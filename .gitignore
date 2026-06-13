@@ -1,0 +1,7 @@
+﻿bin/
+obj/
+publish_*/
+.vs/
+*.csproj.user
+*.suo
+*.user

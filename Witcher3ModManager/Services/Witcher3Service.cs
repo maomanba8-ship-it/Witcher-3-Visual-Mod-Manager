@@ -1,0 +1,373 @@
+using System.IO;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
+using Witcher3ModManager.Models;
+
+namespace Witcher3ModManager.Services;
+
+public class Witcher3Service
+{
+    private readonly SettingsService _settings;
+    private string? _gamePath;
+    private string? _modsSettingsPath;
+    private bool _isLaunching;
+
+    public Witcher3Service(SettingsService settings)
+    {
+        _settings = settings;
+    }
+
+    public string? GetGamePath()
+    {
+        if (!string.IsNullOrEmpty(_gamePath)) return _gamePath;
+
+        var configured = _settings.Current.Witcher3GamePath;
+        if (!string.IsNullOrEmpty(configured) && Directory.Exists(configured))
+        {
+            var normalized = configured.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (normalized.EndsWith(Path.Combine("bin", "x64_dx12"), StringComparison.OrdinalIgnoreCase) ||
+                normalized.EndsWith(Path.Combine("bin", "x64"), StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = Path.GetDirectoryName(Path.GetDirectoryName(normalized)) ?? normalized;
+            }
+            if (Directory.Exists(Path.Combine(normalized, "content")) ||
+                File.Exists(Path.Combine(normalized, "bin", "x64", "witcher3.exe")) ||
+                File.Exists(Path.Combine(normalized, "bin", "x64_dx12", "witcher3.exe")))
+            {
+                _gamePath = normalized;
+                if (normalized != configured)
+                    _settings.SetGamePath(normalized);
+                return _gamePath;
+            }
+        }
+
+        var steamPath = DetectSteamPath();
+        if (steamPath != null) { _gamePath = steamPath; _settings.SetGamePath(steamPath); return _gamePath; }
+
+        var gogPath = DetectGogPath();
+        if (gogPath != null) { _gamePath = gogPath; _settings.SetGamePath(gogPath); return _gamePath; }
+
+        var commonPaths = new[]
+        {
+            @"Z:\Steam\steamapps\common\The Witcher 3",
+            @"D:\Steam\steamapps\common\The Witcher 3",
+            @"C:\Program Files (x86)\Steam\steamapps\common\The Witcher 3",
+        };
+        foreach (var p in commonPaths)
+        {
+            if (Directory.Exists(p) && File.Exists(Path.Combine(p, "bin", "x64", "witcher3.exe")))
+            { _gamePath = p; _settings.SetGamePath(p); return _gamePath; }
+        }
+        return null;
+    }
+
+    private static string? DetectSteamPath()
+    {
+        try { using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 292030"); var p = key?.GetValue("InstallLocation") as string; if (!string.IsNullOrEmpty(p) && Directory.Exists(p)) return p; } catch { }
+        try { using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 292030"); var p = key?.GetValue("InstallLocation") as string; if (!string.IsNullOrEmpty(p) && Directory.Exists(p)) return p; } catch { }
+        return null;
+    }
+
+    private static string? DetectGogPath()
+    {
+        try { using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\GOG.com\Games\1207664643"); var p = key?.GetValue("PATH") as string; if (!string.IsNullOrEmpty(p) && Directory.Exists(p)) return p; } catch { }
+        try { using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\GOG.com\Games\1207664643"); var p = key?.GetValue("PATH") as string; if (!string.IsNullOrEmpty(p) && Directory.Exists(p)) return p; } catch { }
+        return null;
+    }
+
+    public string? GetModsSettingsPath()
+    {
+        if (_modsSettingsPath != null) return _modsSettingsPath;
+        var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var path = Path.Combine(docs, "The Witcher 3", "mods.settings");
+        _modsSettingsPath = File.Exists(path) ? path : null;
+        return _modsSettingsPath;
+    }
+
+    public string GetGameModsPath()
+    {
+        var gamePath = GetGamePath();
+        if (gamePath == null) throw new InvalidOperationException("Game path not found");
+        var p = Path.Combine(gamePath, "mods");
+        Directory.CreateDirectory(p);
+        return p;
+    }
+
+    public string GetGameDlcPath()
+    {
+        var gamePath = GetGamePath();
+        if (gamePath == null) throw new InvalidOperationException("Game path not found");
+        return Path.Combine(gamePath, "dlc");
+    }
+
+    public bool EnableMod(ModEntry mod)
+    {
+        try
+        {
+            var safeName = EnsureModPrefix(
+                !string.IsNullOrEmpty(mod.GameModFolderName)
+                    ? mod.GameModFolderName
+                    : SanitizeModName(mod.Name),
+                mod.ModType);
+
+            var targetDir = mod.ModType == ModType.Dlc ? GetGameDlcPath() : GetGameModsPath();
+            var enabledPath = Path.Combine(targetDir, safeName);
+            var disabledPath = Path.Combine(targetDir, "~" + safeName);
+
+            if (Directory.Exists(disabledPath))
+            {
+                if (Directory.Exists(enabledPath))
+                    Directory.Delete(enabledPath, true);
+                Directory.Move(disabledPath, enabledPath);
+            }
+            else if (!string.IsNullOrEmpty(mod.InstalledPath) && Directory.Exists(mod.InstalledPath))
+            {
+                MoveDirectory(mod.InstalledPath, enabledPath);
+            }
+            else if (Directory.Exists(enabledPath))
+            {
+            }
+            else
+            {
+                return false;
+            }
+
+            mod.InstalledPath = enabledPath;
+            mod.GameModFolderName = safeName;
+            // Update screenshot path to new location
+            if (!string.IsNullOrEmpty(mod.ScreenshotPath))
+            {
+                var ssName = Path.GetFileName(mod.ScreenshotPath);
+                var newSsPath = Path.Combine(enabledPath, ssName);
+                if (File.Exists(newSsPath))
+                    mod.ScreenshotPath = newSsPath;
+                else
+                {
+                    // Search for any image in new location
+                    var found = Directory.GetFiles(enabledPath, "*.png", SearchOption.AllDirectories)
+                        .Concat(Directory.GetFiles(enabledPath, "*.jpg", SearchOption.AllDirectories))
+                        .FirstOrDefault();
+                    if (found != null) mod.ScreenshotPath = found;
+                }
+            }
+
+            if (mod.ModType == ModType.Mod)
+            {
+                var currentMods = GetEnabledModsFromSettings();
+                int finalPriority = mod.Priority > 0 ? mod.Priority :
+                    (currentMods.Count > 0 ? currentMods.Max(m => m.Priority) + 1 : 1);
+                currentMods.RemoveAll(m => m.ModName == safeName);
+                currentMods.Add((safeName, finalPriority));
+                WriteModsSettings(currentMods);
+            }
+
+            return true;
+        }
+        catch { return false; }
+    }
+
+    public bool DisableMod(ModEntry mod)
+    {
+        try
+        {
+            var safeName = !string.IsNullOrEmpty(mod.GameModFolderName)
+                ? mod.GameModFolderName
+                : SanitizeModName(mod.Name);
+            var cleanName = safeName.StartsWith("~") ? safeName[1..] : safeName;
+
+            var targetDir = mod.ModType == ModType.Dlc ? GetGameDlcPath() : GetGameModsPath();
+            var enabledPath = Path.Combine(targetDir, cleanName);
+            var disabledPath = Path.Combine(targetDir, "~" + cleanName);
+
+            if (Directory.Exists(enabledPath))
+            {
+                if (Directory.Exists(disabledPath))
+                    Directory.Delete(disabledPath, true);
+                Directory.Move(enabledPath, disabledPath);
+                mod.InstalledPath = disabledPath;
+                // Update screenshot path
+                if (!string.IsNullOrEmpty(mod.ScreenshotPath))
+                {
+                    var ssName = Path.GetFileName(mod.ScreenshotPath);
+                    var newSsPath = Path.Combine(disabledPath, ssName);
+                    if (File.Exists(newSsPath)) mod.ScreenshotPath = newSsPath;
+                }
+            }
+
+            if (mod.ModType == ModType.Mod)
+            {
+                var currentMods = GetEnabledModsFromSettings();
+                currentMods.RemoveAll(m => m.ModName == cleanName);
+                WriteModsSettings(currentMods);
+            }
+
+            return true;
+        }
+        catch { return false; }
+    }
+
+    public bool DeleteMod(ModEntry mod)
+    {
+        try
+        {
+            var safeName = !string.IsNullOrEmpty(mod.GameModFolderName)
+                ? mod.GameModFolderName
+                : SanitizeModName(mod.Name);
+            var cleanName = safeName.StartsWith("~") ? safeName[1..] : safeName;
+            var deleted = false;
+
+            string[] gameDirs;
+            try { gameDirs = new[] { GetGameModsPath(), GetGameDlcPath() }; }
+            catch { gameDirs = Array.Empty<string>(); }
+
+            foreach (var targetDir in gameDirs)
+            {
+                try
+                {
+                    var enabledPath = Path.Combine(targetDir, cleanName);
+                    var disabledPath = Path.Combine(targetDir, "~" + cleanName);
+                    if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
+                    if (Directory.Exists(disabledPath)) { Directory.Delete(disabledPath, true); deleted = true; }
+                }
+                catch { }
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(mod.InstalledPath) && Directory.Exists(mod.InstalledPath))
+                { Directory.Delete(mod.InstalledPath, true); deleted = true; }
+            }
+            catch { }
+
+            try
+            {
+                var currentMods = GetEnabledModsFromSettings();
+                currentMods.RemoveAll(m => m.ModName == cleanName);
+                WriteModsSettings(currentMods);
+            }
+            catch { }
+
+            return deleted;
+        }
+        catch { return false; }
+    }
+
+    public List<(string ModName, int Priority)> GetEnabledModsFromSettings()
+    {
+        var result = new List<(string, int)>();
+        var path = GetModsSettingsPath();
+        if (path == null || !File.Exists(path)) return result;
+
+        try
+        {
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var match = Regex.Match(line, @"^\s*""([^""]+)""\s*=\s*(\d+)\s*$");
+                if (match.Success)
+                    result.Add((match.Groups[1].Value, int.Parse(match.Groups[2].Value)));
+            }
+        }
+        catch { }
+        return result;
+    }
+
+    public void WriteModsSettings(List<(string ModName, int Priority)> mods)
+    {
+        try
+        {
+            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var dir = Path.Combine(docs, "The Witcher 3");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "mods.settings");
+            var sorted = mods.OrderBy(m => m.Priority).ToList();
+            var lines = sorted.Select(m => $@"""{m.ModName}"" = {m.Priority}");
+            File.WriteAllLines(path, lines);
+        }
+        catch { }
+    }
+
+    public void UpdateAllPriorities(List<(string GameModFolderName, int Priority)> mods)
+    {
+        WriteModsSettings(mods);
+    }
+
+    public void LaunchGame()
+    {
+        if (_isLaunching) return;
+        _isLaunching = true;
+        try
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "steam://rungameid/292030",
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                var gamePath = GetGamePath();
+                if (gamePath != null)
+                {
+                    var exePath = Path.Combine(gamePath, "bin", "x64", "witcher3.exe");
+                    if (File.Exists(exePath))
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = exePath,
+                            WorkingDirectory = Path.GetDirectoryName(exePath) ?? gamePath,
+                            UseShellExecute = true
+                        });
+                }
+            }
+        }
+        finally
+        {
+            _ = Task.Run(async () => { await Task.Delay(5000); _isLaunching = false; });
+        }
+    }
+
+    private static string EnsureModPrefix(string name, ModType modType)
+    {
+        var prefix = modType == ModType.Dlc ? "dlc" : "mod";
+        var clean = name.StartsWith("~") ? name[1..] : name;
+        var lower = clean.ToLower();
+        if (lower.StartsWith("mod") || lower.StartsWith("dlc"))
+            return clean;
+        return prefix + clean;
+    }
+
+    public static string SanitizeModName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(name.Where(c => !invalid.Contains(c) && c != ' ').ToArray());
+        return string.IsNullOrWhiteSpace(sanitized) ? "custom_mod" : sanitized;
+    }
+
+    private static void MoveDirectory(string sourceDir, string targetDir)
+    {
+        if (Directory.Exists(targetDir))
+            Directory.Delete(targetDir, true);
+        try { Directory.Move(sourceDir, targetDir); return; }
+        catch (IOException)
+        {
+            CopyDirectoryRecursive(sourceDir, targetDir);
+            Directory.Delete(sourceDir, true);
+        }
+    }
+
+    private static void CopyDirectoryRecursive(string sourceDir, string targetDir)
+    {
+        Directory.CreateDirectory(targetDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var dest = Path.Combine(targetDir, Path.GetFileName(file));
+            File.Copy(file, dest, true);
+        }
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var dest = Path.Combine(targetDir, Path.GetFileName(dir));
+            CopyDirectoryRecursive(dir, dest);
+        }
+    }
+}

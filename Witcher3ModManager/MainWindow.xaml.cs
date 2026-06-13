@@ -1,0 +1,286 @@
+﻿using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using Witcher3ModManager.Services;
+using Witcher3ModManager.Views;
+
+namespace Witcher3ModManager;
+
+public partial class MainWindow : Window
+{
+    private HomePage? _homePage;
+    private ModListPage? _modListPage;
+    private SettingsPage? _settingsPage;
+    private ModStorageService? _storage;
+    private ModImportService? _importer;
+    private SettingsService? _settings;
+    private Witcher3Service? _w3;
+    private ConflictService? _conflict;
+    private BackupService? _backup;
+    private PresetPage? _presetPage;
+    private PresetService? _presets;
+
+    public MainWindow()
+    {
+        try { InitializeComponent(); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"界面初始化失败：: {ex.Message}", "错误",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            Application.Current.Shutdown();
+            return;
+        }
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _storage = new ModStorageService();
+            _settings = new SettingsService();
+            _importer = new ModImportService(_storage);
+            _w3 = new Witcher3Service(_settings);
+            _conflict = new ConflictService(_storage, _w3);
+            _backup = new BackupService(_w3, _settings);
+            _presets = new PresetService();
+
+            LoadTitleIcon();
+            SetupStatusBarPanel();
+            LoadBackgroundImage();
+            DetectAndShowGamePath();
+            NavigateToHome();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"启动失败：: {ex.Message}", "错误",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void LoadTitleIcon()
+    {
+        try
+        {
+            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "Resources", "Icons", "app_icon.png");
+            if (File.Exists(iconPath))
+            {
+                var bmp = new BitmapImage(new Uri(iconPath));
+                bmp.Freeze();
+                TitleIcon.Source = bmp;
+            }
+        }
+        catch { }
+    }
+
+    private void LoadBackgroundImage()
+    {
+        string? bgPath = null;
+        try
+        {
+            if (_settings != null && !string.IsNullOrEmpty(_settings.Current.BackgroundImagePath))
+            {
+                var custom = _settings.Current.BackgroundImagePath;
+                if (File.Exists(custom)) bgPath = custom;
+            }
+        }
+        catch { }
+
+        if (bgPath == null)
+        {
+            var defPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "Resources", "bg_default.jpg");
+            if (File.Exists(defPath)) bgPath = defPath;
+        }
+
+        if (bgPath != null)
+        {
+            try
+            {
+                var bmp = new BitmapImage(new Uri(bgPath));
+                bmp.Freeze();
+                BgImageClear.Source = bmp;
+            }
+            catch { }
+        }
+    }
+
+    private void DetectAndShowGamePath()
+    {
+        try
+        {
+            var path = _w3?.GetGamePath();
+            StatusGamePath.Text = path != null
+                ? $"巫师3：{Path.GetFileName(path)}"
+                : "巫师3：未检测";
+        }
+        catch { StatusGamePath.Text = "巫师3：未检测"; }
+    }
+
+    private void NavigateToHome()
+    {
+        _homePage ??= new HomePage();
+        _homePage.NavigateRequested += OnHomeNavigate;
+        PageHost.Content = _homePage;
+        SetBackgroundBlur(false);
+        MainStatusBar.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnHomeNavigate(string target)
+    {
+        switch (target)
+        {
+            case "mods":
+            case "conflicts":
+                NavigateToModList();
+                break;
+            case "import":
+                NavigateToModList();
+                _modListPage?.ImportButton_Click(this, new RoutedEventArgs());
+                break;
+            case "settings":
+                NavigateToSettings();
+                break;
+            case "launch":
+                LaunchGame();
+                break;
+            case "presets":
+                NavigateToPresets();
+                break;
+        }
+    }
+
+    private void NavigateToModList()
+    {
+        if (_storage == null || _importer == null || _w3 == null || _conflict == null || _backup == null) return;
+        _modListPage ??= new ModListPage();
+        _modListPage.NavigateBackRequested += OnModListBack;
+        _modListPage.StatusUpdated += OnStatusUpdated;
+        _modListPage.Initialize(_storage, _importer, _w3, _conflict, _backup);
+        // _modListPage.RefreshModList();
+        PageHost.Content = _modListPage;
+        SetBackgroundBlur(true);
+        MainStatusBar.Visibility = Visibility.Visible;
+    }
+
+    private void NavigateToPresets()
+    {
+        if (_presets == null || _storage == null || _w3 == null) return;
+        _presetPage ??= new PresetPage();
+        _presetPage.NavigateBackRequested += OnPresetsBack;
+        _presetPage.PresetApplied += OnPresetApplied;
+        _presetPage.Initialize(_presets, _storage, _w3);
+        PageHost.Content = _presetPage;
+        SetBackgroundBlur(true);
+        MainStatusBar.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnPresetsBack() => NavigateToHome();
+
+    private void OnPresetApplied()
+    {
+        _modListPage?.RefreshModList();
+    }
+
+    private void NavigateToSettings()
+    {
+        if (_settings == null) return;
+        _settingsPage ??= new SettingsPage();
+        _settingsPage.NavigateBackRequested += OnSettingsBack;
+        _settingsPage.BackgroundImageChanged += OnBackgroundChanged;
+        _settingsPage.Initialize(_settings);
+        PageHost.Content = _settingsPage;
+        SetBackgroundBlur(true);
+        MainStatusBar.Visibility = Visibility.Collapsed;
+    }
+
+    private void LaunchGame()
+    {
+        if (_w3 == null) return;
+        var path = _w3.GetGamePath();
+        if (path == null)
+        {
+            MessageBox.Show("未检测到巫师3安装路径。请在设置中手动配置。",
+                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            NavigateToSettings();
+            return;
+        }
+        try { _w3.LaunchGame(); }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"启动游戏失败: {ex.Message}", "错误",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void OnModListBack() => NavigateToHome();
+    private void OnSettingsBack() => NavigateToHome();
+
+    private void OnBackgroundChanged(string path) => LoadBackgroundImage();
+
+    private void OnStatusUpdated(int enabled, int total, int conflicts)
+    {
+        StatusEnabled.Text = $"已启用 {enabled}";
+        StatusTotal.Text = $"总计 {total}";
+        StatusConflicts.Text = $"冲突 {conflicts}";
+    }
+
+    private void SetBackgroundBlur(bool blurred)
+    {
+        if (blurred)
+        {
+            BgImageClear.Visibility = Visibility.Collapsed;
+            BgDarkOverlay.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            BgImageClear.Visibility = Visibility.Visible;
+            BgDarkOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void SetupStatusBarPanel()
+    {
+        var gridFactory = new FrameworkElementFactory(typeof(Grid));
+        AddGridColumn(gridFactory, GridLength.Auto);
+        AddGridColumn(gridFactory, GridLength.Auto);
+        AddGridColumn(gridFactory, new GridLength(1, GridUnitType.Star));
+        AddGridColumn(gridFactory, GridLength.Auto);
+        AddGridColumn(gridFactory, GridLength.Auto);
+        MainStatusBar.ItemsPanel = new ItemsPanelTemplate(gridFactory);
+    }
+
+    private static void AddGridColumn(FrameworkElementFactory parent, GridLength width)
+    {
+        var col = new FrameworkElementFactory(typeof(ColumnDefinition));
+        col.SetValue(ColumnDefinition.WidthProperty, width);
+        parent.AppendChild(col);
+    }
+
+    #region Window Controls
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2) ToggleMaximize();
+        else if (e.ChangedButton == MouseButton.Left) DragMove();
+    }
+    private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void BtnMaximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
+    private void ToggleMaximize()
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            BtnMaximize.Content = "\uE922";
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            BtnMaximize.Content = "\uE923";
+        }
+    }
+    private void BtnClose_Click(object sender, RoutedEventArgs e) => Application.Current.Shutdown();
+    #endregion
+}

@@ -1,0 +1,154 @@
+<UserControl x:Class="Witcher3ModManager.Views.ModListPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#14161E"
+             AllowDrop="True" DragEnter="Page_DragEnter" Drop="Page_Drop">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#25FFFFFF" Padding="12,8" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button Content="&#xE72B; Back" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                            Foreground="#9A9EAA" Click="BackButton_Click" Cursor="Hand"
+                            Background="Transparent" BorderThickness="0" Padding="10,6"/>
+                    <TextBlock Text="模组" FontSize="15" FontWeight="SemiBold"
+                               Foreground="#E2E4E9" VerticalAlignment="Center" Margin="20,0,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <TextBox x:Name="SearchBox" Width="160" Padding="8,5" Background="#1C1F2A" Foreground="#E2E4E9"
+                             BorderBrush="#2A2E3C" CaretBrush="#E2E4E9" TextChanged="SearchBox_TextChanged"/>
+                    <Button Content="冲突检测" Margin="6,0,0,0" Padding="10,6" Foreground="#C9A96E" Cursor="Hand"
+                            Click="ConflictCheck_Click" Background="Transparent" BorderBrush="#2A2E3C"/>
+                    <Button Content="备份" Margin="4,0,0,0" Padding="10,6" Foreground="#9A9EAA" Cursor="Hand"
+                            Click="BackupAll_Click" Background="Transparent" BorderBrush="#2A2E3C"/>
+                    <Button Content="导入" Margin="4,0,0,0" Padding="10,6" Foreground="#8BA4B5" Cursor="Hand"
+                            Click="ImportButton_Click" Background="Transparent" BorderBrush="#2A2E3C"/>
+                    <Button Content="全部卸载" Margin="8,0,0,0" Padding="10,6" Foreground="#E0556A" Cursor="Hand"
+                            Click="UninstallAll_Click" Background="Transparent" BorderBrush="#E0556A"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180"/>
+                <ColumnDefinition Width="1"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="1"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="#15FFFFFF">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Padding="16,14" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
+                        <TextBlock Text="分类" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
+                    </Border>
+                    <ListBox x:Name="CategoryListBox" Grid.Row="1" Background="Transparent" BorderThickness="0"
+                             SelectionChanged="CategoryListBox_SelectionChanged" Padding="0,4,0,0">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="#9A9EAA"/>
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Bd" Background="Transparent" Padding="16,10">
+                                                <ContentPresenter/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="#25242C3F"/>
+                                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#8BA4B5"/>
+                                                    <Setter TargetName="Bd" Property="BorderThickness" Value="3,0,0,0"/>
+                                                    <Setter Property="Foreground" Value="#E2E4E9"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="#35344058"/>
+                                                    <Setter Property="Foreground" Value="#E2E4E9"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Background="#1E2230"/>
+
+            <Grid Grid.Column="2">
+                <StackPanel x:Name="WelcomePanel" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="暂无模组" FontSize="16" Foreground="#9A9EAA"/>
+                    <TextBlock Text="拖拽 .rar / .zip / .7z 文件到此处" FontSize="12"
+                               Foreground="#5E626E" Margin="0,6,0,0"/>
+                </StackPanel>
+                <ScrollViewer x:Name="ModListScroll" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="ModItemsControl" Margin="12,10"/>
+                </ScrollViewer>
+            </Grid>
+
+            <Border Grid.Column="3" Background="#1E2230"/>
+
+            <Border Grid.Column="4" Background="#15FFFFFF">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Padding="16,14" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
+                        <TextBlock Text="详情" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
+                    </Border>
+                    <Border Grid.Row="1" Height="180" Background="#1C1F2A" Margin="12,12,12,0"
+                            CornerRadius="6" BorderBrush="#1E2230" BorderThickness="1">
+                        <Image x:Name="DetailScreenshot" Stretch="Uniform"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="DetailPanel" Margin="16,12" Visibility="Collapsed">
+                            <TextBlock x:Name="DetailName" FontSize="15" FontWeight="SemiBold" Foreground="#E2E4E9" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DetailAuthor" FontSize="12" Foreground="#9A9EAA" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="DetailVersion" FontSize="12" Foreground="#5E626E"/>
+                            <TextBlock x:Name="DetailCategory" FontSize="12" Foreground="#8BA4B5"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock Text="Priority:" Foreground="#5E626E" FontSize="12"/>
+                                <TextBlock x:Name="DetailPriority" Foreground="#9A9EAA" FontSize="12" Margin="6,0"/>
+                                <Button Content="UP" Width="22" Height="18" Foreground="#8BA4B5"
+                                        Click="PriorityUp_Click" Cursor="Hand" FontSize="10"/>
+                                <Button Content="DN" Width="22" Height="18" Foreground="#8BA4B5"
+                                        Click="PriorityDown_Click" Cursor="Hand" FontSize="10"/>
+                            </StackPanel>
+                            <TextBlock x:Name="DetailImportDate" FontSize="12" Foreground="#5E626E" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="DetailSize" FontSize="12" Foreground="#5E626E"/>
+                            <Separator Margin="0,10" Background="#1E2230"/>
+                            <TextBlock Text="Location" FontSize="12" Foreground="#5E626E" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="DetailLocation" FontSize="11" Foreground="#5E626E" TextWrapping="Wrap" Margin="0,2,0,10"/>
+                            <Separator Margin="0,4" Background="#1E2230"/>
+                            <TextBlock x:Name="DetailDescription" FontSize="12" Foreground="#9A9EAA" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <StackPanel x:Name="DetailEmptyPanel" Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="选择一个模组" FontSize="12" Foreground="#5E626E"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

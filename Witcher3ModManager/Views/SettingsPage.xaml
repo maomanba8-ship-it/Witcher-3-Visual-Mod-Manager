@@ -1,0 +1,367 @@
+<UserControl x:Class="Witcher3ModManager.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#2014161E"
+                BorderBrush="#1E2230"
+                BorderThickness="0,0,0,1" Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Width="Auto" Padding="10,6" Click="BackButton_Click"
+                        Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
+                        FontSize="14" Cursor="Hand" FontFamily="Segoe MDL2 Assets">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border" Background="{TemplateBinding Background}"
+                                    CornerRadius="6" Padding="6">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#242836"/>
+                                    <Setter Property="Foreground" Value="#E2E4E9"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE72B;" FontSize="14"/>
+                        <TextBlock Text="返回" FontSize="13" FontFamily="Microsoft YaHei UI" Margin="6,0,0,0"/>
+                    </StackPanel>
+                </Button>
+                <TextBlock Grid.Column="1" Text="设置" FontSize="15" FontWeight="SemiBold"
+                           Foreground="#E2E4E9"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Margin="0,0,80,0"/>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="60,30" MaxWidth="640">
+
+                <Border Background="#1814161E" CornerRadius="8" Padding="20"
+                        BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="外观" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="#E2E4E9" Margin="0,0,0,16"/>
+                        <TextBlock Text="自定义背景图" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="BgPathBox" Grid.Column="0"
+                                     IsReadOnly="True" Background="#1C1F2A"
+                                     Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                     CaretBrush="#E2E4E9" Padding="8,5"/>
+                            <Button Grid.Column="1" Content="浏览"
+                                    Margin="8,0,4,0" Click="BrowseBg_Click"
+                                    Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                                    FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                            <Button Grid.Column="2" Content="&#xE74D;"
+                                    ToolTip="重置默认背景" Click="ResetBg_Click"
+                                    Width="34" Height="34"
+                                    Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
+                                    FontSize="14" Cursor="Hand" FontFamily="Segoe MDL2 Assets">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="6">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#242836"/>
+                                                <Setter Property="Foreground" Value="#E2E4E9"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+                        <TextBlock Text="支持 .jpg / .png 格式，推荐 1920x1080" FontSize="11"
+                                   Foreground="#5E626E" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#1814161E" CornerRadius="8" Padding="20"
+                        BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="路径配置" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="#E2E4E9" Margin="0,0,0,16"/>
+                        <TextBlock Text="巫师3 游戏路径" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="GamePathBox" Grid.Column="0"
+                                     IsReadOnly="True" Background="#1C1F2A"
+                                     Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                     CaretBrush="#E2E4E9" Padding="8,5"/>
+                            <Button Grid.Column="1" Content="浏览"
+                                    Margin="8,0,0,0" Click="BrowseGamePath_Click"
+                                    Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                                    FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+
+                        <TextBlock Text="7-Zip 路径" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SevenZipBox" Grid.Column="0"
+                                     IsReadOnly="True" Background="#1C1F2A"
+                                     Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                     CaretBrush="#E2E4E9" Padding="8,5"/>
+                            <Button Grid.Column="1" Content="浏览"
+                                    Margin="8,0,0,0" Click="Browse7Zip_Click"
+                                    Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                                    FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+
+                        <TextBlock Text="备份文件夹路径" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="BackupPathBox" Grid.Column="0"
+                                     IsReadOnly="True" Background="#1C1F2A"
+                                     Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                     CaretBrush="#E2E4E9" Padding="8,5"/>
+                            <Button Grid.Column="1" Content="浏览"
+                                    Margin="8,0,0,0" Click="BrowseBackupPath_Click"
+                                    Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                                    FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+
+                        <TextBlock Text="Script Merger 路径" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ScriptMergerBox" Grid.Column="0"
+                                     IsReadOnly="True" Background="#1C1F2A"
+                                     Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                     CaretBrush="#E2E4E9" Padding="8,5"/>
+                            <Button Grid.Column="1" Content="浏览"
+                                    Margin="8,0,0,0" Click="BrowseScriptMerger_Click"
+                                    Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                                    FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+
+                        <TextBlock Text="模组存储路径" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ModStorageBox" Grid.Column="0"
+                                     IsReadOnly="True" Background="#1C1F2A"
+                                     Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                     CaretBrush="#E2E4E9" Padding="8,5"/>
+                            <Button Grid.Column="1" Content="浏览"
+                                    Margin="8,0,0,0" Click="BrowseModStorage_Click"
+                                    Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                                    FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#1814161E" CornerRadius="8" Padding="20"
+                        BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="游戏选项" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="#E2E4E9" Margin="0,0,0,16"/>
+                        <TextBlock Text="启动参数" FontSize="12"
+                                   Foreground="#9A9EAA" Margin="0,0,0,6"/>
+                        <TextBox x:Name="LaunchArgsBox" Background="#1C1F2A"
+                                 Foreground="#E2E4E9" BorderBrush="#2A2E3C"
+                                 CaretBrush="#E2E4E9" Padding="8,5"
+                                 TextChanged="LaunchArgs_Changed"
+                                 ToolTip="例如: -dx12 --launcher-skip"/>
+                        <TextBlock Text="例如: -dx12 (DirectX 12模式) 或 --launcher-skip (跳过启动器)" FontSize="11"
+                                   Foreground="#5E626E" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#1814161E" CornerRadius="8" Padding="20"
+                        BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="工具" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="#E2E4E9" Margin="0,0,0,16"/>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="启用前自动备份" FontSize="12"
+                                           Foreground="#9A9EAA"/>
+                                <TextBlock Text="启用模组前自动备份原始游戏文件" FontSize="11"
+                                           Foreground="#5E626E"/>
+                            </StackPanel>
+                            <ToggleButton x:Name="AutoBackupToggle" Grid.Column="1"
+                                          Width="44" Height="22" IsChecked="True"
+                                          Checked="AutoBackup_Changed"
+                                          Unchecked="AutoBackup_Changed">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="bg" CornerRadius="11"
+                                                Background="#1C1F2A"
+                                                Width="44" Height="22">
+                                            <Ellipse x:Name="knob" Fill="#889098" Width="16" Height="16"
+                                                     HorizontalAlignment="Left" Margin="3,0,0,0"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="bg" Property="Background" Value="#306BAF7B"/>
+                                                <Setter TargetName="knob" Property="Fill" Value="#6BAF7B"/>
+                                                <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right"/>
+                                                <Setter TargetName="knob" Property="Margin" Value="0,0,3,0"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#1814161E" CornerRadius="8" Padding="20"
+                        BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="更多功能（即将推出）" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="#5E626E" Margin="0,0,0,12"/>
+                        <TextBlock Text=". 预设系统（保存/加载模组配置）" FontSize="12"
+                                   Foreground="#5E626E" Margin="0,0,0,4"/>
+                        <TextBlock Text=". 模组优先级拖拽排序" FontSize="12"
+                                   Foreground="#5E626E" Margin="0,0,0,4"/>
+                        <TextBlock Text=". 脚本合并工具集成" FontSize="12"
+                                   Foreground="#5E626E" Margin="0,0,0,4"/>
+                        <TextBlock Text=". Nexus Mods 链接配置" FontSize="12"
+                                   Foreground="#5E626E" Margin="0,0,0,4"/>
+                        <TextBlock Text=". 主题配色方案" FontSize="12"
+                                   Foreground="#5E626E"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#1814161E" CornerRadius="8" Padding="20"
+                        BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,30">
+                    <StackPanel>
+                        <TextBlock Text="关于" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="#E2E4E9" Margin="0,0,0,8"/>
+                        <TextBlock Text="巫师3 Mod 管理器 v1.0.0-dev" FontSize="12"
+                                   Foreground="#9A9EAA"/>
+                        <TextBlock Text="基于 .NET 10 + WPF 构建" FontSize="11"
+                                   Foreground="#5E626E" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -1,0 +1,140 @@
+<Window x:Class="Witcher3ModManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:Witcher3ModManager.Views"
+        Title="巫师3 Mod 管理器"
+        Width="1280" Height="780"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="CanResizeWithGrip">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="4"
+                      CornerRadius="0" GlassFrameThickness="0"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid>
+        <Image x:Name="BgImageClear" Stretch="UniformToFill"
+               HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.85"/>
+        <Image x:Name="BgImageBlurred" Stretch="UniformToFill"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               Opacity="0.25" Visibility="Collapsed"/>
+        <Border x:Name="BgDarkOverlay" Background="#D80C0E14" Visibility="Collapsed"/>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="36"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Background="#1014161E"
+                  MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <Image x:Name="TitleIcon" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" Stretch="Uniform"/>
+                    <TextBlock Text="巫师3 Mod 管理器" FontSize="11" FontWeight="Medium"
+                               Foreground="#9A9EAA" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="&#xE921;" FontSize="10" Width="32" Height="32"
+                            Click="BtnMinimize_Click" ToolTip="最小化"
+                            Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
+                            Cursor="Hand" FontFamily="Segoe MDL2 Assets">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" Background="{TemplateBinding Background}"
+                                        CornerRadius="6" Padding="6">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#242836"/>
+                                        <Setter Property="Foreground" Value="#E2E4E9"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button x:Name="BtnMaximize" Content="&#xE922;" FontSize="10" Width="32" Height="32"
+                            Click="BtnMaximize_Click" ToolTip="最大化"
+                            Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
+                            Cursor="Hand" FontFamily="Segoe MDL2 Assets">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" Background="{TemplateBinding Background}"
+                                        CornerRadius="6" Padding="6">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#242836"/>
+                                        <Setter Property="Foreground" Value="#E2E4E9"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button Content="&#xE8BB;" FontSize="10" Width="32" Height="32"
+                            Click="BtnClose_Click" ToolTip="关闭"
+                            Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
+                            Cursor="Hand" FontFamily="Segoe MDL2 Assets">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" Background="{TemplateBinding Background}"
+                                        CornerRadius="6" Padding="6">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#242836"/>
+                                        <Setter Property="Foreground" Value="#E2E4E9"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <ContentControl Grid.Row="1" x:Name="PageHost"/>
+
+            <StatusBar Grid.Row="2" x:Name="MainStatusBar" Visibility="Collapsed"
+                       Background="#14161E" Foreground="#5E626E"
+                       BorderBrush="#1E2230" BorderThickness="0,1,0,0"
+                       Padding="16,5" FontSize="12">
+
+                <StatusBarItem Grid.Column="0" Margin="0,0,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE930;" FontSize="11" Foreground="#6BAF7B" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"/>
+                        <TextBlock x:Name="StatusEnabled" Text="已启用 0" FontSize="12"
+                                   Foreground="#5E626E" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StatusBarItem>
+                <StatusBarItem Grid.Column="1" Margin="0,0,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xEC7A;" FontSize="11" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"
+                                   Foreground="#5E626E"/>
+                        <TextBlock x:Name="StatusTotal" Text="总计 0" FontSize="12"
+                                   Foreground="#5E626E" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StatusBarItem>
+                <StatusBarItem Grid.Column="3" Margin="0,0,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xEA3B;" FontSize="11" Foreground="#C9A96E" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"/>
+                        <TextBlock x:Name="StatusConflicts" Text="冲突 0" FontSize="12"
+                                   Foreground="#5E626E" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StatusBarItem>
+                <StatusBarItem Grid.Column="4">
+                    <TextBlock x:Name="StatusGamePath" Text="巫师3: 未检测" FontSize="12"
+                               Foreground="#5E626E" VerticalAlignment="Center"/>
+                </StatusBarItem>
+            </StatusBar>
+        </Grid>
+    </Grid>
+</Window>
