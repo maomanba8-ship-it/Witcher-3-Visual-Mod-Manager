@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -12,13 +12,15 @@ public partial class ConflictDialog : Window
     private readonly List<ConflictInfo> _conflicts;
     private string? _scriptMergerPath;
 
-    public ConflictDialog(List<ConflictInfo> conflicts, 
-        Dictionary<string, DateTime>? modDates = null)
+    public ConflictDialog(List<ConflictInfo> conflicts,
+        Dictionary<string, DateTime>? modDates = null,
+        Dictionary<CategoryType, List<string>>? potentialOverrides = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
+        CloseBtn.Content = "关闭";
         _conflicts = conflicts;
-        LoadConflicts(conflicts, modDates);
+        LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
     }
 
@@ -57,11 +59,16 @@ public partial class ConflictDialog : Window
     }
 
     private void LoadConflicts(List<ConflictInfo> conflicts, 
-        Dictionary<string, DateTime>? modDates)
+        Dictionary<string, DateTime>? modDates,
+        Dictionary<CategoryType, List<string>>? potentialOverrides)
     {
+        // Set default texts in code to avoid XAML encoding issues
+        ScriptWarning.Text = "检测到脚本冲突，建议使用 Witcher Script Merger 工具处理";
+
         if (conflicts.Count == 0)
         {
             SummaryText.Text = "未检测到模组冲突。";
+            NoConflictsText.Text = "未检测到冲突";
             NoConflictsPanel.Visibility = Visibility.Visible;
             ConflictStackPanel.Visibility = Visibility.Collapsed;
             return;
@@ -77,7 +84,7 @@ public partial class ConflictDialog : Window
         if (scriptCount > 0)
         {
             ScriptWarning.Visibility = Visibility.Visible;
-            ScriptWarning.Text = $"⚠ 其中  {scriptCount} 个为脚本冲突，建议使用脚本合并工具处理";
+            ScriptWarning.Text = $"⚠ 其中 {scriptCount} 个为脚本冲突，建议使用脚本合并工具处理";
             BtnScriptMerger.Visibility = Visibility.Visible;
         }
 
@@ -147,6 +154,90 @@ public partial class ConflictDialog : Window
 
             card.Child = stack;
             ConflictStackPanel.Children.Add(card);
+        }
+
+        // Add potential overrides section
+        if (potentialOverrides != null && potentialOverrides.Count > 0)
+        {
+            var sep = new System.Windows.Controls.Separator
+            {
+                Margin = new System.Windows.Thickness(0, 16, 0, 12),
+                Background = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2E3C"))
+            };
+            ConflictStackPanel.Children.Add(sep);
+
+            var sectionTitle = new System.Windows.Controls.TextBlock
+            {
+                Text = "潜在覆盖（同分类模组）",
+                FontSize = 13,
+                FontWeight = System.Windows.FontWeights.SemiBold,
+                Foreground = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C9A96E")),
+                Margin = new System.Windows.Thickness(0, 0, 0, 8)
+            };
+            ConflictStackPanel.Children.Add(sectionTitle);
+
+            var sectionHint = new System.Windows.Controls.TextBlock
+            {
+                Text = "以下模组属于同一分类，可能存在逻辑覆盖，建议检查优先级。",
+                FontSize = 11,
+                Foreground = new System.Windows.Media.SolidColorBrush(
+                    (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#5E626E")),
+                Margin = new System.Windows.Thickness(0, 0, 0, 10),
+                TextWrapping = System.Windows.TextWrapping.Wrap
+            };
+            ConflictStackPanel.Children.Add(sectionHint);
+
+            foreach (var kvp in potentialOverrides)
+            {
+                var catDisplay = kvp.Key switch
+                {
+                    CategoryType.Geralt => "杰洛特",
+                    CategoryType.Yennefer => "叶奈法",
+                    CategoryType.Triss => "特莉丝",
+                    CategoryType.Graphics => "图形",
+                    CategoryType.Characters => "角色",
+                    CategoryType.ArmorWeapons => "护甲武器",
+                    CategoryType.Gameplay => "玩法",
+                    CategoryType.Quests => "任务",
+                    CategoryType.UI => "UI",
+                    _ => kvp.Key.ToString()
+                };
+
+                var ovCard = new System.Windows.Controls.Border
+                {
+                    Background = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1C1F2A")),
+                    CornerRadius = new System.Windows.CornerRadius(4),
+                    Padding = new System.Windows.Thickness(12, 10, 12, 10),
+                    Margin = new System.Windows.Thickness(0, 0, 0, 6),
+                    BorderBrush = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2E3C")),
+                    BorderThickness = new System.Windows.Thickness(1)
+                };
+
+                var ovStack = new System.Windows.Controls.StackPanel();
+                ovStack.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = $"\uE74B {catDisplay}",
+                    FontSize = 12,
+                    FontWeight = System.Windows.FontWeights.SemiBold,
+                    Foreground = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C9A96E"))
+                });
+                ovStack.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = string.Join(" \u2194 ", kvp.Value),
+                    FontSize = 11,
+                    Foreground = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#9A9EAA")),
+                    Margin = new System.Windows.Thickness(0, 4, 0, 0)
+                });
+
+                ovCard.Child = ovStack;
+                ConflictStackPanel.Children.Add(ovCard);
+            }
         }
     }
 

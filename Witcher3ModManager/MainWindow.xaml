@@ -103,38 +103,48 @@
 
             <ContentControl Grid.Row="1" x:Name="PageHost"/>
 
-            <StatusBar Grid.Row="2" x:Name="MainStatusBar" Visibility="Collapsed"
-                       Background="#14161E" Foreground="#5E626E"
-                       BorderBrush="#1E2230" BorderThickness="0,1,0,0"
-                       Padding="16,5" FontSize="12">
-
-                <StatusBarItem Grid.Column="0" Margin="0,0,16,0">
-                    <StackPanel Orientation="Horizontal">
+            <Border Grid.Row="2" x:Name="MainStatusBar" Visibility="Collapsed"
+                    Background="#14161E" BorderBrush="#1E2230" BorderThickness="0,1,0,0"
+                    Padding="16,5" Height="32">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,16,0">
                         <TextBlock Text="&#xE930;" FontSize="11" Foreground="#6BAF7B" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"/>
                         <TextBlock x:Name="StatusEnabled" Text="已启用 0" FontSize="12"
                                    Foreground="#5E626E" VerticalAlignment="Center"/>
                     </StackPanel>
-                </StatusBarItem>
-                <StatusBarItem Grid.Column="1" Margin="0,0,16,0">
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,16,0">
                         <TextBlock Text="&#xEC7A;" FontSize="11" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"
                                    Foreground="#5E626E"/>
                         <TextBlock x:Name="StatusTotal" Text="总计 0" FontSize="12"
                                    Foreground="#5E626E" VerticalAlignment="Center"/>
                     </StackPanel>
-                </StatusBarItem>
-                <StatusBarItem Grid.Column="3" Margin="0,0,16,0">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xEA3B;" FontSize="11" Foreground="#C9A96E" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"/>
-                        <TextBlock x:Name="StatusConflicts" Text="冲突 0" FontSize="12"
-                                   Foreground="#5E626E" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </StatusBarItem>
-                <StatusBarItem Grid.Column="4">
-                    <TextBlock x:Name="StatusGamePath" Text="巫师3: 未检测" FontSize="12"
-                               Foreground="#5E626E" VerticalAlignment="Center"/>
-                </StatusBarItem>
-            </StatusBar>
+                    <Button Grid.Column="2" Click="ConflictStatus_Click" Cursor="Hand"
+                            Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,16,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA3B;" FontSize="11" Foreground="#E0556A" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"/>
+                            <TextBlock x:Name="StatusConflicts" Text="冲突 0" FontSize="12"
+                                       Foreground="#E0556A" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="3" Click="PotentialStatus_Click" Cursor="Hand"
+                            Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,16,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xEA39;" FontSize="11" Foreground="#C9A96E" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets"/>
+                            <TextBlock x:Name="StatusPotential" Text="潜在覆盖 0" FontSize="12"
+                                       Foreground="#C9A96E" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Grid.Column="4" x:Name="StatusGamePath" Text="巫师3: 未检测" FontSize="12"
+                               Foreground="#5E626E" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>

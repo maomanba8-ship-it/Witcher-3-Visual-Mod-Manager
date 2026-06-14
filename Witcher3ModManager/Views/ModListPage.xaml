@@ -121,9 +121,23 @@
                         <Image x:Name="DetailScreenshot" Stretch="Uniform"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
+                    <Button x:Name="CoverBtn" Grid.Row="1" Content="&#xE722; 设置封面" 
+                            HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                            Margin="0,0,0,6" Padding="8,4"
+                            FontSize="10" FontFamily="Microsoft YaHei UI"
+                            Foreground="#5E626E" Cursor="Hand"
+                            Background="#251C1F2A" BorderBrush="#2A2E3C" BorderThickness="1"
+                            Click="CoverBtn_Click" ToolTip="自定义预览图片"/>
                     <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="DetailPanel" Margin="16,12" Visibility="Collapsed">
-                            <TextBlock x:Name="DetailName" FontSize="15" FontWeight="SemiBold" Foreground="#E2E4E9" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="DetailName" FontSize="15" FontWeight="SemiBold" Foreground="#E2E4E9" TextWrapping="Wrap" MaxWidth="220"/>
+                                <Button x:Name="RenameBtn" Content="&#xE8EC;" FontFamily="Segoe MDL2 Assets" Width="24" Height="24"
+                                        Foreground="#5E626E" Cursor="Hand" Margin="6,0,0,0"
+                                        Background="Transparent" BorderThickness="0" FontSize="14"
+                                        Click="RenameBtn_Click" ToolTip="Edit Display Name"/>
+                            </StackPanel>
+                            <TextBlock x:Name="DetailOriginalName" FontSize="11" Foreground="#5E626E" Margin="0,2,0,6" TextWrapping="Wrap"/>
                             <TextBlock x:Name="DetailAuthor" FontSize="12" Foreground="#9A9EAA" Margin="0,4,0,0"/>
                             <TextBlock x:Name="DetailVersion" FontSize="12" Foreground="#5E626E"/>
                             <TextBlock x:Name="DetailCategory" FontSize="12" Foreground="#8BA4B5"/>

@@ -1,6 +1,8 @@
 using System.IO;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.RegularExpressions;
+using System.Windows;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -23,7 +25,7 @@ public class ModImportService
         _sevenZipPath = Find7Zip();
     }
 
-    public async Task<ModEntry?> ImportArchiveAsync(string archivePath,
+    public async Task<List<ModEntry>> ImportArchiveAsync(string archivePath,
         IProgress<string>? progress = null)
     {
         if (!File.Exists(archivePath))
@@ -32,7 +34,6 @@ public class ModImportService
         var archiveName = Path.GetFileNameWithoutExtension(archivePath);
         progress?.Report($"正在解压: {Path.GetFileName(archivePath)}...");
 
-        // Extract to a temp directory
         var tempExtractDir = Path.Combine(_storage.GetModsDirectory(), 
             "_tmp_" + Guid.NewGuid().ToString("N")[..8]);
         if (Directory.Exists(tempExtractDir))
@@ -42,37 +43,124 @@ public class ModImportService
         if (!extracted)
         {
             progress?.Report("解压失败");
-            return null;
+            return new List<ModEntry>();
         }
 
-        // Find the actual mod root folder (the one with content/ inside)
-        // Preserve its ORIGINAL name, don't rename to archive name
-        var modRoot = FindModRoot(tempExtractDir);
-        var originalFolderName = Path.GetFileName(modRoot);
+        var groupId = Guid.NewGuid().ToString("N")[..8];
+        var results = new List<ModEntry>();
 
-        progress?.Report("正在分析模组信息...");
+        // Step 0: Detect bundle-patching mods (quickbms + .bms)
+        if (IsBundlePatchMod(tempExtractDir))
+        {
+            progress?.Report("不支持此类模组：Bundle 补丁模组需手动运行 Install.bat");
+            try { Directory.Delete(tempExtractDir, true); } catch { }
+            return results;
+        }
 
-        var modType = DetectModType(modRoot, archiveName);
-        var gameFolderName = EnsureModPrefix(originalFolderName, modType);
+        // Step 1: Recursively scan for mod*/dlc* folders with content/
+        var candidates = ScanModDlcRoots(tempExtractDir);
 
-        // Store using the real mod folder name (e.g., "modNoFallDamage"), NOT the archive name
+        if (candidates.Count > 0)
+        {
+            foreach (var candidate in candidates)
+            {
+                var modType = candidate.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) 
+                    ? ModType.Dlc : ModType.Mod;
+                var entry = await BuildModEntry(candidate.FullName, modType, groupId, archivePath, archiveName, progress);
+                if (entry != null) results.Add(entry);
+            }
+        }
+        else
+        {
+            // Step 2: Fallback to FindModRoot
+            var root = FindModRoot(tempExtractDir);
+            if (root != null)
+            {
+                // Ask user: Mods or DLC?
+                var modType = Application.Current.Dispatcher.Invoke(() => AskModOrDlc(archiveName));
+                if (modType != null)
+                {
+                    var entry = await BuildModEntry(root, modType.Value, groupId, archivePath, archiveName, progress);
+                    if (entry != null) results.Add(entry);
+                }
+            }
+            else
+            {
+                // Step 3: Can't identify
+                progress?.Report($"无法自动识别模组结构: {archiveName}");
+            }
+        }
+
+        // Cleanup temp
+        try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+
+        foreach (var entry in results)
+            _storage.AddMod(entry);
+
+        progress?.Report(results.Count > 0 
+            ? $"导入完成: {results.Count} 个模组"
+            : $"导入失败: {archiveName} - 无法识别");
+        
+        return results;
+    }
+
+    /// <summary>
+    /// Recursively scan for mod*/dlc* folders that directly contain a "content" subfolder.
+    /// Deduplicates nested matches (keeps deepest).
+    /// </summary>
+    private static List<DirectoryInfo> ScanModDlcRoots(string extractDir)
+    {
+        var allDirs = new DirectoryInfo(extractDir).GetDirectories("*", SearchOption.AllDirectories);
+
+        var candidates = allDirs.Where(d =>
+            (d.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase) ||
+             d.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase)) &&
+            d.GetDirectories("content", SearchOption.TopDirectoryOnly).Length > 0
+        ).ToList();
+
+        // Deduplicate: if modX and modX/sub/modX both found, keep deepest
+        for (int i = candidates.Count - 1; i >= 0; i--)
+        {
+            for (int j = candidates.Count - 1; j >= 0; j--)
+            {
+                if (i != j && candidates[i].FullName.StartsWith(
+                    candidates[j].FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    candidates.RemoveAt(j);
+                    i = candidates.Count - 1;
+                    break;
+                }
+            }
+        }
+
+        return candidates
+            .OrderBy(d => d.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(d => d.Name)
+            .ToList();
+    }
+
+    private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
+        string archivePath, string archiveName, IProgress<string>? progress)
+    {
+        progress?.Report($"正在分析: {Path.GetFileName(modRoot)}...");
+
+        var originalName = Path.GetFileName(modRoot);
+        var gameFolderName = EnsureModPrefix(originalName, modType);
+
         var finalModDir = Path.Combine(_storage.GetModsDirectory(), gameFolderName);
         if (Directory.Exists(finalModDir))
             finalModDir = Path.Combine(_storage.GetModsDirectory(), 
                 gameFolderName + "_" + DateTime.Now.ToString("yyyyMMddHHmmss"));
 
-        // Move from temp to final storage
-        MoveDirectory(modRoot, finalModDir);
-        // Clean up temp
-        try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+        await Task.Run(() => MoveDirectory(modRoot, finalModDir));
 
         var modInfo = ParseModInfo(finalModDir);
         var category = DetectCategory(finalModDir, archiveName, modInfo);
         var screenshot = FindScreenshot(finalModDir, modInfo);
 
-        var mod = new ModEntry
+        return new ModEntry
         {
-            Name = modInfo.TryGetValue("name", out var n) ? n : archiveName,
+            Name = modInfo.TryGetValue("name", out var n) ? n : originalName,
             Author = modInfo.GetValueOrDefault("author", ""),
             Version = modInfo.GetValueOrDefault("version", ""),
             Description = modInfo.GetValueOrDefault("description", "") != ""
@@ -83,22 +171,34 @@ public class ModImportService
             SourceArchive = archivePath,
             InstalledPath = finalModDir,
             GameModFolderName = gameFolderName,
+            GroupId = groupId,
             ImportDate = DateTime.Now,
             IsEnabled = false,
             ModType = modType
         };
-
-        _storage.AddMod(mod);
-        progress?.Report($"导入完成: {mod.Name} [{mod.DisplayModType}]");
-        return mod;
     }
 
-    /// <summary>
-    /// Find the actual mod root folder by recursively stripping single-child wrapper folders.
-    /// Stops when: folder has "content" subfolder, OR has multiple children, OR no children.
-    /// Returns the ORIGINAL path without renaming — caller decides the final name.
-    /// </summary>
-    private static string FindModRoot(string sourceDir)
+    private static ModType? AskModOrDlc(string archiveName)
+    {
+        var result = MessageBox.Show(
+            $"无法自动识别 \"{archiveName}\" 的安装位置。\n\n" +
+            "这个模组应安装到哪个目录？\n\n" +
+            "是 = Mods 文件夹\n" +
+            "否 = DLC 文件夹\n" +
+            "取消 = 跳过此模组",
+            "选择安装位置",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+
+        return result switch
+        {
+            MessageBoxResult.Yes => ModType.Mod,
+            MessageBoxResult.No => ModType.Dlc,
+            _ => null
+        };
+    }
+
+private static string FindModRoot(string sourceDir)
     {
         var current = sourceDir;
 
@@ -308,6 +408,20 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             searchText.Contains("model")) return CategoryType.Characters;
 
         return CategoryType.Other;
+    }
+
+    /// <summary>
+    /// Detect bundle-patching mods that use quickbms to modify game .bundle files.
+    /// These cannot be managed automatically.
+    /// </summary>
+    private static bool IsBundlePatchMod(string extractDir)
+    {
+        var files = Directory.GetFiles(extractDir, "*.*", SearchOption.AllDirectories);
+        var hasQuickBms = files.Any(f => Path.GetFileName(f).Equals(
+            "quickbms.exe", StringComparison.OrdinalIgnoreCase));
+        var hasBmsScript = files.Any(f => Path.GetExtension(f).Equals(
+            ".bms", StringComparison.OrdinalIgnoreCase));
+        return hasQuickBms && hasBmsScript;
     }
 
     private string? FindScreenshot(string modDir, Dictionary<string, string> modInfo)

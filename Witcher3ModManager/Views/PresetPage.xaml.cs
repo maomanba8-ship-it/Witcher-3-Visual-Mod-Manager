@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Controls;
@@ -18,6 +18,10 @@ public partial class PresetPage : UserControl
     public PresetPage()
     {
         InitializeComponent();
+        BackBtnText.Text = "返回";
+        PageTitleText.Text = "预设管理";
+        SaveBtnText.Text = "保存当前配置";
+        EmptyText.Text = "暂无预设";
     }
 
     public void Initialize(PresetService presetService, ModStorageService storage, Witcher3Service w3)
@@ -137,11 +141,11 @@ public partial class PresetPage : UserControl
     {
         if (_presetService == null || _storage == null) return;
 
-        var inputDialog = new InputDialog("保存预设", "输入预设名称：", "我的配置");
-        if (inputDialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(inputDialog.InputText))
+        var result = InputDialog.Show("保存预设", "\uE8EC", "输入预设名称：", "我的配置", "确定", "取消");
+        if (!string.IsNullOrWhiteSpace(result))
         {
             var allMods = _storage.GetAllMods().ToList();
-            _presetService.SavePreset(inputDialog.InputText.Trim(), allMods);
+            _presetService.SavePreset(result.Trim(), allMods);
             RefreshPresets();
         }
     }
@@ -251,135 +255,3 @@ public partial class PresetPage : UserControl
 }
     }
 /// <summary>
-/// Simple input dialog for typing preset name.
-/// </summary>
-public class InputDialog : Window
-{
-    public string InputText { get; private set; } = "";
-    private readonly System.Windows.Controls.TextBox _textBox;
-
-    public InputDialog(string title, string message, string defaultText = "")
-    {
-        Width = 420;
-        Height = 200;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = System.Windows.Media.Brushes.Transparent;
-        ShowInTaskbar = false;
-        Owner = Application.Current.MainWindow;
-
-        var border = new Border
-        {
-            Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#14161E")),
-            CornerRadius = new CornerRadius(10),
-            BorderBrush = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2E3C")),
-            BorderThickness = new Thickness(1)
-        };
-
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) });
-
-        // Title
-        var titleBar = new Border
-        {
-            Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1C1F2A")),
-            CornerRadius = new CornerRadius(10, 10, 0, 0),
-            Padding = new Thickness(16, 14, 16, 14)
-        };
-        titleBar.Child = new System.Windows.Controls.TextBlock
-        {
-            Text = title,
-            FontSize = 14,
-            FontWeight = System.Windows.FontWeights.SemiBold,
-            Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E2E4E9"))
-        };
-        Grid.SetRow(titleBar, 0);
-        grid.Children.Add(titleBar);
-
-        // Content
-        var content = new StackPanel { Margin = new Thickness(20, 14, 20, 10) };
-        content.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = message,
-            FontSize = 12,
-            Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#9A9EAA")),
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-        _textBox = new System.Windows.Controls.TextBox
-        {
-            Text = defaultText,
-            Height = 30,
-            Background = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1C1F2A")),
-            Foreground = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E2E4E9")),
-            BorderBrush = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#2A2E3C")),
-            CaretBrush = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E2E4E9"))
-        };
-        _textBox.SelectAll();
-        _textBox.Focus();
-        _textBox.KeyDown += (s, args) => { if (args.Key == System.Windows.Input.Key.Enter) { InputText = _textBox.Text; DialogResult = true; Close(); } };
-        content.Children.Add(_textBox);
-        Grid.SetRow(content, 1);
-        grid.Children.Add(content);
-
-        // Buttons
-        var btnPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(16, 6, 16, 12)
-        };
-        var cancelBtn = CreateButton("取消", false);
-        var okBtn = CreateButton("确定", true);
-        btnPanel.Children.Add(cancelBtn);
-        btnPanel.Children.Add(okBtn);
-        Grid.SetRow(btnPanel, 2);
-        grid.Children.Add(btnPanel);
-
-        border.Child = grid;
-        Content = border;
-        Loaded += (s, e) => { _textBox.Focus(); _textBox.SelectAll(); };
-    }
-
-    private Button CreateButton(string text, bool isPrimary)
-    {
-        var btn = new Button
-        {
-            Content = text,
-            Width = 80,
-            Height = 32,
-            Margin = new Thickness(4, 0, 0, 0),
-            Cursor = System.Windows.Input.Cursors.Hand
-        };
-        if (isPrimary)
-        {
-            btn.Style = null;
-            btn.Click += (s, e) => { InputText = _textBox.Text; DialogResult = true; Close(); };
-        }
-        else
-        {
-            btn.Click += (s, e) => { DialogResult = false; Close(); };
-        }
-        return btn;
-    }
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-        var chrome = new System.Windows.Shell.WindowChrome
-        {
-            CaptionHeight = 0,
-            ResizeBorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(10),
-            GlassFrameThickness = new Thickness(0)
-        };
-        System.Windows.Shell.WindowChrome.SetWindowChrome(this, chrome);
-    }
-}
-
-
-
-
-

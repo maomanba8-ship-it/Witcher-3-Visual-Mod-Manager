@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -48,8 +48,7 @@ public partial class MainWindow : Window
             _presets = new PresetService();
 
             LoadTitleIcon();
-            SetupStatusBarPanel();
-            LoadBackgroundImage();
+                        LoadBackgroundImage();
             DetectAndShowGamePath();
             NavigateToHome();
         }
@@ -221,12 +220,52 @@ public partial class MainWindow : Window
 
     private void OnBackgroundChanged(string path) => LoadBackgroundImage();
 
-    private void OnStatusUpdated(int enabled, int total, int conflicts)
+    private void OnStatusUpdated(int enabled, int total, int conflicts, int potential)
     {
         StatusEnabled.Text = $"已启用 {enabled}";
         StatusTotal.Text = $"总计 {total}";
         StatusConflicts.Text = $"冲突 {conflicts}";
+        StatusPotential.Text = $"潜在覆盖 {potential}";
     }
+
+    private void ConflictStatus_Click(object sender, RoutedEventArgs e)
+    {
+        if (_conflict == null || _storage == null) return;
+        var conflicts = _conflict.ForceDetectConflicts();
+        var allMods = _storage.GetAllMods();
+        var modDateMap = allMods.ToDictionary(m => m.Name, m => m.ImportDate);
+        var overrides = _conflict.GetPotentialOverrides();
+        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides);
+        dialog.ShowDialog();
+        RefreshStatusBar();
+    }
+
+    private void PotentialStatus_Click(object sender, RoutedEventArgs e)
+    {
+        if (_conflict == null) return;
+        var overlaps = _conflict.GetPotentialOverrides();
+        if (overlaps.Count == 0)
+        {
+            System.Windows.MessageBox.Show("未检测到潜在覆盖。",
+                "潜在覆盖", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+        var dialog = new Views.PotentialOverlapDialog(overlaps);
+        dialog.ShowDialog();
+    }
+
+    private void RefreshStatusBar()
+    {
+        if (_storage == null || _conflict == null) return;
+        var allMods = _storage.GetAllMods();
+        StatusEnabled.Text = $"已启用 {allMods.Count(m => m.IsEnabled)}";
+        StatusTotal.Text = $"总计 {allMods.Count}";
+        StatusConflicts.Text = $"冲突 {_conflict.DetectConflicts().Count}";
+        StatusPotential.Text = $"潜在覆盖 {_conflict.DetectPotentialOverrideCount()}";
+    }
+
+    
 
     private void SetBackgroundBlur(bool blurred)
     {
@@ -242,23 +281,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SetupStatusBarPanel()
-    {
-        var gridFactory = new FrameworkElementFactory(typeof(Grid));
-        AddGridColumn(gridFactory, GridLength.Auto);
-        AddGridColumn(gridFactory, GridLength.Auto);
-        AddGridColumn(gridFactory, new GridLength(1, GridUnitType.Star));
-        AddGridColumn(gridFactory, GridLength.Auto);
-        AddGridColumn(gridFactory, GridLength.Auto);
-        MainStatusBar.ItemsPanel = new ItemsPanelTemplate(gridFactory);
-    }
-
-    private static void AddGridColumn(FrameworkElementFactory parent, GridLength width)
-    {
-        var col = new FrameworkElementFactory(typeof(ColumnDefinition));
-        col.SetValue(ColumnDefinition.WidthProperty, width);
-        parent.AppendChild(col);
-    }
+    
 
     #region Window Controls
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

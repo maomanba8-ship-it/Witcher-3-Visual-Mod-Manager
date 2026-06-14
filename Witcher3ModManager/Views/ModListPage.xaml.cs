@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+
 using System.Diagnostics;
 using Microsoft.Win32;
 using Witcher3ModManager.Models;
@@ -23,7 +24,7 @@ public partial class ModListPage : UserControl
     private ModEntry? _selectedMod;
 
     public event Action? NavigateBackRequested;
-    public event Action<int, int, int>? StatusUpdated;
+    public event Action<int, int, int, int>? StatusUpdated;  // enabled, total, conflicts, potentialOverrides
 
     public ModListPage()
     {
@@ -98,7 +99,7 @@ public partial class ModListPage : UserControl
             Tag = mod
         };
         card.MouseLeftButtonDown += ModCard_Click;
-
+        
         var grid = new Grid { Margin = new Thickness(12, 10, 12, 10) };
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -111,7 +112,7 @@ public partial class ModListPage : UserControl
         var leftStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var nameText = new TextBlock
         {
-            Text = mod.Name, FontSize = 13, FontWeight = FontWeights.SemiBold,
+            Text = mod.DisplayName, FontSize = 13, FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E2E4E9")),
             TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 155
         };
@@ -168,14 +169,40 @@ public partial class ModListPage : UserControl
             FontSize = 12, Cursor = Cursors.Hand
         };
         delBtn.Click += DeleteMod_Click;
-        Grid.SetColumn(delBtn, 1);
-
+        
         row1.Children.Add(authorText);
-        row1.Children.Add(delBtn);
+        // Dots row: red (conflict) + yellow (override) + delete button
+        var dotsPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+
+        if (_conflict != null)
+        {
+            var conflictingMods = _conflict.CheckModConflicts(mod);
+            if (conflictingMods.Count > 0)
+                dotsPanel.Children.Add(new System.Windows.Shapes.Ellipse
+                {
+                    Width = 7, Height = 7,
+                    Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E0556A")),
+                    Margin = new Thickness(0, 0, 4, 0)
+                });
+        }
+
+        if (_conflict != null && _conflict.HasPotentialOverride(mod))
+            dotsPanel.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 7, Height = 7,
+                Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C9A96E")),
+                Margin = new Thickness(0, 0, 4, 0)
+            });
+
+        dotsPanel.Children.Add(delBtn);
+        Grid.SetColumn(dotsPanel, 1);
+        row1.Children.Add(dotsPanel);
         Grid.SetRow(row1, 1);
 
         grid.Children.Add(row0);
         grid.Children.Add(row1);
+
+
         card.Child = grid;
         return card;
     }
@@ -186,7 +213,8 @@ public partial class ModListPage : UserControl
         var total = _allMods.Count;
         var conflicts = 0;
         try { conflicts = _conflict?.DetectConflicts().Count ?? 0; } catch { }
-        StatusUpdated?.Invoke(enabled, total, conflicts);
+        var overrides = _conflict?.DetectPotentialOverrideCount() ?? 0;
+        StatusUpdated?.Invoke(enabled, total, conflicts, overrides);
     }
 
     #region Drag and Drop
@@ -238,10 +266,19 @@ public partial class ModListPage : UserControl
         if (_importer == null || _storage == null) return;
         try
         {
-            var mod = await _importer.ImportArchiveAsync(filePath);
-            if (mod != null) RefreshModList();
-            else MessageBox.Show("Import failed: " + Path.GetFileName(filePath),
-                "Import Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            var imported = await _importer.ImportArchiveAsync(filePath);
+            if (imported.Count > 0) 
+            {
+                _conflict?.InvalidateCache();
+                RefreshModList();
+                if (imported.Count > 1)
+                    MessageBox.Show($"导入了 {imported.Count} 个模组（组合包已拆分）",
+                        "导入完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else MessageBox.Show("导入失败: " + Path.GetFileName(filePath) + "\n\n"
+                    + "该模组使用了 Bundle 补丁方式（quickbms），不是标准模组格式。\n"
+                    + "请手动解压后运行其中的 Install.bat 进行安装。",
+                    "导入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
@@ -272,6 +309,7 @@ public partial class ModListPage : UserControl
                 "Delete [" + mod.Name + "]?\n\nThis cannot be undone.",
                 "\uE74D", "Delete", "取消");
             if (!confirmed) return;
+            _conflict?.InvalidateCache();
             if (_w3 != null) _w3.DeleteMod(mod);
             _storage?.RemoveMod(modId);
             RefreshModList();
@@ -280,6 +318,45 @@ public partial class ModListPage : UserControl
     #endregion
 
     #region Detail
+    private void ModCard_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement el && el.Tag is ModEntry mod)
+        {
+            var menu = new ContextMenu();
+            var setCoverItem = new MenuItem { Header = "\uE722  设置预览图片" };
+            setCoverItem.Click += (s, args) => SetCoverImage(mod);
+            menu.Items.Add(setCoverItem);
+
+            var clearCoverItem = new MenuItem { Header = "\uE74D  清除封面" };
+            clearCoverItem.Click += (s, args) => { mod.CoverImagePath = ""; _storage?.UpdateMod(mod); ShowModDetail(mod); };
+            menu.Items.Add(clearCoverItem);
+
+            menu.IsOpen = true;
+        }
+    }
+
+    private void SetCoverImage(ModEntry mod)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择预览图片",
+            Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            var coversDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Witcher3ModManager", "Covers");
+            Directory.CreateDirectory(coversDir);
+
+            var destPath = Path.Combine(coversDir, mod.Id + Path.GetExtension(dlg.FileName));
+            File.Copy(dlg.FileName, destPath, true);
+            mod.CoverImagePath = destPath;
+            _storage?.UpdateMod(mod);
+            ShowModDetail(mod);
+        }
+    }
+
     private void ModCard_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement el && el.Tag is ModEntry mod)
@@ -291,7 +368,9 @@ public partial class ModListPage : UserControl
         _selectedMod = mod;
         DetailEmptyPanel.Visibility = Visibility.Collapsed;
         DetailPanel.Visibility = Visibility.Visible;
-        DetailName.Text = mod.Name;
+        DetailName.Text = mod.DisplayName;
+        DetailOriginalName.Text = string.IsNullOrEmpty(mod.GameModFolderName) ? "" : "文件名： " + mod.GameModFolderName;
+        RenameBtn.Tag = mod;
         DetailAuthor.Text = "作者： " + mod.Author;
         DetailVersion.Text = "版本： " + mod.Version;
         DetailCategory.Text = "分类： " + mod.DisplayCategory + " | " + mod.DisplayModType;
@@ -309,12 +388,17 @@ public partial class ModListPage : UserControl
         catch { DetailSize.Text = "大小： 未知"; }
         DetailLocation.Text = mod.InstalledPath;
         DetailDescription.Text = string.IsNullOrEmpty(mod.Description) ? "（无描述）" : mod.Description;
-        if (!string.IsNullOrEmpty(mod.ScreenshotPath) && File.Exists(mod.ScreenshotPath))
+        // Warn if storage directory is missing
+        if (!string.IsNullOrEmpty(mod.InstalledPath) && !Directory.Exists(mod.InstalledPath))
+            DetailDescription.Text = "⚠ 存储目录已丢失！\n" + DetailDescription.Text;
+        var imagePath = !string.IsNullOrEmpty(mod.CoverImagePath) && File.Exists(mod.CoverImagePath)
+            ? mod.CoverImagePath : mod.ScreenshotPath;
+        if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
         {
             try
             {
                                 var bmp = new BitmapImage();
-                using (var fs = new FileStream(mod.ScreenshotPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     bmp.BeginInit();
                     bmp.StreamSource = fs;
@@ -340,7 +424,7 @@ public partial class ModListPage : UserControl
             if (_w3 != null && _w3.GetGamePath() != null)
             {
                 var success = _w3.EnableMod(mod);
-                if (success) { mod.IsEnabled = true; }
+                if (success) { mod.IsEnabled = true; _conflict?.InvalidateCache(); }
                 else
                 {
                     MessageBox.Show("启用失败： " + mod.Name, "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -362,6 +446,7 @@ public partial class ModListPage : UserControl
             if (_w3 != null && _w3.GetGamePath() != null)
                 _w3.DisableMod(mod);
             mod.IsEnabled = false;
+            _conflict?.InvalidateCache();
             _storage?.UpdateMod(mod);
             UpdateStatusBar();
             RefreshModList();
@@ -417,7 +502,7 @@ public partial class ModListPage : UserControl
         
         var filtered = string.IsNullOrEmpty(query)
             ? source
-            : source.Where(m => m.Name.ToLower().Contains(query) ||
+            : source.Where(m => m.DisplayName.ToLower().Contains(query) ||
                                (m.Author?.ToLower().Contains(query) ?? false)).ToList();
         
         var panel2 = new WrapPanel { Orientation = Orientation.Horizontal };
@@ -430,9 +515,10 @@ public partial class ModListPage : UserControl
     private void ConflictCheck_Click(object sender, RoutedEventArgs e)
     {
         if (_conflict == null) return;
-        var conflicts = _conflict.DetectConflicts();
+        var conflicts = _conflict.ForceDetectConflicts();
         var modDateMap = _allMods.ToDictionary(m => m.Name, m => m.ImportDate);
-        var dialog = new ConflictDialog(conflicts, modDateMap);
+        var overrides = _conflict.GetPotentialOverrides();
+        var dialog = new ConflictDialog(conflicts, modDateMap, overrides);
         dialog.ShowDialog();
         UpdateStatusBar();
     }
@@ -452,8 +538,51 @@ public partial class ModListPage : UserControl
             "\uEA3B", "卸载", "取消");
         if (!confirmed) return;
         if (_backup != null) _backup.UninstallAllMods(_allMods);
+        _conflict?.InvalidateCache();
         RefreshModList();
         MessageBox.Show("所有模组已卸载。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void CoverBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedMod == null) return;
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择预览图片",
+            Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*"
+        };
+        if (dlg.ShowDialog() == true)
+        {
+            var coversDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Witcher3ModManager", "Covers");
+            System.IO.Directory.CreateDirectory(coversDir);
+
+            var destPath = System.IO.Path.Combine(coversDir, _selectedMod.Id + System.IO.Path.GetExtension(dlg.FileName));
+            System.IO.File.Copy(dlg.FileName, destPath, true);
+            _selectedMod.CoverImagePath = destPath;
+            _storage?.UpdateMod(_selectedMod);
+            ShowModDetail(_selectedMod);
+        }
+    }
+
+    private void RenameBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is ModEntry mod)
+        {
+            var newName = InputDialog.Show("编辑显示名", "\uE8EC",
+                "输入自定义显示名称（不影响原始文件）：",
+                mod.UserDisplayName ?? mod.Name,
+                "确定", "取消");
+            if (newName != null)
+            {
+                mod.UserDisplayName = newName.Trim();
+                _storage?.UpdateMod(mod);
+                if (_selectedMod?.Id == mod.Id)
+                    ShowModDetail(mod);
+                RefreshModList();
+            }
+        }
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)

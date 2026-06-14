@@ -17,12 +17,18 @@ public class ModEntry
     public string Description { get; set; } = "";
     public CategoryType Category { get; set; } = CategoryType.Other;
     public string ScreenshotPath { get; set; } = "";
+    public string CoverImagePath { get; set; } = "";
     public string SourceArchive { get; set; } = "";
     public string InstalledPath { get; set; } = "";
     public bool IsEnabled { get; set; }
     public int Priority { get; set; }
     public DateTime ImportDate { get; set; } = DateTime.Now;
     public string GameModFolderName { get; set; } = "";
+    public string GroupId { get; set; } = "";
+    public string UserDisplayName { get; set; } = "";
+
+    [JsonIgnore]
+    public string DisplayName => string.IsNullOrWhiteSpace(UserDisplayName) ? Name : UserDisplayName;
     public ModType ModType { get; set; } = ModType.Mod;
 
     [JsonIgnore]
