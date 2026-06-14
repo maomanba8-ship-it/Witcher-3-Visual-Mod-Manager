@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         try { InitializeComponent(); }
         catch (Exception ex)
         {
-            MessageBox.Show($"界面初始化失败：: {ex.Message}", "错误",
+            MessageBox.Show($"界面初始化失败: {ex.Message}", "错误",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Application.Current.Shutdown();
             return;
@@ -40,6 +40,8 @@ public partial class MainWindow : Window
         try
         {
             _storage = new ModStorageService();
+            _storage.MigrateGroupedEntries();
+            _storage.DeduplicateByGameFolderName();
             _settings = new SettingsService();
             _importer = new ModImportService(_storage);
             _w3 = new Witcher3Service(_settings);
@@ -48,13 +50,13 @@ public partial class MainWindow : Window
             _presets = new PresetService();
 
             LoadTitleIcon();
-                        LoadBackgroundImage();
+            LoadBackgroundImage();
             DetectAndShowGamePath();
             NavigateToHome();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"启动失败：: {ex.Message}", "错误",
+            MessageBox.Show($"启动失败: {ex.Message}", "错误",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -113,10 +115,10 @@ public partial class MainWindow : Window
         {
             var path = _w3?.GetGamePath();
             StatusGamePath.Text = path != null
-                ? $"巫师3：{Path.GetFileName(path)}"
-                : "巫师3：未检测";
+                ? $"巫师3: {Path.GetFileName(path)}"
+                : "巫师3: 未检测";
         }
-        catch { StatusGamePath.Text = "巫师3：未检测"; }
+        catch { StatusGamePath.Text = "巫师3: 未检测"; }
     }
 
     private void NavigateToHome()
@@ -159,10 +161,10 @@ public partial class MainWindow : Window
         _modListPage.NavigateBackRequested += OnModListBack;
         _modListPage.StatusUpdated += OnStatusUpdated;
         _modListPage.Initialize(_storage, _importer, _w3, _conflict, _backup);
-        // _modListPage.RefreshModList();
         PageHost.Content = _modListPage;
         SetBackgroundBlur(true);
         MainStatusBar.Visibility = Visibility.Visible;
+        RefreshStatusBar();
     }
 
     private void NavigateToPresets()
@@ -233,7 +235,12 @@ public partial class MainWindow : Window
         if (_conflict == null || _storage == null) return;
         var conflicts = _conflict.ForceDetectConflicts();
         var allMods = _storage.GetAllMods();
-        var modDateMap = allMods.ToDictionary(m => m.Name, m => m.ImportDate);
+
+        // Use GroupBy to handle duplicate names safely (e.g. from incomplete Mod+DLC merges)
+        var modDateMap = allMods
+            .GroupBy(m => m.Name)
+            .ToDictionary(g => g.Key, g => g.First().ImportDate);
+
         var overrides = _conflict.GetPotentialOverrides();
         var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides);
         dialog.ShowDialog();
@@ -265,7 +272,7 @@ public partial class MainWindow : Window
         StatusPotential.Text = $"潜在覆盖 {_conflict.DetectPotentialOverrideCount()}";
     }
 
-    
+
 
     private void SetBackgroundBlur(bool blurred)
     {
@@ -281,7 +288,7 @@ public partial class MainWindow : Window
         }
     }
 
-    
+
 
     #region Window Controls
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

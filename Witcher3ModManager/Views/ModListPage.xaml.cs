@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -516,7 +516,7 @@ public partial class ModListPage : UserControl
     {
         if (_conflict == null) return;
         var conflicts = _conflict.ForceDetectConflicts();
-        var modDateMap = _allMods.ToDictionary(m => m.Name, m => m.ImportDate);
+        var modDateMap = _allMods.GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.First().ImportDate);
         var overrides = _conflict.GetPotentialOverrides();
         var dialog = new ConflictDialog(conflicts, modDateMap, overrides);
         dialog.ShowDialog();

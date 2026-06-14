@@ -23,7 +23,11 @@ public class ModEntry
     public bool IsEnabled { get; set; }
     public int Priority { get; set; }
     public DateTime ImportDate { get; set; } = DateTime.Now;
-    public string GameModFolderName { get; set; } = "";
+    public string? GameModFolderName { get; set; }
+    public string? GameDlcFolderName { get; set; }
+
+    [JsonIgnore]
+    public bool HasDlcComponent => !string.IsNullOrWhiteSpace(GameDlcFolderName);
     public string GroupId { get; set; } = "";
     public string UserDisplayName { get; set; } = "";
 

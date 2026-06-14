@@ -41,7 +41,7 @@ public class PresetService
         {
             Name = name,
             CreatedAt = DateTime.Now,
-            ModStates = mods.ToDictionary(m => m.Name, m => m.IsEnabled)
+            ModStates = mods.Where(m => !string.IsNullOrEmpty(m.GameModFolderName)).GroupBy(m => m.GameModFolderName!).ToDictionary(g => g.Key, g => g.First().IsEnabled)
         };
 
         var safeName = GetSafeFileName(name);

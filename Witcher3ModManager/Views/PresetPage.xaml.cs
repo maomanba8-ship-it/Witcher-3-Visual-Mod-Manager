@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Controls;
@@ -169,7 +169,7 @@ public partial class PresetPage : UserControl
             var allMods = _storage.GetAllMods().ToList();
             foreach (var mod in allMods)
             {
-                bool shouldEnable = preset.ModStates.TryGetValue(mod.Name, out var enabled) && enabled;
+                bool shouldEnable = !string.IsNullOrEmpty(mod.GameModFolderName) && preset.ModStates.TryGetValue(mod.GameModFolderName, out var enabled) && enabled;
                 
                 if (shouldEnable && !mod.IsEnabled)
                 {

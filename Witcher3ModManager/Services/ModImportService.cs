@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -62,11 +62,35 @@ public class ModImportService
 
         if (candidates.Count > 0)
         {
-            foreach (var candidate in candidates)
+            // Separate mod and dlc candidates
+            var modDir = candidates.FirstOrDefault(c => c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase));
+            var dlcDir = candidates.FirstOrDefault(c => c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase));
+            var other = candidates.FirstOrDefault(c => !c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
+                                                     && !c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase));
+
+            if (modDir != null || dlcDir != null)
             {
-                var modType = candidate.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) 
-                    ? ModType.Dlc : ModType.Mod;
-                var entry = await BuildModEntry(candidate.FullName, modType, groupId, archivePath, archiveName, progress);
+                // Merge into single ModEntry
+                var primary = modDir ?? dlcDir!;
+                var entry = await BuildModEntry(primary.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
+                if (entry != null)
+                {
+                    entry.GameModFolderName = modDir?.Name ?? "";
+                    if (dlcDir != null)
+                    {
+                        entry.GameDlcFolderName = dlcDir.Name;
+                        // Also move dlc folder to storage
+                        var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dlcDir.Name);
+                        if (Directory.Exists(dlcStorageDir))
+                            Directory.Delete(dlcStorageDir, true);
+                        Directory.Move(dlcDir.FullName, dlcStorageDir);
+                    }
+                    results.Add(entry);
+                }
+            }
+            if (other != null)
+            {
+                var entry = await BuildModEntry(other.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
                 if (entry != null) results.Add(entry);
             }
         }
@@ -95,7 +119,20 @@ public class ModImportService
         try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
 
         foreach (var entry in results)
-            _storage.AddMod(entry);
+        {
+            if (_storage.AddMod(entry)) continue;
+
+            // Duplicate — ask user
+            var overwrite = Application.Current.Dispatcher.Invoke(() =>
+                MessageBox.Show(
+                    $"该模组已存在: {entry.Name}\n\n是否重新导入并覆盖？",
+                    "重复模组",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question) == MessageBoxResult.Yes);
+
+            if (overwrite)
+                _storage.AddOrReplaceMod(entry);
+        }
 
         progress?.Report(results.Count > 0 
             ? $"导入完成: {results.Count} 个模组"

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -16,19 +16,12 @@ public class ConflictService
         _w3 = w3;
     }
 
-    /// <summary>
-    /// Invalidate cache so next DetectConflicts() does a fresh scan.
-    /// Call after: import, enable, disable, delete.
-    /// </summary>
     public void InvalidateCache()
     {
         _cacheValid = false;
         _cachedConflicts = null;
     }
 
-    /// <summary>
-    /// Get conflicts (cached if valid, otherwise full scan).
-    /// </summary>
     public List<ConflictInfo> DetectConflicts()
     {
         if (_cacheValid && _cachedConflicts != null)
@@ -39,27 +32,65 @@ public class ConflictService
         return _cachedConflicts;
     }
 
-    /// <summary>
-    /// Force a fresh scan (used by manual "conflict check" button).
-    /// </summary>
     public List<ConflictInfo> ForceDetectConflicts()
     {
         InvalidateCache();
         return DetectConflicts();
     }
 
-    /// <summary>
-    /// Scan ONLY Game/mods/ and Game/dlc/ as the single source of truth.
-    /// </summary>
-    // Engine cache files that modders accidentally bundle — not real conflicts.
-    private static readonly HashSet<string> IgnoredPaths = new(StringComparer.OrdinalIgnoreCase)
+    // ── Ignore Rule System ────────────────────────────────────────
+    //
+    // Admission criteria (ALL three must be met):
+    //   1. Present in nearly every WolvenKit-packed mod
+    //   2. Overwriting it does NOT change game behavior
+    //   3. It provides ZERO diagnostic value for real conflicts
+    //
+    // ⚠ If a file only meets 1-2 criteria → do NOT add it here.
+
+    public static IReadOnlyList<IgnoredConflictRule> IgnoredConflictRules { get; } = new List<IgnoredConflictRule>
     {
-        @"content\blob0.bundle",
-        @"content\buffers0.bundle",
-        @"content\collision.cache",
-        @"content\texture.cache",
-        @"content\metadata.store"
+        new(@"content\blob0.bundle",          "Standard WolvenKit content bundle"),
+        new(@"content\buffers0.bundle",       "WolvenKit buffer bundle"),
+        new(@"content\collision.cache",       "Auto-generated collision cache"),
+        new(@"content\texture.cache",         "Auto-generated texture cache"),
+        new(@"content\metadata.store",        "WolvenKit metadata store"),
+        new(@"content\info.json",             "WolvenKit auto-generated mod metadata"),
+        new(@"content\shaderDx12.cache",      "Auto-generated shader cache (DX12)")
     };
+
+    /// <summary>
+    /// Fast-path check: is this relative path ignorable?
+    /// Uses a switch expression to avoid allocation.
+    /// </summary>
+    public static bool IsIgnorableConflict(string relativePath)
+    {
+        var normalized = relativePath.Replace('/', '\\').ToLowerInvariant();
+
+        return normalized switch
+        {
+            @"content\blob0.bundle"      => true,
+            @"content\buffers0.bundle"   => true,
+            @"content\collision.cache"   => true,
+            @"content\texture.cache"     => true,
+            @"content\metadata.store"    => true,
+            @"content\info.json"         => true,
+            @"content\shaderdx12.cache"  => true,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Return the reason a path was ignored, or null if not ignored.
+    /// </summary>
+    public static string? GetIgnoreReason(string relativePath)
+    {
+        var normalized = relativePath.Replace('/', '\\');
+        return IgnoredConflictRules
+            .FirstOrDefault(r => string.Equals(r.Pattern, normalized, StringComparison.OrdinalIgnoreCase))
+            ?.Reason;
+    }
+
+    // ── Scanning ──────────────────────────────────────────────────
 
     private List<ConflictInfo> ScanGameDirectory()
     {
@@ -71,11 +102,9 @@ public class ConflictService
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
             return conflicts;
 
-        // Build file -> mod names mapping
         var fileModMap = new Dictionary<string, List<string>>(
             StringComparer.OrdinalIgnoreCase);
 
-        // Scan both mods/ and dlc/ directories
         var rootDirs = new[] { "mods", "dlc" };
 
         foreach (var rootDir in rootDirs)
@@ -97,9 +126,7 @@ public class ConflictService
                     {
                         var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
 
-                                // Skip known engine cache files
-                                var normalized = relativePath.Replace('/', '\\');
-                                if (IgnoredPaths.Contains(normalized)) continue;
+                        if (IsIgnorableConflict(relativePath)) continue;
 
                         if (!fileModMap.ContainsKey(relativePath))
                             fileModMap[relativePath] = new List<string>();
@@ -108,11 +135,38 @@ public class ConflictService
                             fileModMap[relativePath].Add(mod.Name);
                     }
                 }
-                catch { /* skip inaccessible mod folders */ }
+                catch { }
+
+                if (mod.HasDlcComponent && rootDir == "mods")
+                {
+                    var dlcRoot = Path.Combine(gamePath, "dlc");
+                    if (Directory.Exists(dlcRoot))
+                    {
+                        var dlcDir = Path.Combine(dlcRoot, mod.GameDlcFolderName ?? "");
+                        if (Directory.Exists(dlcDir))
+                        {
+                            try
+                            {
+                                var dlcFiles = Directory.GetFiles(dlcDir, "*.*", SearchOption.AllDirectories);
+                                foreach (var dlcFile in dlcFiles)
+                                {
+                                    var dlcRelPath = dlcFile.Substring(dlcDir.Length + 1).Replace((char)92, (char)47);
+                                    if (IsIgnorableConflict(dlcRelPath)) continue;
+
+                                    if (!fileModMap.ContainsKey(dlcRelPath))
+                                        fileModMap[dlcRelPath] = new List<string>();
+
+                                    if (!fileModMap[dlcRelPath].Contains(mod.Name))
+                                        fileModMap[dlcRelPath].Add(mod.Name);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
             }
         }
 
-        // Find files owned by 2+ mods → conflict
         foreach (var kvp in fileModMap)
         {
             if (kvp.Value.Count >= 2)
@@ -132,10 +186,8 @@ public class ConflictService
         return conflicts;
     }
 
-    /// <summary>
-    /// Count potential overrides: mod pairs sharing the same category (excl. All/Other).
-    /// Does NOT scan files — purely category-based.
-    /// </summary>
+    // ── Potential Override ────────────────────────────────────────
+
     public int DetectPotentialOverrideCount()
     {
         var enabled = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
@@ -145,9 +197,6 @@ public class ConflictService
             .Sum(g => (long)g.Count() * (g.Count() - 1) / 2);
     }
 
-    /// <summary>
-    /// Get potential override groups keyed by category.
-    /// </summary>
     public Dictionary<CategoryType, List<string>> GetPotentialOverrides()
     {
         var enabled = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
@@ -157,9 +206,6 @@ public class ConflictService
             .ToDictionary(g => g.Key, g => g.Select(m => m.Name).ToList());
     }
 
-    /// <summary>
-    /// Check if a specific mod has potential overrides (same category, 2+ enabled).
-    /// </summary>
     public bool HasPotentialOverride(ModEntry mod)
     {
         if (!mod.IsEnabled) return false;
@@ -168,9 +214,8 @@ public class ConflictService
             .Count(m => m.IsEnabled && m.Id != mod.Id && m.Category == mod.Category) >= 1;
     }
 
-    /// <summary>
-    /// Get a summary grouped by mod pairs for display.
-    /// </summary>
+    // ── Summaries & Queries ───────────────────────────────────────
+
     public List<string> GetConflictSummary()
     {
         var conflicts = DetectConflicts();
@@ -193,14 +238,11 @@ public class ConflictService
         {
             var mods = kvp.Key.Split('|');
             var filesStr = kvp.Value.Files.Take(3).ToList();
-            var more = kvp.Value.Count > 3 ? $" (+{kvp.Value.Count - 3}个文件)" : "";
-            return $"{mods[0]} \u2194 {mods[1]}: {kvp.Value.Count}个冲突文件\n  {string.Join("\n  ", filesStr)}{more}";
+            var more = kvp.Value.Count > 3 ? $" (+{kvp.Value.Count - 3} more files)" : "";
+            return $"{mods[0]} <-> {mods[1]}: {kvp.Value.Count} conflicting files\n  {string.Join("\n  ", filesStr)}{more}";
         }).ToList();
     }
 
-    /// <summary>
-    /// Check if a specific mod conflicts with any enabled mod.
-    /// </summary>
     public List<string> CheckModConflicts(ModEntry mod)
     {
         if (!mod.IsEnabled) return new();

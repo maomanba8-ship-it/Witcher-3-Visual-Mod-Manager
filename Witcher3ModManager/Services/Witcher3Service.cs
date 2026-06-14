@@ -132,6 +132,7 @@ public class Witcher3Service
                 return false;
             }
 
+            var _savedStorageDir = System.IO.Path.GetDirectoryName(mod.InstalledPath) ?? "";
             mod.InstalledPath = enabledPath;
             mod.GameModFolderName = safeName;
             // Update screenshot path to new location
@@ -148,6 +149,32 @@ public class Witcher3Service
                         .Concat(Directory.GetFiles(enabledPath, "*.jpg", SearchOption.AllDirectories))
                         .FirstOrDefault();
                     if (found != null) mod.ScreenshotPath = found;
+                }
+            }
+
+            // Enable DLC component if present
+            if (mod.HasDlcComponent)
+            {
+                var dlcDir = GetGameDlcPath();
+                if (!string.IsNullOrEmpty(dlcDir) && !string.IsNullOrEmpty(mod.GameDlcFolderName))
+                {
+                    var dlcEnabled = System.IO.Path.Combine(dlcDir, mod.GameDlcFolderName);
+                    var dlcDisabled = System.IO.Path.Combine(dlcDir, "~" + mod.GameDlcFolderName);
+
+                    if (Directory.Exists(dlcDisabled))
+                    {
+                        if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true);
+                        Directory.Move(dlcDisabled, dlcEnabled);
+                    }
+                    else if (!Directory.Exists(dlcEnabled))
+                    {
+                        // Copy DLC from storage to game directory
+                        var storageDlc = System.IO.Path.Combine(
+                            _savedStorageDir,
+                            mod.GameDlcFolderName);
+                        if (Directory.Exists(storageDlc))
+                            CopyDirectoryRecursive(storageDlc, dlcEnabled);
+                    }
                 }
             }
 
@@ -185,6 +212,12 @@ public class Witcher3Service
                     Directory.Delete(disabledPath, true);
                 Directory.Move(enabledPath, disabledPath);
                 mod.InstalledPath = disabledPath;
+            if (mod.HasDlcComponent)
+            {
+                var dlcPath = GetGameDlcPath();
+                if (!string.IsNullOrEmpty(dlcPath))
+                    ToggleFolder(dlcPath, mod.GameDlcFolderName, false);
+            }
                 // Update screenshot path
                 if (!string.IsNullOrEmpty(mod.ScreenshotPath))
                 {
@@ -227,7 +260,21 @@ public class Witcher3Service
                     var enabledPath = Path.Combine(targetDir, cleanName);
                     var disabledPath = Path.Combine(targetDir, "~" + cleanName);
                     if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
+                    if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
                     if (Directory.Exists(disabledPath)) { Directory.Delete(disabledPath, true); deleted = true; }
+
+                    // Also clean dlc component
+                    if (mod.HasDlcComponent && Path.GetFileName(targetDir).Equals("mods", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dlcDir2 = GetGameDlcPath();
+                        if (!string.IsNullOrEmpty(dlcDir2))
+                        {
+                            var dlcEnabled = Path.Combine(dlcDir2, mod.GameDlcFolderName);
+                            var dlcDisabled = Path.Combine(dlcDir2, "~" + mod.GameDlcFolderName);
+                            try { if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true); } catch { }
+                            try { if (Directory.Exists(dlcDisabled)) Directory.Delete(dlcDisabled, true); } catch { }
+                        }
+                    }
                 }
                 catch { }
             }
@@ -286,7 +333,7 @@ public class Witcher3Service
         catch { }
     }
 
-    public void UpdateAllPriorities(List<(string GameModFolderName, int Priority)> mods)
+    public void UpdateAllPriorities(List<(string? GameModFolderName, int Priority)> mods)
     {
         WriteModsSettings(mods);
     }
@@ -337,6 +384,30 @@ public class Witcher3Service
         return prefix + clean;
     }
 
+    /// <summary>
+    /// Enable or disable a single folder by renaming (add/remove ~ prefix).
+    /// </summary>
+    private static bool ToggleFolder(string gameDir, string folderName, bool enable)
+    {
+        var cleanName = folderName.StartsWith("~") ? folderName.Substring(1) : folderName;
+        var enabledPath = System.IO.Path.Combine(gameDir, cleanName);
+        var disabledPath = System.IO.Path.Combine(gameDir, "~" + cleanName);
+
+        if (enable && Directory.Exists(disabledPath))
+        {
+            if (Directory.Exists(enabledPath)) Directory.Delete(enabledPath, true);
+            Directory.Move(disabledPath, enabledPath);
+            return true;
+        }
+        if (!enable && Directory.Exists(enabledPath))
+        {
+            if (Directory.Exists(disabledPath)) Directory.Delete(disabledPath, true);
+            Directory.Move(enabledPath, disabledPath);
+            return true;
+        }
+        return false;
+    }
+
     public static string SanitizeModName(string name)
     {
         var invalid = Path.GetInvalidFileNameChars();
@@ -353,6 +424,18 @@ public class Witcher3Service
         {
             CopyDirectoryRecursive(sourceDir, targetDir);
             Directory.Delete(sourceDir, true);
+        }
+    }
+
+    private void CopyDlcToGame(ModEntry mod, string dlcPath)
+    {
+        if (string.IsNullOrEmpty(dlcPath)) return;
+        var storageDlc = Path.Combine(Path.GetDirectoryName(mod.InstalledPath) ?? "", mod.GameDlcFolderName);
+        if (Directory.Exists(storageDlc))
+        {
+            var target = Path.Combine(dlcPath, mod.GameDlcFolderName);
+            if (!Directory.Exists(target))
+                CopyDirectoryRecursive(storageDlc, target);
         }
     }
 
