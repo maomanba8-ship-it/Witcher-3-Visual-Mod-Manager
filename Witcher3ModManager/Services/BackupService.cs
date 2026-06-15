@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -32,7 +32,7 @@ public class BackupService
 
         _backupRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Witcher3ModManager", "Backups");
+            AppDataPath.FolderName, "Backups");
         return _backupRoot;
     }
 

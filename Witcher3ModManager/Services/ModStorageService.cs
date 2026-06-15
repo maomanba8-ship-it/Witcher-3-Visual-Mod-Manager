@@ -15,7 +15,7 @@ public class ModStorageService
     {
         _dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Witcher3ModManager");
+            AppDataPath.FolderName);
         _modsDir = Path.Combine(_dataDir, "mods");
         _dbPath = Path.Combine(_dataDir, "mods.json");
         

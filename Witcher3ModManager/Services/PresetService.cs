@@ -12,7 +12,7 @@ public class PresetService
     {
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Witcher3ModManager");
+            AppDataPath.FolderName);
         _presetsDir = Path.Combine(dataDir, "presets");
         Directory.CreateDirectory(_presetsDir);
     }

@@ -16,7 +16,7 @@ public class TranslationService
     {
         _dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Witcher3ModManager", "translations");
+            AppDataPath.FolderName, "translations");
         Directory.CreateDirectory(_dir);
         EnsureDefaultTranslations();
     }

@@ -15,7 +15,7 @@ public class SettingsService
     {
         var dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Witcher3ModManager");
+            AppDataPath.FolderName);
         Directory.CreateDirectory(dir);
         _settingsPath = Path.Combine(dir, "settings.json");
         Load();
