@@ -7,4 +7,11 @@ public static class AppDataPath
 #else
     public const string FolderName = "Witcher3ModManager";
 #endif
+
+    public static bool IsTestMode =>
+#if DEBUG
+        true;
+#else
+        false;
+#endif
 }

@@ -33,6 +33,7 @@ public partial class MainWindow : Window
             return;
         }
         Loaded += OnLoaded;
+        if (AppDataPath.IsTestMode) ApplyTestMode();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -289,6 +290,12 @@ public partial class MainWindow : Window
     }
 
 
+
+    private void ApplyTestMode()
+    {
+        TitleText.Text = "Witcher 3 Mod Manager [TEST]";
+        TestBanner.Visibility = Visibility.Visible;
+    }
 
     #region Window Controls
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
