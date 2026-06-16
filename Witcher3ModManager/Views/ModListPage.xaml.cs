@@ -249,17 +249,29 @@ public partial class ModListPage : UserControl
     #endregion
 
     #region Import
+    private bool _importing;
     public void ImportButton_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog
+        if (_importing) return;
+        _importing = true;
+        try
         {
-            Title = "Select mod archive",
-            Filter = "Archive files|*.rar;*.zip;*.7z|All files|*.*",
-            Multiselect = true, RestoreDirectory = true
-        };
-        if (dlg.ShowDialog() == true)
-            foreach (var f in dlg.FileNames) _ = ImportFileAsync(f);
-        dlg = null; GC.Collect(); GC.WaitForPendingFinalizers();
+            GC.Collect(); GC.WaitForPendingFinalizers();
+            var dlg = new OpenFileDialog
+            {
+                Title = "Select mod archive",
+                Filter = "Archive files|*.rar;*.zip;*.7z|All files|*.*",
+                Multiselect = true, RestoreDirectory = true
+            };
+            if (dlg.ShowDialog() == true)
+                foreach (var f in dlg.FileNames) _ = ImportFileAsync(f);
+            dlg = null;
+        }
+        finally
+        {
+            GC.Collect(); GC.WaitForPendingFinalizers();
+            _importing = false;
+        }
     }
 
     private async Task ImportFileAsync(string filePath)
