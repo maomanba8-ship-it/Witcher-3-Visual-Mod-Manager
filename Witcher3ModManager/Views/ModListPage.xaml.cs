@@ -255,10 +255,11 @@ public partial class ModListPage : UserControl
         {
             Title = "Select mod archive",
             Filter = "Archive files|*.rar;*.zip;*.7z|All files|*.*",
-            Multiselect = true
+            Multiselect = true, RestoreDirectory = true
         };
         if (dlg.ShowDialog() == true)
             foreach (var f in dlg.FileNames) _ = ImportFileAsync(f);
+        dlg = null;
     }
 
     private async Task ImportFileAsync(string filePath)
