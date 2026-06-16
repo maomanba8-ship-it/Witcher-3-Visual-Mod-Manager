@@ -259,7 +259,7 @@ public partial class ModListPage : UserControl
         };
         if (dlg.ShowDialog() == true)
             foreach (var f in dlg.FileNames) _ = ImportFileAsync(f);
-        dlg = null;
+        dlg = null; GC.Collect(); GC.WaitForPendingFinalizers();
     }
 
     private async Task ImportFileAsync(string filePath)
