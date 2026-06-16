@@ -369,7 +369,7 @@ public partial class ModListPage : UserControl
         DetailEmptyPanel.Visibility = Visibility.Collapsed;
         DetailPanel.Visibility = Visibility.Visible;
         DetailName.Text = mod.DisplayName;
-        DetailOriginalName.Text = string.IsNullOrEmpty(mod.GameModFolderName) ? "" : "文件名： " + mod.GameModFolderName;
+        DetailOriginalName.Text = mod.GameModFolders.Count > 0 ? "文件名： " + string.Join(", ", mod.GameModFolders) : "";
         RenameBtn.Tag = mod;
         DetailAuthor.Text = "作者： " + mod.Author;
         DetailVersion.Text = "版本： " + mod.Version;

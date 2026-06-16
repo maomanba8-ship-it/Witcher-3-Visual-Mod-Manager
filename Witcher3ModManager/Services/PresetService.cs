@@ -41,7 +41,7 @@ public class PresetService
         {
             Name = name,
             CreatedAt = DateTime.Now,
-            ModStates = mods.Where(m => !string.IsNullOrEmpty(m.GameModFolderName)).GroupBy(m => m.GameModFolderName!).ToDictionary(g => g.Key, g => g.First().IsEnabled)
+            ModStates = BuildPresetStates(mods)
         };
 
         var safeName = GetSafeFileName(name);
@@ -70,6 +70,8 @@ public class PresetService
         }
         catch { return null; }
     }
+
+    private static Dictionary<string, bool> BuildPresetStates(List<ModEntry> mods) { var s = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase); foreach (var m in mods) { foreach (var f in m.GameModFolders) s[f] = m.IsEnabled; foreach (var f in m.GameDlcFolders) s[f] = m.IsEnabled; } return s; }
 
     private static string GetSafeFileName(string name)
     {

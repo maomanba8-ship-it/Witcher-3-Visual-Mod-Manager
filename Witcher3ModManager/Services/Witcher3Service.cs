@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Witcher3ModManager.Models;
@@ -99,92 +99,69 @@ public class Witcher3Service
         if (gamePath == null) throw new InvalidOperationException("Game path not found");
         return Path.Combine(gamePath, "dlc");
     }
-
     public bool EnableMod(ModEntry mod)
     {
         try
         {
-            var safeName = EnsureModPrefix(
-                !string.IsNullOrEmpty(mod.GameModFolderName)
-                    ? mod.GameModFolderName
-                    : SanitizeModName(mod.Name),
-                mod.ModType);
+            var gameModsPath = GetGameModsPath();
+            var storageDir = System.IO.Path.GetDirectoryName(mod.InstalledPath) ?? "";
 
-            var targetDir = mod.ModType == ModType.Dlc ? GetGameDlcPath() : GetGameModsPath();
-            var enabledPath = Path.Combine(targetDir, safeName);
-            var disabledPath = Path.Combine(targetDir, "~" + safeName);
+            // Enable each mod folder
+            foreach (var folder in mod.GameModFolders)
+            {
+                var srcInStorage = System.IO.Path.Combine(storageDir, folder);
+                var enabledPath = System.IO.Path.Combine(gameModsPath, folder);
+                var disabledPath = System.IO.Path.Combine(gameModsPath, "~" + folder);
 
-            if (Directory.Exists(disabledPath))
-            {
-                if (Directory.Exists(enabledPath))
-                    Directory.Delete(enabledPath, true);
-                Directory.Move(disabledPath, enabledPath);
-            }
-            else if (!string.IsNullOrEmpty(mod.InstalledPath) && Directory.Exists(mod.InstalledPath))
-            {
-                MoveDirectory(mod.InstalledPath, enabledPath);
-            }
-            else if (Directory.Exists(enabledPath))
-            {
-            }
-            else
-            {
-                return false;
-            }
-
-            var _savedStorageDir = System.IO.Path.GetDirectoryName(mod.InstalledPath) ?? "";
-            mod.InstalledPath = enabledPath;
-            mod.GameModFolderName = safeName;
-            // Update screenshot path to new location
-            if (!string.IsNullOrEmpty(mod.ScreenshotPath))
-            {
-                var ssName = Path.GetFileName(mod.ScreenshotPath);
-                var newSsPath = Path.Combine(enabledPath, ssName);
-                if (File.Exists(newSsPath))
-                    mod.ScreenshotPath = newSsPath;
-                else
+                if (Directory.Exists(disabledPath))
                 {
-                    // Search for any image in new location
-                    var found = Directory.GetFiles(enabledPath, "*.png", SearchOption.AllDirectories)
-                        .Concat(Directory.GetFiles(enabledPath, "*.jpg", SearchOption.AllDirectories))
-                        .FirstOrDefault();
-                    if (found != null) mod.ScreenshotPath = found;
+                    if (Directory.Exists(enabledPath)) Directory.Delete(enabledPath, true);
+                    Directory.Move(disabledPath, enabledPath);
+                }
+                else if (Directory.Exists(srcInStorage))
+                {
+                    if (!Directory.Exists(enabledPath))
+                        CopyDirectoryRecursive(srcInStorage, enabledPath);
                 }
             }
 
-            // Enable DLC component if present
-            if (mod.HasDlcComponent)
+            // Update InstalledPath to game dir (primary folder)
+            if (mod.GameModFolders.Count > 0)
+                mod.InstalledPath = System.IO.Path.Combine(gameModsPath, mod.GameModFolders[0]);
+
+            // Enable each DLC folder
+            if (mod.GameDlcFolders.Count > 0)
             {
-                var dlcDir = GetGameDlcPath();
-                if (!string.IsNullOrEmpty(dlcDir) && !string.IsNullOrEmpty(mod.GameDlcFolderName))
+                var gameDlcPath = GetGameDlcPath();
+                foreach (var dlcFolder in mod.GameDlcFolders)
                 {
-                    var dlcEnabled = System.IO.Path.Combine(dlcDir, mod.GameDlcFolderName);
-                    var dlcDisabled = System.IO.Path.Combine(dlcDir, "~" + mod.GameDlcFolderName);
+                    var srcInStorage = System.IO.Path.Combine(storageDir, dlcFolder);
+                    var dlcEnabled = System.IO.Path.Combine(gameDlcPath, dlcFolder);
+                    var dlcDisabled = System.IO.Path.Combine(gameDlcPath, "~" + dlcFolder);
 
                     if (Directory.Exists(dlcDisabled))
                     {
                         if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true);
                         Directory.Move(dlcDisabled, dlcEnabled);
                     }
-                    else if (!Directory.Exists(dlcEnabled))
+                    else if (!Directory.Exists(dlcEnabled) && Directory.Exists(srcInStorage))
                     {
-                        // Copy DLC from storage to game directory
-                        var storageDlc = System.IO.Path.Combine(
-                            _savedStorageDir,
-                            mod.GameDlcFolderName);
-                        if (Directory.Exists(storageDlc))
-                            CopyDirectoryRecursive(storageDlc, dlcEnabled);
+                        CopyDirectoryRecursive(srcInStorage, dlcEnabled);
                     }
                 }
             }
 
+            // Update mods.settings priorities
             if (mod.ModType == ModType.Mod)
             {
                 var currentMods = GetEnabledModsFromSettings();
                 int finalPriority = mod.Priority > 0 ? mod.Priority :
                     (currentMods.Count > 0 ? currentMods.Max(m => m.Priority) + 1 : 1);
-                currentMods.RemoveAll(m => m.ModName == safeName);
-                currentMods.Add((safeName, finalPriority));
+                foreach (var folder in mod.GameModFolders)
+                {
+                    currentMods.RemoveAll(m => m.ModName == folder);
+                    currentMods.Add((folder, finalPriority));
+                }
                 WriteModsSettings(currentMods);
             }
 
@@ -197,40 +174,42 @@ public class Witcher3Service
     {
         try
         {
-            var safeName = !string.IsNullOrEmpty(mod.GameModFolderName)
-                ? mod.GameModFolderName
-                : SanitizeModName(mod.Name);
-            var cleanName = safeName.StartsWith("~") ? safeName[1..] : safeName;
+            var gameModsPath = GetGameModsPath();
 
-            var targetDir = mod.ModType == ModType.Dlc ? GetGameDlcPath() : GetGameModsPath();
-            var enabledPath = Path.Combine(targetDir, cleanName);
-            var disabledPath = Path.Combine(targetDir, "~" + cleanName);
+            // Disable each mod folder
+            foreach (var folder in mod.GameModFolders)
+            {
+                var enabledPath = Path.Combine(gameModsPath, folder);
+                var disabledPath = Path.Combine(gameModsPath, "~" + folder);
 
-            if (Directory.Exists(enabledPath))
-            {
-                if (Directory.Exists(disabledPath))
-                    Directory.Delete(disabledPath, true);
-                Directory.Move(enabledPath, disabledPath);
-                mod.InstalledPath = disabledPath;
-            if (mod.HasDlcComponent)
-            {
-                var dlcPath = GetGameDlcPath();
-                if (!string.IsNullOrEmpty(dlcPath))
-                    ToggleFolder(dlcPath, mod.GameDlcFolderName, false);
-            }
-                // Update screenshot path
-                if (!string.IsNullOrEmpty(mod.ScreenshotPath))
+                if (Directory.Exists(enabledPath))
                 {
-                    var ssName = Path.GetFileName(mod.ScreenshotPath);
-                    var newSsPath = Path.Combine(disabledPath, ssName);
-                    if (File.Exists(newSsPath)) mod.ScreenshotPath = newSsPath;
+                    if (Directory.Exists(disabledPath))
+                        Directory.Delete(disabledPath, true);
+                    Directory.Move(enabledPath, disabledPath);
                 }
             }
 
+            // Update InstalledPath to disabled path (primary folder)
+            if (mod.GameModFolders.Count > 0)
+                mod.InstalledPath = Path.Combine(gameModsPath, "~" + mod.GameModFolders[0]);
+
+            // Disable each DLC folder
+            if (mod.GameDlcFolders.Count > 0)
+            {
+                var gameDlcPath = GetGameDlcPath();
+                foreach (var dlcFolder in mod.GameDlcFolders)
+                {
+                    ToggleFolder(gameDlcPath, dlcFolder, false);
+                }
+            }
+
+            // Update mods.settings
             if (mod.ModType == ModType.Mod)
             {
                 var currentMods = GetEnabledModsFromSettings();
-                currentMods.RemoveAll(m => m.ModName == cleanName);
+                foreach (var folder in mod.GameModFolders)
+                    currentMods.RemoveAll(m => m.ModName == folder);
                 WriteModsSettings(currentMods);
             }
 
@@ -243,42 +222,45 @@ public class Witcher3Service
     {
         try
         {
-            var safeName = !string.IsNullOrEmpty(mod.GameModFolderName)
-                ? mod.GameModFolderName
-                : SanitizeModName(mod.Name);
-            var cleanName = safeName.StartsWith("~") ? safeName[1..] : safeName;
             var deleted = false;
+            var gameModsPath = GetGameModsPath();
+            var storageDir = Path.GetDirectoryName(mod.InstalledPath) ?? "";
 
-            string[] gameDirs;
-            try { gameDirs = new[] { GetGameModsPath(), GetGameDlcPath() }; }
-            catch { gameDirs = Array.Empty<string>(); }
-
-            foreach (var targetDir in gameDirs)
+            // Delete all mod folders from game mods dir
+            foreach (var folder in mod.GameModFolders)
             {
-                try
-                {
-                    var enabledPath = Path.Combine(targetDir, cleanName);
-                    var disabledPath = Path.Combine(targetDir, "~" + cleanName);
-                    if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
-                    if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
-                    if (Directory.Exists(disabledPath)) { Directory.Delete(disabledPath, true); deleted = true; }
-
-                    // Also clean dlc component
-                    if (mod.HasDlcComponent && Path.GetFileName(targetDir).Equals("mods", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var dlcDir2 = GetGameDlcPath();
-                        if (!string.IsNullOrEmpty(dlcDir2))
-                        {
-                            var dlcEnabled = Path.Combine(dlcDir2, mod.GameDlcFolderName);
-                            var dlcDisabled = Path.Combine(dlcDir2, "~" + mod.GameDlcFolderName);
-                            try { if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true); } catch { }
-                            try { if (Directory.Exists(dlcDisabled)) Directory.Delete(dlcDisabled, true); } catch { }
-                        }
-                    }
-                }
-                catch { }
+                var enabledPath = Path.Combine(gameModsPath, folder);
+                var disabledPath = Path.Combine(gameModsPath, "~" + folder);
+                if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
+                if (Directory.Exists(disabledPath)) { Directory.Delete(disabledPath, true); deleted = true; }
             }
 
+            // Delete all DLC folders from game dlc dir
+            if (mod.GameDlcFolders.Count > 0)
+            {
+                var gameDlcPath = GetGameDlcPath();
+                foreach (var dlcFolder in mod.GameDlcFolders)
+                {
+                    var dlcEnabled = Path.Combine(gameDlcPath, dlcFolder);
+                    var dlcDisabled = Path.Combine(gameDlcPath, "~" + dlcFolder);
+                    try { if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true); } catch { }
+                    try { if (Directory.Exists(dlcDisabled)) Directory.Delete(dlcDisabled, true); } catch { }
+                }
+            }
+
+            // Delete storage folders
+            foreach (var folder in mod.GameModFolders)
+            {
+                var storagePath = Path.Combine(storageDir, folder);
+                try { if (Directory.Exists(storagePath)) Directory.Delete(storagePath, true); } catch { }
+            }
+            foreach (var dlcFolder in mod.GameDlcFolders)
+            {
+                var storagePath = Path.Combine(storageDir, dlcFolder);
+                try { if (Directory.Exists(storagePath)) Directory.Delete(storagePath, true); } catch { }
+            }
+
+            // Delete primary installed path
             try
             {
                 if (!string.IsNullOrEmpty(mod.InstalledPath) && Directory.Exists(mod.InstalledPath))
@@ -286,10 +268,12 @@ public class Witcher3Service
             }
             catch { }
 
+            // Update mods.settings
             try
             {
                 var currentMods = GetEnabledModsFromSettings();
-                currentMods.RemoveAll(m => m.ModName == cleanName);
+                foreach (var folder in mod.GameModFolders)
+                    currentMods.RemoveAll(m => m.ModName == folder);
                 WriteModsSettings(currentMods);
             }
             catch { }
@@ -298,6 +282,7 @@ public class Witcher3Service
         }
         catch { return false; }
     }
+
 
     public List<(string ModName, int Priority)> GetEnabledModsFromSettings()
     {
@@ -317,7 +302,6 @@ public class Witcher3Service
         catch { }
         return result;
     }
-
     public void WriteModsSettings(List<(string ModName, int Priority)> mods)
     {
         try

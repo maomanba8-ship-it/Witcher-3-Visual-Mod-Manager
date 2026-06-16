@@ -169,7 +169,7 @@ public partial class PresetPage : UserControl
             var allMods = _storage.GetAllMods().ToList();
             foreach (var mod in allMods)
             {
-                bool shouldEnable = !string.IsNullOrEmpty(mod.GameModFolderName) && preset.ModStates.TryGetValue(mod.GameModFolderName, out var enabled) && enabled;
+                bool shouldEnable = false; foreach (var f in mod.GameModFolders) { if (preset.ModStates.TryGetValue(f, out var en) && en) { shouldEnable = true; break; } }
                 
                 if (shouldEnable && !mod.IsEnabled)
                 {

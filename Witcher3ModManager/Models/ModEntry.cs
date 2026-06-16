@@ -1,11 +1,11 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace Witcher3ModManager.Models;
 
 public enum ModType
 {
-    Mod,    // Installs to [GameRoot]\mods\
-    Dlc     // Installs to [GameRoot]\dlc\
+    Mod,
+    Dlc
 }
 
 public class ModEntry
@@ -23,11 +23,26 @@ public class ModEntry
     public bool IsEnabled { get; set; }
     public int Priority { get; set; }
     public DateTime ImportDate { get; set; } = DateTime.Now;
-    public string? GameModFolderName { get; set; }
-    public string? GameDlcFolderName { get; set; }
+
+    public List<string> GameModFolders { get; set; } = new();
+    public List<string> GameDlcFolders { get; set; } = new();
 
     [JsonIgnore]
-    public bool HasDlcComponent => !string.IsNullOrWhiteSpace(GameDlcFolderName);
+    public string? GameModFolderName
+    {
+        get => GameModFolders.Count > 0 ? GameModFolders[0] : null;
+        set { GameModFolders.Clear(); if (value != null) GameModFolders.Add(value); }
+    }
+
+    [JsonIgnore]
+    public string? GameDlcFolderName
+    {
+        get => GameDlcFolders.Count > 0 ? GameDlcFolders[0] : null;
+        set { GameDlcFolders.Clear(); if (value != null) GameDlcFolders.Add(value); }
+    }
+
+    [JsonIgnore]
+    public bool HasDlcComponent => GameDlcFolders.Count > 0;
     public string GroupId { get; set; } = "";
     public string UserDisplayName { get; set; } = "";
 
