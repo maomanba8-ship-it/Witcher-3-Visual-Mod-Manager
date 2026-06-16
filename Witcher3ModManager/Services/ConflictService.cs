@@ -105,68 +105,65 @@ public class ConflictService
         var fileModMap = new Dictionary<string, List<string>>(
             StringComparer.OrdinalIgnoreCase);
 
-        var rootDirs = new[] { "mods", "dlc" };
-
-        foreach (var rootDir in rootDirs)
+        // Scan mod folders
+        var modsRoot = Path.Combine(gamePath, "mods");
+        if (Directory.Exists(modsRoot))
         {
-            var scanRoot = Path.Combine(gamePath, rootDir);
-            if (!Directory.Exists(scanRoot)) continue;
-
             foreach (var mod in enabledMods)
             {
-                if (string.IsNullOrEmpty(mod.GameModFolderName)) continue;
-
-                var modDir = Path.Combine(scanRoot, mod.GameModFolderName);
-                if (!Directory.Exists(modDir)) continue;
-
-                try
+                foreach (var folderName in mod.GameModFolders)
                 {
-                    var files = Directory.GetFiles(modDir, "*.*", SearchOption.AllDirectories);
-                    foreach (var file in files)
+                    if (string.IsNullOrEmpty(folderName)) continue;
+                    var modDir = Path.Combine(modsRoot, folderName);
+                    if (!Directory.Exists(modDir)) continue;
+
+                    try
                     {
-                        var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
-
-                        if (IsIgnorableConflict(relativePath)) continue;
-
-                        if (!fileModMap.ContainsKey(relativePath))
-                            fileModMap[relativePath] = new List<string>();
-
-                        if (!fileModMap[relativePath].Contains(mod.Name))
-                            fileModMap[relativePath].Add(mod.Name);
-                    }
-                }
-                catch { }
-
-                if (mod.HasDlcComponent && rootDir == "mods")
-                {
-                    var dlcRoot = Path.Combine(gamePath, "dlc");
-                    if (Directory.Exists(dlcRoot))
-                    {
-                        var dlcDir = Path.Combine(dlcRoot, mod.GameDlcFolderName ?? "");
-                        if (Directory.Exists(dlcDir))
+                        var files = Directory.GetFiles(modDir, "*.*", SearchOption.AllDirectories);
+                        foreach (var file in files)
                         {
-                            try
-                            {
-                                var dlcFiles = Directory.GetFiles(dlcDir, "*.*", SearchOption.AllDirectories);
-                                foreach (var dlcFile in dlcFiles)
-                                {
-                                    var dlcRelPath = dlcFile.Substring(dlcDir.Length + 1).Replace((char)92, (char)47);
-                                    if (IsIgnorableConflict(dlcRelPath)) continue;
-
-                                    if (!fileModMap.ContainsKey(dlcRelPath))
-                                        fileModMap[dlcRelPath] = new List<string>();
-
-                                    if (!fileModMap[dlcRelPath].Contains(mod.Name))
-                                        fileModMap[dlcRelPath].Add(mod.Name);
-                                }
-                            }
-                            catch { }
+                            var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
+                            if (IsIgnorableConflict(relativePath)) continue;
+                            if (!fileModMap.ContainsKey(relativePath))
+                                fileModMap[relativePath] = new List<string>();
+                            if (!fileModMap[relativePath].Contains(mod.Name))
+                                fileModMap[relativePath].Add(mod.Name);
                         }
                     }
+                    catch { }
                 }
             }
         }
 
+        // Scan DLC folders
+        var dlcRoot = Path.Combine(gamePath, "dlc");
+        if (Directory.Exists(dlcRoot))
+        {
+            foreach (var mod in enabledMods)
+            {
+                foreach (var dlcFolderName in mod.GameDlcFolders)
+                {
+                    if (string.IsNullOrEmpty(dlcFolderName)) continue;
+                    var dlcDir = Path.Combine(dlcRoot, dlcFolderName);
+                    if (!Directory.Exists(dlcDir)) continue;
+
+                    try
+                    {
+                        var dlcFiles = Directory.GetFiles(dlcDir, "*.*", SearchOption.AllDirectories);
+                        foreach (var dlcFile in dlcFiles)
+                        {
+                            var dlcRelPath = dlcFile.Substring(dlcDir.Length + 1).Replace((char)92, (char)47);
+                            if (IsIgnorableConflict(dlcRelPath)) continue;
+                            if (!fileModMap.ContainsKey(dlcRelPath))
+                                fileModMap[dlcRelPath] = new List<string>();
+                            if (!fileModMap[dlcRelPath].Contains(mod.Name))
+                                fileModMap[dlcRelPath].Add(mod.Name);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
         foreach (var kvp in fileModMap)
         {
             if (kvp.Value.Count >= 2)
