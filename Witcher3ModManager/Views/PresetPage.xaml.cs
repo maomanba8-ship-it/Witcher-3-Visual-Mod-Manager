@@ -176,7 +176,7 @@ public partial class PresetPage : UserControl
                     if (_w3.GetGamePath() != null)
                     {
                         var success = _w3.EnableMod(mod);
-                        if (success) { mod.IsEnabled = true; mod.GameModFolderName = mod.Name; }
+                        if (success) { mod.IsEnabled = true; }
                     }
                     else { mod.IsEnabled = true; }
                     _storage.UpdateMod(mod);

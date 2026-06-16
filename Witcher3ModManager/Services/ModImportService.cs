@@ -4,6 +4,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using Witcher3ModManager.Models;
+#if DEBUG
+using System.Text.Json;
+#endif
 
 namespace Witcher3ModManager.Services;
 
@@ -63,27 +66,43 @@ public class ModImportService
         if (candidates.Count > 0)
         {
             // Separate mod and dlc candidates
-            var modDir = candidates.FirstOrDefault(c => c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase));
-            var dlcDir = candidates.FirstOrDefault(c => c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase));
+            var modDirs = candidates.Where(c => c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)).ToList();
+#if DEBUG
+            File.AppendAllText(@"Z:\griffin_import.log", $"mods={string.Join(",", modDirs.Select(x => x.Name))}\r\n");
+#endif
+            var dlcDirs = candidates.Where(c => c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase)).ToList();
             var other = candidates.FirstOrDefault(c => !c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
                                                      && !c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase));
 
-            if (modDir != null || dlcDir != null)
+            if (modDirs.Count > 0 || dlcDirs.Count > 0)
             {
                 // Merge into single ModEntry
-                var primary = modDir ?? dlcDir!;
+                var primary = modDirs.Count > 0 ? modDirs[0] : dlcDirs[0];
                 var entry = await BuildModEntry(primary.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
                 if (entry != null)
                 {
-                    entry.GameModFolderName = modDir?.Name ?? "";
-                    if (dlcDir != null)
+                    entry.GameModFolders.Clear(); foreach (var md in modDirs) entry.GameModFolders.Add(md.Name);
+#if DEBUG
+                    File.AppendAllText(@"Z:\griffin_import.log", $"entry={string.Join(",", entry.GameModFolders)}\r\n");
+#endif
+                    if (dlcDirs.Count > 0)
                     {
-                        entry.GameDlcFolderName = dlcDir.Name;
+                        entry.GameDlcFolders.Clear(); foreach (var dd in dlcDirs) entry.GameDlcFolders.Add(dd.Name);
                         // Also move dlc folder to storage
-                        var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dlcDir.Name);
+                        foreach (var dd in dlcDirs) { var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dd.Name);
                         if (Directory.Exists(dlcStorageDir))
                             Directory.Delete(dlcStorageDir, true);
-                        Directory.Move(dlcDir.FullName, dlcStorageDir);
+                        Directory.Move(dd.FullName, dlcStorageDir); }
+                    }
+                    // Move remaining mod folders to storage (primary already moved by BuildModEntry)
+                    for (int mi = 1; mi < modDirs.Count; mi++)
+                    {
+                        var md = modDirs[mi];
+                        var modStorageDir = Path.Combine(_storage.GetModsDirectory(), md.Name);
+                        if (Directory.Exists(modStorageDir))
+                            Directory.Delete(modStorageDir, true);
+                        if (Directory.Exists(md.FullName))
+                            Directory.Move(md.FullName, modStorageDir);
                     }
                     results.Add(entry);
                 }
@@ -120,6 +139,9 @@ public class ModImportService
 
         foreach (var entry in results)
         {
+            #if DEBUG
+            File.AppendAllText(@"Z:\griffin_import.log", $"json={JsonSerializer.Serialize(entry)}\r\n");
+#endif
             if (_storage.AddMod(entry)) continue;
 
             // Duplicate — ask user
