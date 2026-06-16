@@ -53,7 +53,7 @@ public class ModStorageService
 
             if (modEntry != null && dlcEntry != null)
             {
-                modEntry.GameDlcFolderName = dlcEntry.GameModFolderName;
+                if (!string.IsNullOrEmpty(dlcEntry.GameModFolderName) && !modEntry.GameDlcFolders.Contains(dlcEntry.GameModFolderName)) modEntry.GameDlcFolders.Add(dlcEntry.GameModFolderName);
                 _mods.Remove(dlcEntry);
             }
         }
@@ -94,7 +94,7 @@ public class ModStorageService
                 if (!string.IsNullOrEmpty(dupe.GameDlcFolderName) &&
                     string.IsNullOrEmpty(keeper.GameDlcFolderName))
                 {
-                    keeper.GameDlcFolderName = dupe.GameDlcFolderName;
+                    if (!string.IsNullOrEmpty(dupe.GameDlcFolderName) && !keeper.GameDlcFolders.Contains(dupe.GameDlcFolderName)) keeper.GameDlcFolders.Add(dupe.GameDlcFolderName);
                 }
 
                 // Merge cover image
