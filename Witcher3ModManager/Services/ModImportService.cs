@@ -1,4 +1,4 @@
-ï»¿using System.IO;
+using System.IO;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -28,6 +28,18 @@ public class ModImportService
         _sevenZipPath = Find7Zip();
     }
 
+    /// <summary>
+    /// [¼¼ÊõÕ®] Import Á÷³ÌÖØ¹¹ ¡ª BuildModEntry Ö»¸ºÔğÉú³É ModEntry£¬½ûÖ¹²Ù×÷ÎÄ¼şÏµÍ³¡£
+    /// ImportArchiveAsync Í³Ò»¸ºÔğ£º½âÑ¹¡úÉ¨Ãè¡úÖØÃû´¦Àí¡úMove¡úSaveMod¡úÇåÀítemp¡£
+    /// µ±Ç° BuildModEntry ºÍ ImportArchiveAsync µÄÖ°Ôğ±ß½çÒÑÄ£ºı£¬µ¼ÖÂ£º
+
+
+    /// [¼¼ÊõÕ®] ÖĞÓ¢ÎÄÇĞ»» ¡ª µ±Ç° 150+ ´¦Ó²±àÂëÖĞÎÄ£¬Ğè¸ÄÎª Loc ×Öµä + ¶¯Ì¬Ë¢ĞÂ£¬½ûÖ¹ÓÃ resx£¨±ÜÃâ BAML »Ø»ê£©¡£
+    /// [¼¼ÊõÕ®] bin/ Ä¿Â¼Ö§³Ö ¡ª ²¿·Ö Mod ĞèÒª½« bin\config\...\xxx.xml ·ÅÈëÓÎÏ· bin Ä¿Â¼²ÅÄÜÆôÓÃÄ£×é²Ëµ¥¿ª¹Ø¡£
+    /// ĞèÒª¸Ä¶¯: ModEntry.GameBinFiles, ScanBinFiles(), EnableBin/DisableBin, ConflictService bin¼ì²â¡£
+    /// µ±Ç°×´Ì¬: bin ÎÄ¼ş±»¶ªÆú£¬Mod ¹¦ÄÜ¿ÉÄÜ²»ÍêÕû£¨ÎŞ²Ëµ¥¿ª¹Ø£©¡£
+    /// Ê¨ğÕ¶àÎÄ¼ş¼Ğ / Bathhouse´¿dlc / ÖØ¸´µ¼Èë / Ä¿Â¼¸ÄÃû µÈÎÊÌâ·´¸´³öÏÖ¡£
+    /// </summary>
     public async Task<List<ModEntry>> ImportArchiveAsync(string archivePath,
         IProgress<string>? progress = null)
     {
@@ -35,7 +47,7 @@ public class ModImportService
             throw new FileNotFoundException("Archive not found", archivePath);
 
         var archiveName = Path.GetFileNameWithoutExtension(archivePath);
-        progress?.Report($"æ­£åœ¨è§£å‹: {Path.GetFileName(archivePath)}...");
+        progress?.Report($"ÕıÔÚ½âÑ¹: {Path.GetFileName(archivePath)}...");
 
         var tempExtractDir = Path.Combine(_storage.GetModsDirectory(), 
             "_tmp_" + Guid.NewGuid().ToString("N")[..8]);
@@ -45,7 +57,7 @@ public class ModImportService
         bool extracted = await Task.Run(() => ExtractArchive(archivePath, tempExtractDir));
         if (!extracted)
         {
-            progress?.Report("è§£å‹å¤±è´¥");
+            progress?.Report("½âÑ¹Ê§°Ü");
             return new List<ModEntry>();
         }
 
@@ -55,7 +67,7 @@ public class ModImportService
         // Step 0: Detect bundle-patching mods (quickbms + .bms)
         if (IsBundlePatchMod(tempExtractDir))
         {
-            progress?.Report("ä¸æ”¯æŒæ­¤ç±»æ¨¡ç»„ï¼šBundle è¡¥ä¸æ¨¡ç»„éœ€æ‰‹åŠ¨è¿è¡Œ Install.bat");
+            progress?.Report("²»Ö§³Ö´ËÀàÄ£×é£ºBundle ²¹¶¡Ä£×éĞèÊÖ¶¯ÔËĞĞ Install.bat");
             try { Directory.Delete(tempExtractDir, true); } catch { }
             return results;
         }
@@ -89,7 +101,7 @@ public class ModImportService
                     {
                         entry.GameDlcFolders.Clear(); foreach (var dd in dlcDirs) entry.GameDlcFolders.Add(dd.Name);
                         // Also move dlc folder to storage
-                        foreach (var dd in dlcDirs) { var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dd.Name);
+                        foreach (var dd in dlcDirs) { if (!Directory.Exists(dd.FullName)) continue; var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dd.Name);
                         if (Directory.Exists(dlcStorageDir))
                             Directory.Delete(dlcStorageDir, true);
                         Directory.Move(dd.FullName, dlcStorageDir); }
@@ -97,8 +109,7 @@ public class ModImportService
                     // Move remaining mod folders to storage (primary already moved by BuildModEntry)
                     for (int mi = 1; mi < modDirs.Count; mi++)
                     {
-                        var md = modDirs[mi];
-                        var modStorageDir = Path.Combine(_storage.GetModsDirectory(), md.Name);
+                        var md = modDirs[mi]; if (!Directory.Exists(md.FullName)) continue; var modStorageDir = Path.Combine(_storage.GetModsDirectory(), md.Name);
                         if (Directory.Exists(modStorageDir))
                             Directory.Delete(modStorageDir, true);
                         if (Directory.Exists(md.FullName))
@@ -130,7 +141,7 @@ public class ModImportService
             else
             {
                 // Step 3: Can't identify
-                progress?.Report($"æ— æ³•è‡ªåŠ¨è¯†åˆ«æ¨¡ç»„ç»“æ„: {archiveName}");
+                progress?.Report($"ÎŞ·¨×Ô¶¯Ê¶±ğÄ£×é½á¹¹: {archiveName}");
             }
         }
 
@@ -144,11 +155,11 @@ public class ModImportService
 #endif
             if (_storage.AddMod(entry)) continue;
 
-            // Duplicate â€” ask user
+            // Duplicate ¡ª ask user
             var overwrite = Application.Current.Dispatcher.Invoke(() =>
                 MessageBox.Show(
-                    $"è¯¥æ¨¡ç»„å·²å­˜åœ¨: {entry.Name}\n\næ˜¯å¦é‡æ–°å¯¼å…¥å¹¶è¦†ç›–ï¼Ÿ",
-                    "é‡å¤æ¨¡ç»„",
+                    $"¸ÃÄ£×éÒÑ´æÔÚ: {entry.Name}\n\nÊÇ·ñÖØĞÂµ¼Èë²¢¸²¸Ç£¿",
+                    "ÖØ¸´Ä£×é",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question) == MessageBoxResult.Yes);
 
@@ -157,8 +168,8 @@ public class ModImportService
         }
 
         progress?.Report(results.Count > 0 
-            ? $"å¯¼å…¥å®Œæˆ: {results.Count} ä¸ªæ¨¡ç»„"
-            : $"å¯¼å…¥å¤±è´¥: {archiveName} - æ— æ³•è¯†åˆ«");
+            ? $"µ¼ÈëÍê³É: {results.Count} ¸öÄ£×é"
+            : $"µ¼ÈëÊ§°Ü: {archiveName} - ÎŞ·¨Ê¶±ğ");
         
         return results;
     }
@@ -201,7 +212,7 @@ public class ModImportService
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
         string archivePath, string archiveName, IProgress<string>? progress)
     {
-        progress?.Report($"æ­£åœ¨åˆ†æ: {Path.GetFileName(modRoot)}...");
+        progress?.Report($"ÕıÔÚ·ÖÎö: {Path.GetFileName(modRoot)}...");
 
         var originalName = Path.GetFileName(modRoot);
         var gameFolderName = EnsureModPrefix(originalName, modType);
@@ -240,12 +251,12 @@ public class ModImportService
     private static ModType? AskModOrDlc(string archiveName)
     {
         var result = MessageBox.Show(
-            $"æ— æ³•è‡ªåŠ¨è¯†åˆ« \"{archiveName}\" çš„å®‰è£…ä½ç½®ã€‚\n\n" +
-            "è¿™ä¸ªæ¨¡ç»„åº”å®‰è£…åˆ°å“ªä¸ªç›®å½•ï¼Ÿ\n\n" +
-            "æ˜¯ = Mods æ–‡ä»¶å¤¹\n" +
-            "å¦ = DLC æ–‡ä»¶å¤¹\n" +
-            "å–æ¶ˆ = è·³è¿‡æ­¤æ¨¡ç»„",
-            "é€‰æ‹©å®‰è£…ä½ç½®",
+            $"ÎŞ·¨×Ô¶¯Ê¶±ğ \"{archiveName}\" µÄ°²×°Î»ÖÃ¡£\n\n" +
+            "Õâ¸öÄ£×éÓ¦°²×°µ½ÄÄ¸öÄ¿Â¼£¿\n\n" +
+            "ÊÇ = Mods ÎÄ¼ş¼Ğ\n" +
+            "·ñ = DLC ÎÄ¼ş¼Ğ\n" +
+            "È¡Ïû = Ìø¹ı´ËÄ£×é",
+            "Ñ¡Ôñ°²×°Î»ÖÃ",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
 
@@ -275,7 +286,7 @@ private static string FindModRoot(string sourceDir)
                 break;
             }
 
-            // Exactly one subfolder, no files â†’ drill in
+            // Exactly one subfolder, no files ¡ú drill in
             if (subDirs.Length == 1 && files.Length == 0)
             {
                 current = subDirs[0];
@@ -332,7 +343,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             var subDirs = Directory.GetDirectories(current);
             var files = Directory.GetFiles(current);
 
-            // If this folder has a "content" subfolder, it's a mod root â€” stop here
+            // If this folder has a "content" subfolder, it's a mod root ¡ª stop here
             if (subDirs.Any(d => string.Equals(Path.GetFileName(d), "content", StringComparison.OrdinalIgnoreCase)))
                 break;
 
@@ -343,7 +354,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 continue;
             }
 
-            // Multiple items or single item with files â€” this is likely the mod root
+            // Multiple items or single item with files ¡ª this is likely the mod root
             break;
         }
 
@@ -533,7 +544,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 try
                 {
                     var text = File.ReadAllText(files[0]);
-                    if (text.Length > 2000) text = text[..2000] + "\n\n... (å†…å®¹è¿‡é•¿ï¼Œå·²æˆªæ–­)";
+                    if (text.Length > 2000) text = text[..2000] + "\n\n... (ÄÚÈİ¹ı³¤£¬ÒÑ½Ø¶Ï)";
                     return text;
                 }
                 catch { }
@@ -545,7 +556,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             try
             {
                 var text = File.ReadAllText(anyTxt[0]);
-                if (text.Length > 2000) text = text[..2000] + "\n\n... (å†…å®¹è¿‡é•¿ï¼Œå·²æˆªæ–­)";
+                if (text.Length > 2000) text = text[..2000] + "\n\n... (ÄÚÈİ¹ı³¤£¬ÒÑ½Ø¶Ï)";
                 return text;
             }
             catch { }

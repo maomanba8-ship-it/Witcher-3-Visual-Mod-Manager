@@ -1,4 +1,4 @@
-ï»¿using System.IO;
+using System.IO;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -38,14 +38,14 @@ public class ConflictService
         return DetectConflicts();
     }
 
-    // â”€â”€ Ignore Rule System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Ignore Rule System ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
     //
     // Admission criteria (ALL three must be met):
     //   1. Present in nearly every WolvenKit-packed mod
     //   2. Overwriting it does NOT change game behavior
     //   3. It provides ZERO diagnostic value for real conflicts
     //
-    // âš  If a file only meets 1-2 criteria â†’ do NOT add it here.
+    // ? If a file only meets 1-2 criteria ¡ú do NOT add it here.
 
     public static IReadOnlyList<IgnoredConflictRule> IgnoredConflictRules { get; } = new List<IgnoredConflictRule>
     {
@@ -55,7 +55,8 @@ public class ConflictService
         new(@"content\texture.cache",         "Auto-generated texture cache"),
         new(@"content\metadata.store",        "WolvenKit metadata store"),
         new(@"content\info.json",             "WolvenKit auto-generated mod metadata"),
-        new(@"content\shaderDx12.cache",      "Auto-generated shader cache (DX12)")
+        new(@"content\shaderDx12.cache",      "Auto-generated shader cache (DX12)"),
+        new(@"content\*.w3strings",           "WolvenKit auto-generated localization stubs (per-folder, no cross-mod impact)")
     };
 
     /// <summary>
@@ -75,7 +76,7 @@ public class ConflictService
             @"content\metadata.store"    => true,
             @"content\info.json"         => true,
             @"content\shaderdx12.cache"  => true,
-            _ => false
+            _ => normalized.EndsWith(".w3strings")
         };
     }
 
@@ -90,7 +91,7 @@ public class ConflictService
             ?.Reason;
     }
 
-    // â”€â”€ Scanning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Scanning ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     private List<ConflictInfo> ScanGameDirectory()
     {
@@ -183,7 +184,7 @@ public class ConflictService
         return conflicts;
     }
 
-    // â”€â”€ Potential Override â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Potential Override ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     public int DetectPotentialOverrideCount()
     {
@@ -211,7 +212,7 @@ public class ConflictService
             .Count(m => m.IsEnabled && m.Id != mod.Id && m.Category == mod.Category) >= 1;
     }
 
-    // â”€â”€ Summaries & Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ©¤©¤ Summaries & Queries ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
 
     public List<string> GetConflictSummary()
     {
