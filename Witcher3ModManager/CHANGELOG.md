@@ -1,5 +1,11 @@
 ﻿# Changelog
 
+## v0.8.2 (2026-06-20)
+- bin 文件支持（mods/dlc/bin 三件套完整管控）
+- bin 只安装不卸载（安全策略：多 Mod 可能共享同一 bin 文件）
+- bin 冲突改为蓝色共享提示，不标红
+- 删除 Mod 时弹窗提示 bin 文件保留
+
 ## v0.8.1 (2026-06-19)
 - 修复 .w3strings 虚假冲突（与忽略规则同条件）
 - 修复 DLC-only Mod 导入 Access Denied 报错
