@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -25,6 +25,7 @@ public partial class ModListPage : UserControl
 
     public event Action? NavigateBackRequested;
     public event Action<int, int, int, int>? StatusUpdated;  // enabled, total, conflicts, potentialOverrides
+    private List<OrphanModInfo> _orphans = new();
 
     public ModListPage()
     {
@@ -67,6 +68,15 @@ public partial class ModListPage : UserControl
         UpdateStatusBar();
     }
 
+    public void SetOrphans(List<OrphanModInfo> orphans)
+    {        if (_orphans.Count == 0)
+        {
+            OrphanBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+        OrphanBannerText.Text = "发现 " + _orphans.Count + " 个未被管理的 Mod";
+        OrphanBanner.Visibility = Visibility.Visible;
+    }
     private void ApplyCategoryFilter()
     {
         var filtered = _selectedCategory == null || _selectedCategory.Type == CategoryType.All
@@ -603,6 +613,51 @@ public partial class ModListPage : UserControl
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
         NavigateBackRequested?.Invoke();
+    }
+    #endregion
+    #region Orphan Handlers
+    private void OrphanImportAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (_storage == null || _orphans.Count == 0) return;
+        var dialog = new OrphanDialog(_orphans);
+        if (dialog.ShowDialog() == true && dialog.SelectedOrphans.Count > 0)
+        {
+            var imported = 0;
+            foreach (var orphan in dialog.SelectedOrphans)
+            {
+                try { _storage.ImportOrphanMod(orphan); imported++; }
+                catch (Exception ex) { Debug.WriteLine(string.Format("Orphan import failed: {0} - {1}", orphan.FolderName, ex.Message)); }
+            }
+            _orphans.Clear();
+            OrphanBanner.Visibility = Visibility.Collapsed;
+            RefreshModList();
+            MessageBox.Show("成功导入 " + imported + " 个 Mod。", "孤儿 Mod 导入", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void OrphanViewDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_orphans.Count == 0) return;
+        var dialog = new OrphanDialog(_orphans);
+        if (dialog.ShowDialog() == true && dialog.SelectedOrphans.Count > 0)
+        {
+            var imported = 0;
+            foreach (var orphan in dialog.SelectedOrphans)
+            {
+                try { _storage.ImportOrphanMod(orphan); imported++; }
+                catch (Exception ex) { Debug.WriteLine(string.Format("Orphan import failed: {0} - {1}", orphan.FolderName, ex.Message)); }
+            }
+            _orphans.Clear();
+            OrphanBanner.Visibility = Visibility.Collapsed;
+            RefreshModList();
+            MessageBox.Show("成功导入 " + imported + " 个 Mod。", "孤儿 Mod 导入", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void OrphanIgnore_Click(object sender, RoutedEventArgs e)
+    {
+        _orphans.Clear();
+        OrphanBanner.Visibility = Visibility.Collapsed;
     }
     #endregion
 }

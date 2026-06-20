@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using Witcher3ModManager.Models;
 using Witcher3ModManager.Services;
 using Witcher3ModManager.Views;
 
@@ -21,13 +22,14 @@ public partial class MainWindow : Window
     private BackupService? _backup;
     private PresetPage? _presetPage;
     private PresetService? _presets;
+    private OrphanDetectionService? _orphanDetector;
 
     public MainWindow()
     {
         try { InitializeComponent(); }
         catch (Exception ex)
         {
-            MessageBox.Show($"½çÃæ³õÊ¼»¯Ê§°Ü: {ex.Message}", "´íÎó",
+            MessageBox.Show($"ç•Œé¢åˆå§‹åŒ–å¤±è´¥: {ex.Message}", "é”™è¯¯",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Application.Current.Shutdown();
             return;
@@ -49,6 +51,7 @@ public partial class MainWindow : Window
             _conflict = new ConflictService(_storage, _w3);
             _backup = new BackupService(_w3, _settings);
             _presets = new PresetService();
+            _orphanDetector = new OrphanDetectionService();
 
             LoadTitleIcon();
             LoadBackgroundImage();
@@ -57,7 +60,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Æô¶¯Ê§°Ü: {ex.Message}", "´íÎó",
+            MessageBox.Show($"å¯åŠ¨å¤±è´¥: {ex.Message}", "é”™è¯¯",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -116,10 +119,10 @@ public partial class MainWindow : Window
         {
             var path = _w3?.GetGamePath();
             StatusGamePath.Text = path != null
-                ? $"Î×Ê¦3: {Path.GetFileName(path)}"
-                : "Î×Ê¦3: Î´¼ì²â";
+                ? $"å·«å¸ˆ3: {Path.GetFileName(path)}"
+                : "å·«å¸ˆ3: æœªæ£€æµ‹";
         }
-        catch { StatusGamePath.Text = "Î×Ê¦3: Î´¼ì²â"; }
+        catch { StatusGamePath.Text = "å·«å¸ˆ3: æœªæ£€æµ‹"; }
     }
 
     private void NavigateToHome()
@@ -165,6 +168,15 @@ public partial class MainWindow : Window
         _modListPage.StatusUpdated -= OnStatusUpdated;
         _modListPage.StatusUpdated += OnStatusUpdated;
         _modListPage.Initialize(_storage, _importer, _w3, _conflict, _backup);
+        if (_orphanDetector != null)
+        {
+            var gamePath = _w3?.GetGamePath();
+            if (gamePath != null)
+            {
+                var orphans = _orphanDetector.ScanOrphans(gamePath, _storage.GetAllMods());
+                _modListPage.SetOrphans(orphans);
+            }
+        }
         PageHost.Content = _modListPage;
         SetBackgroundBlur(true);
         MainStatusBar.Visibility = Visibility.Visible;
@@ -212,15 +224,15 @@ public partial class MainWindow : Window
         var path = _w3.GetGamePath();
         if (path == null)
         {
-            MessageBox.Show("Î´¼ì²âµ½Î×Ê¦3°²×°Â·¾¶¡£ÇëÔÚÉèÖÃÖĞÊÖ¶¯ÅäÖÃ¡£",
-                "ÌáÊ¾", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Î´ï¿½ï¿½âµ½ï¿½ï¿½Ê¦3ï¿½ï¿½×°Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½",
+                "ï¿½ï¿½Ê¾", MessageBoxButton.OK, MessageBoxImage.Information);
             NavigateToSettings();
             return;
         }
         try { _w3.LaunchGame(); }
         catch (Exception ex)
         {
-            MessageBox.Show($"Æô¶¯ÓÎÏ·Ê§°Ü: {ex.Message}", "´íÎó",
+            MessageBox.Show($"å¯åŠ¨å¤±è´¥: {ex.Message}", "é”™è¯¯",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -232,10 +244,10 @@ public partial class MainWindow : Window
 
     private void OnStatusUpdated(int enabled, int total, int conflicts, int potential)
     {
-        StatusEnabled.Text = $"ÒÑÆôÓÃ {enabled}";
-        StatusTotal.Text = $"×Ü¼Æ {total}";
-        StatusConflicts.Text = $"³åÍ» {conflicts}";
-        StatusPotential.Text = $"Ç±ÔÚ¸²¸Ç {potential}";
+        StatusEnabled.Text = $"å·²å¯ç”¨ {enabled}";
+        StatusTotal.Text = $"æ€»è®¡ {total}";
+        StatusConflicts.Text = $"å†²çª {conflicts}";
+        StatusPotential.Text = $"æ½œåœ¨è¦†ç›– {potential}";
     }
 
     private void ConflictStatus_Click(object sender, RoutedEventArgs e)
@@ -261,8 +273,8 @@ public partial class MainWindow : Window
         var overlaps = _conflict.GetPotentialOverrides();
         if (overlaps.Count == 0)
         {
-            System.Windows.MessageBox.Show("Î´¼ì²âµ½Ç±ÔÚ¸²¸Ç¡£",
-                "Ç±ÔÚ¸²¸Ç", System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBox.Show("æœªæ£€æµ‹åˆ°æ½œåœ¨è¦†ç›–",
+                "æ½œåœ¨è¦†ç›–", System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
             return;
         }
@@ -274,10 +286,10 @@ public partial class MainWindow : Window
     {
         if (_storage == null || _conflict == null) return;
         var allMods = _storage.GetAllMods();
-        StatusEnabled.Text = $"ÒÑÆôÓÃ {allMods.Count(m => m.IsEnabled)}";
-        StatusTotal.Text = $"×Ü¼Æ {allMods.Count}";
-        StatusConflicts.Text = $"³åÍ» {_conflict.DetectConflicts().Count}";
-        StatusPotential.Text = $"Ç±ÔÚ¸²¸Ç {_conflict.DetectPotentialOverrideCount()}";
+        StatusEnabled.Text = $"å·²å¯ç”¨ {allMods.Count(m => m.IsEnabled)}";
+        StatusTotal.Text = $"æ€»è®¡ {allMods.Count}";
+        StatusConflicts.Text = $"å†²çª {_conflict.DetectConflicts().Count}";
+        StatusPotential.Text = $"æ½œåœ¨è¦†ç›– {_conflict.DetectPotentialOverrideCount()}";
     }
 
 

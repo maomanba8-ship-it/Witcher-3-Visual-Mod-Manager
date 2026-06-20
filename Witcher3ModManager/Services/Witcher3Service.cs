@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Witcher3ModManager.Models;
@@ -99,7 +99,7 @@ public class Witcher3Service
         if (gamePath == null) throw new InvalidOperationException("Game path not found");
         return Path.Combine(gamePath, "dlc");
     }
-    public bool EnableMod(ModEntry mod)
+    public bool EnableMod(ModEntry mod, string? storageModsDir = null)
     {
         try
         {
@@ -174,7 +174,7 @@ public class Witcher3Service
         catch { return false; }
     }
 
-    public bool DisableMod(ModEntry mod)
+    public bool DisableMod(ModEntry mod, string? storageModsDir = null)
     {
         try
         {

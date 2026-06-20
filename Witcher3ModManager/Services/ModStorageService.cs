@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using Witcher3ModManager.Models;
 
@@ -204,6 +204,73 @@ public class ModStorageService
         return dir;
     }
 
+
+        public ModEntry ImportOrphanMod(OrphanModInfo orphan)
+    {
+        var cleanName = GetBaseName(orphan);
+        var storageDir = Path.Combine(_modsDir, cleanName);
+
+        // Copy from game dir to storage (mod component)
+        if (!Directory.Exists(storageDir))
+            CopyDirectoryRecursive(orphan.FullPath, storageDir);
+
+        var entry = new ModEntry
+        {
+            Name = cleanName,
+            InstalledPath = orphan.FullPath,
+            IsEnabled = orphan.IsEnabled,
+            ImportDate = DateTime.Now,
+            Priority = _mods.Count > 0 ? _mods.Max(m => m.Priority) + 1 : 1
+        };
+
+        if (orphan.IsInDlcFolder)
+            entry.GameDlcFolders.Add(orphan.FolderName.StartsWith("~") ? orphan.FolderName[1..] : orphan.FolderName);
+        else
+            entry.GameModFolders.Add(orphan.FolderName.StartsWith("~") ? orphan.FolderName[1..] : orphan.FolderName);
+
+        // Handle paired orphan (Mod + DLC)
+        if (orphan.PairedOrphan != null)
+        {
+            var pair = orphan.PairedOrphan;
+            var pairCleanName = pair.FolderName.StartsWith("~") ? pair.FolderName[1..] : pair.FolderName;
+
+            if (pair.IsInDlcFolder)
+                entry.GameDlcFolders.Add(pairCleanName);
+            else
+                entry.GameModFolders.Add(pairCleanName);
+        }
+
+        // Deduplicate check (check all folders)
+        if (!string.IsNullOrEmpty(cleanName))
+        {
+            var exists = _mods.Any(m =>
+                m.GameModFolders.Contains(cleanName) || m.GameDlcFolders.Contains(cleanName));
+            if (exists) return entry;
+        }
+
+        _mods.Add(entry);
+        Save();
+        return entry;
+    }
+
+    private static string GetBaseName(OrphanModInfo orphan)
+    {
+        var name = orphan.FolderName.StartsWith("~") ? orphan.FolderName[1..] : orphan.FolderName;
+        if (name.StartsWith("mod", StringComparison.OrdinalIgnoreCase) && name.Length > 3)
+            return name[3..];
+        if (name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) && name.Length > 3)
+            return name[3..];
+        return name;
+    }
+
+    private static void CopyDirectoryRecursive(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+            File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), true);
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+            CopyDirectoryRecursive(dir, Path.Combine(destDir, Path.GetFileName(dir)));
+    }
     public string GetModsDirectory() => _modsDir;
 
     private void Load()

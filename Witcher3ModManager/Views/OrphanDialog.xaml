@@ -1,0 +1,123 @@
+<Window x:Class="Witcher3ModManager.Views.OrphanDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Orphan Mods" Width="600" Height="460"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="0"
+                      CornerRadius="8" GlassFrameThickness="0"/>
+    </WindowChrome.WindowChrome>
+
+    <Border Background="#14161E" CornerRadius="8"
+            BorderBrush="#2A2E3C" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title Bar -->
+            <Grid Grid.Row="0" Background="#1C1F2A"
+                  MouseLeftButtonDown="TitleBar_Drag" Height="40">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="16,0">
+                    <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets"
+                               FontSize="14" Foreground="#1C6B9E"
+                               Margin="0,0,8,0"/>
+                    <TextBlock x:Name="TitleText" Text="Orphan Mods" FontSize="14" FontWeight="SemiBold"
+                               Foreground="#E2E4E9"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="&#xE8BB;"
+                        Click="Close_Click" Margin="0,0,4,0"
+                        Width="34" Height="34"
+                        Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
+                        FontSize="14" Cursor="Hand" FontFamily="Segoe MDL2 Assets">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border" Background="{TemplateBinding Background}"
+                                    CornerRadius="6" Padding="6">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#242836"/>
+                                    <Setter Property="Foreground" Value="#E2E4E9"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+
+            <!-- Select All / Deselect All -->
+            <Border Grid.Row="1" Background="#1C1F2A" Padding="12,8"
+                    BorderBrush="#1E2230" BorderThickness="0,0,0,1">
+                <StackPanel Orientation="Horizontal">
+                    <CheckBox x:Name="SelectAllCheckBox" Content="全选 / 取消全选"
+                              Foreground="#9A9EAA" FontSize="12"
+                              Checked="SelectAll_Changed" Unchecked="SelectAll_Changed"
+                              IsChecked="True" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SelectionCount" Text="已选 0 / 0"
+                               Foreground="#5E626E" FontSize="12"
+                               VerticalAlignment="Center" Margin="16,0,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Orphan List -->
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="OrphanListPanel" Margin="12"/>
+            </ScrollViewer>
+
+            <!-- Bottom Buttons -->
+            <Border Grid.Row="3" Background="#1C1F2A"
+                    Padding="12" BorderBrush="#1E2230" BorderThickness="0,1,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ImportBtn" Content="导入选中" Width="90"
+                            Margin="0,0,10,0" Click="Import_Click"
+                            Background="#1C6B9E" Foreground="#E2E4E9" BorderThickness="0"
+                            FontSize="13" FontWeight="SemiBold" Padding="16,9" Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" Background="{TemplateBinding Background}"
+                                        CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#2A8ABF"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    <Button x:Name="CancelBtn" Content="取消" Width="80" Click="Close_Click"
+                            Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
+                            FontSize="13" FontWeight="SemiBold" Padding="16,9" Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border" Background="{TemplateBinding Background}"
+                                        CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border" Property="Background" Value="#A3B8C7"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="Witcher3ModManager.Views.ModListPage"
+<UserControl x:Class="Witcher3ModManager.Views.ModListPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="#14161E"
@@ -6,7 +6,8 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="#25FFFFFF" Padding="12,8" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
@@ -37,8 +38,37 @@
                 </StackPanel>
             </Grid>
         </Border>
+        <!-- Orphan Mod Banner -->
+        <Border x:Name="OrphanBanner" Grid.Row="1" Background="#201C6B9E" Padding="12,8" 
+                BorderBrush="#1C6B9E" BorderThickness="0,0,0,1" Visibility="Collapsed">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                               Foreground="#1C6B9E" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock x:Name="OrphanBannerText" Text="发现 0 个未被管理的 Mod" FontSize="13"
+                               Foreground="#9A9EAA" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="全部导入" Padding="10,5" FontSize="12" Cursor="Hand"
+                            Foreground="#E2E4E9" Background="#251C6B9E" BorderBrush="#1C6B9E" BorderThickness="1"
+                            Click="OrphanImportAll_Click" Margin="0,0,4,0"/>
+                    <Button Content="查看详情" Padding="10,5" FontSize="12" Cursor="Hand"
+                            Foreground="#9A9EAA" Background="#25FFFFFF" BorderBrush="#2A2E3C" BorderThickness="1"
+                            Click="OrphanViewDetails_Click" Margin="0,0,4,0"/>
+                    <Button Content="忽略" Padding="10,5" FontSize="12" Cursor="Hand"
+                            Foreground="#5E626E" Background="Transparent" BorderBrush="#2A2E3C" BorderThickness="1"
+                            Click="OrphanIgnore_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
 
-        <Grid Grid.Row="1">
+
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="180"/>
                 <ColumnDefinition Width="1"/>
@@ -51,7 +81,8 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0" Padding="16,14" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
                         <TextBlock Text="分类" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
@@ -110,8 +141,8 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0" Padding="16,14" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
                         <TextBlock Text="详情" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
