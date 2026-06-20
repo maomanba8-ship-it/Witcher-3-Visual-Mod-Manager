@@ -26,6 +26,8 @@ public class ModEntry
 
     public List<string> GameModFolders { get; set; } = new();
     public List<string> GameDlcFolders { get; set; } = new();
+    public List<string> GameBinFiles { get; set; } = new();
+    public string? BinStoragePath { get; set; }
 
     [JsonIgnore]
     public string? GameModFolderName

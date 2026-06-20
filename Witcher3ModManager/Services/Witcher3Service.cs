@@ -151,6 +151,10 @@ public class Witcher3Service
                 }
             }
 
+
+            // Enable bin files
+            EnableBinFiles(mod);
+
             // Update mods.settings priorities
             if (mod.ModType == ModType.Mod)
             {
@@ -277,6 +281,9 @@ public class Witcher3Service
                 WriteModsSettings(currentMods);
             }
             catch { }
+
+            // Delete bin files
+            DeleteBinFiles(mod);
 
             return deleted;
         }
@@ -437,4 +444,52 @@ public class Witcher3Service
             CopyDirectoryRecursive(dir, dest);
         }
     }
+
+    private void EnableBinFiles(ModEntry mod)
+    {
+        if (mod.GameBinFiles.Count == 0 || string.IsNullOrEmpty(mod.BinStoragePath)) return;
+        var gamePath = GetGamePath();
+        if (gamePath == null) return;
+        var gameBinRoot = Path.Combine(gamePath, "bin");
+        foreach (var bf in mod.GameBinFiles)
+        {
+            var src = Path.Combine(mod.BinStoragePath, bf.Replace('/', Path.DirectorySeparatorChar));
+            var dest = Path.Combine(gameBinRoot, bf.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(src)) continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            File.Copy(src, dest, true);
+        }
+    }
+
+    /// <summary>
+    /// Bin files are NEVER automatically deleted from the game directory.
+    /// Multiple mods may share the same bin file (e.g. config XMLs).
+    /// Removing one mod's bin could break another mod silently.
+    /// </summary>
+    private void DisableBinFiles(ModEntry mod)
+    {
+        // Intentionally empty — bin files persist in game directory
+    }
+
+    private void DeleteBinFiles(ModEntry mod)
+    {
+        // Clean storage copy only — game bin files are intentionally left in place
+        if (!string.IsNullOrEmpty(mod.BinStoragePath) && Directory.Exists(mod.BinStoragePath))
+        {
+            try { Directory.Delete(mod.BinStoragePath, true); } catch { }
+        }
+
+        // Notify user that game bin files were NOT removed
+        if (mod.GameBinFiles.Count > 0)
+        {
+            var fileList = string.Join("\n\uff65 ", mod.GameBinFiles.Take(5));
+            if (mod.GameBinFiles.Count > 5) fileList += "\n\uff65 ...";
+            System.Windows.MessageBox.Show(
+                $"该 Mod 包含 {mod.GameBinFiles.Count} 个 bin 文件：\n\uff65 {fileList}\n\n\u26a0 bin 文件保留在游戏目录中，未被删除。\n如果其他 Mod 也使用这些文件，删除会导致它们失效。\n请手动检查 game/bin/ 目录。",
+                "Bin \u6587\u4ef6\u63d0\u793a",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+    }
+
 }

@@ -1,4 +1,4 @@
-<UserControl x:Class="Witcher3ModManager.Views.ModListPage"
+﻿<UserControl x:Class="Witcher3ModManager.Views.ModListPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="#14161E"
@@ -138,6 +138,8 @@
                                         Click="RenameBtn_Click" ToolTip="Edit Display Name"/>
                             </StackPanel>
                             <TextBlock x:Name="DetailOriginalName" FontSize="11" Foreground="#5E626E" Margin="0,2,0,6" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DetailDlcLabel" FontSize="11" Foreground="#9A9EAA" Margin="0,0,0,2" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DetailBinLabel" FontSize="11" Foreground="#8BA4B5" Margin="0,0,0,4" TextWrapping="Wrap"/>
                             <TextBlock x:Name="DetailAuthor" FontSize="12" Foreground="#9A9EAA" Margin="0,4,0,0"/>
                             <TextBlock x:Name="DetailVersion" FontSize="12" Foreground="#5E626E"/>
                             <TextBlock x:Name="DetailCategory" FontSize="12" Foreground="#8BA4B5"/>

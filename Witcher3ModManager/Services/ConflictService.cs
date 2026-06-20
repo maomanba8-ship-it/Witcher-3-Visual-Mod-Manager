@@ -1,4 +1,4 @@
-using System.IO;
+ï»¿using System.IO;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -8,6 +8,7 @@ public class ConflictService
     private readonly ModStorageService _storage;
     private readonly Witcher3Service _w3;
     private List<ConflictInfo>? _cachedConflicts;
+    private Dictionary<string, List<string>> _sharedBinOverlaps = new(StringComparer.OrdinalIgnoreCase);
     private bool _cacheValid;
 
     public ConflictService(ModStorageService storage, Witcher3Service w3)
@@ -15,6 +16,8 @@ public class ConflictService
         _storage = storage;
         _w3 = w3;
     }
+
+    public IReadOnlyDictionary<string, List<string>> GetSharedBinOverlaps() => _sharedBinOverlaps;
 
     public void InvalidateCache()
     {
@@ -38,14 +41,14 @@ public class ConflictService
         return DetectConflicts();
     }
 
-    // ©¤©¤ Ignore Rule System ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Ignore Rule System ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     //
     // Admission criteria (ALL three must be met):
     //   1. Present in nearly every WolvenKit-packed mod
     //   2. Overwriting it does NOT change game behavior
     //   3. It provides ZERO diagnostic value for real conflicts
     //
-    // ? If a file only meets 1-2 criteria ¡ú do NOT add it here.
+    // ? If a file only meets 1-2 criteria ï¿½ï¿½ do NOT add it here.
 
     public static IReadOnlyList<IgnoredConflictRule> IgnoredConflictRules { get; } = new List<IgnoredConflictRule>
     {
@@ -91,7 +94,7 @@ public class ConflictService
             ?.Reason;
     }
 
-    // ©¤©¤ Scanning ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Scanning ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     private List<ConflictInfo> ScanGameDirectory()
     {
@@ -165,6 +168,33 @@ public class ConflictService
                 }
             }
         }
+
+        // Scan bin files â€” collect shared overlaps (informational, not conflicts)
+        var sharedBinFiles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        if (Directory.Exists(Path.Combine(gamePath, "bin")))
+        {
+            var binModMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var mod in enabledMods)
+            {
+                if (mod.GameBinFiles.Count == 0) continue;
+                foreach (var bf in mod.GameBinFiles)
+                {
+                    if (binModMap.ContainsKey(bf))
+                    {
+                        var otherMod = binModMap[bf];
+                        if (!sharedBinFiles.ContainsKey(bf))
+                            sharedBinFiles[bf] = new List<string> { otherMod };
+                        if (!sharedBinFiles[bf].Contains(mod.Name))
+                            sharedBinFiles[bf].Add(mod.Name);
+                    }
+                    else
+                    {
+                        binModMap[bf] = mod.Name;
+                    }
+                }
+            }
+        }
+        _sharedBinOverlaps = sharedBinFiles;
         foreach (var kvp in fileModMap)
         {
             if (kvp.Value.Count >= 2)
@@ -184,7 +214,7 @@ public class ConflictService
         return conflicts;
     }
 
-    // ©¤©¤ Potential Override ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Potential Override ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     public int DetectPotentialOverrideCount()
     {
@@ -212,7 +242,7 @@ public class ConflictService
             .Count(m => m.IsEnabled && m.Id != mod.Id && m.Category == mod.Category) >= 1;
     }
 
-    // ©¤©¤ Summaries & Queries ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+    // ï¿½ï¿½ï¿½ï¿½ Summaries & Queries ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
     public List<string> GetConflictSummary()
     {

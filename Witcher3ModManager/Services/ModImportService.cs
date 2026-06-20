@@ -1,4 +1,4 @@
-using System.IO;
+ï»¿using System.IO;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -29,16 +29,16 @@ public class ModImportService
     }
 
     /// <summary>
-    /// [¼¼ÊõÕ®] Import Á÷³ÌÖØ¹¹ ¡ª BuildModEntry Ö»¸ºÔðÉú³É ModEntry£¬½ûÖ¹²Ù×÷ÎÄ¼þÏµÍ³¡£
-    /// ImportArchiveAsync Í³Ò»¸ºÔð£º½âÑ¹¡úÉ¨Ãè¡úÖØÃû´¦Àí¡úMove¡úSaveMod¡úÇåÀítemp¡£
-    /// µ±Ç° BuildModEntry ºÍ ImportArchiveAsync µÄÖ°Ôð±ß½çÒÑÄ£ºý£¬µ¼ÖÂ£º
+    /// [ï¿½ï¿½ï¿½ï¿½Õ®] Import ï¿½ï¿½ï¿½ï¿½ï¿½Ø¹ï¿½ ï¿½ï¿½ BuildModEntry Ö»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ModEntryï¿½ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ÏµÍ³ï¿½ï¿½
+    /// ImportArchiveAsync Í³Ò»ï¿½ï¿½ï¿½ð£º½ï¿½Ñ¹ï¿½ï¿½É¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Moveï¿½ï¿½SaveModï¿½ï¿½ï¿½ï¿½ï¿½ï¿½tempï¿½ï¿½
+    /// ï¿½ï¿½Ç° BuildModEntry ï¿½ï¿½ ImportArchiveAsync ï¿½ï¿½Ö°ï¿½ï¿½ß½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â£ï¿½
 
 
-    /// [¼¼ÊõÕ®] ÖÐÓ¢ÎÄÇÐ»» ¡ª µ±Ç° 150+ ´¦Ó²±àÂëÖÐÎÄ£¬Ðè¸ÄÎª Loc ×Öµä + ¶¯Ì¬Ë¢ÐÂ£¬½ûÖ¹ÓÃ resx£¨±ÜÃâ BAML »Ø»ê£©¡£
-    /// [¼¼ÊõÕ®] bin/ Ä¿Â¼Ö§³Ö ¡ª ²¿·Ö Mod ÐèÒª½« bin\config\...\xxx.xml ·ÅÈëÓÎÏ· bin Ä¿Â¼²ÅÄÜÆôÓÃÄ£×é²Ëµ¥¿ª¹Ø¡£
-    /// ÐèÒª¸Ä¶¯: ModEntry.GameBinFiles, ScanBinFiles(), EnableBin/DisableBin, ConflictService bin¼ì²â¡£
-    /// µ±Ç°×´Ì¬: bin ÎÄ¼þ±»¶ªÆú£¬Mod ¹¦ÄÜ¿ÉÄÜ²»ÍêÕû£¨ÎÞ²Ëµ¥¿ª¹Ø£©¡£
-    /// Ê¨ðÕ¶àÎÄ¼þ¼Ð / Bathhouse´¿dlc / ÖØ¸´µ¼Èë / Ä¿Â¼¸ÄÃû µÈÎÊÌâ·´¸´³öÏÖ¡£
+    /// [ï¿½ï¿½ï¿½ï¿½Õ®] ï¿½ï¿½Ó¢ï¿½ï¿½ï¿½Ð»ï¿½ ï¿½ï¿½ ï¿½ï¿½Ç° 150+ ï¿½ï¿½Ó²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½Îª Loc ï¿½Öµï¿½ + ï¿½ï¿½Ì¬Ë¢ï¿½Â£ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ resxï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ BAML ï¿½Ø»ê£©ï¿½ï¿½
+    /// [ï¿½ï¿½ï¿½ï¿½Õ®] bin/ Ä¿Â¼Ö§ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Mod ï¿½ï¿½Òªï¿½ï¿½ bin\config\...\xxx.xml ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï· bin Ä¿Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Ëµï¿½ï¿½ï¿½ï¿½Ø¡ï¿½
+    /// ï¿½ï¿½Òªï¿½Ä¶ï¿½: ModEntry.GameBinFiles, ScanBinFiles(), EnableBin/DisableBin, ConflictService binï¿½ï¿½â¡£
+    /// ï¿½ï¿½Ç°×´Ì¬: bin ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Mod ï¿½ï¿½ï¿½Ü¿ï¿½ï¿½Ü²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Þ²Ëµï¿½ï¿½ï¿½ï¿½Ø£ï¿½ï¿½ï¿½
+    /// Ê¨ï¿½Õ¶ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ / Bathhouseï¿½ï¿½dlc / ï¿½Ø¸ï¿½ï¿½ï¿½ï¿½ï¿½ / Ä¿Â¼ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½â·´ï¿½ï¿½ï¿½ï¿½ï¿½Ö¡ï¿½
     /// </summary>
     public async Task<List<ModEntry>> ImportArchiveAsync(string archivePath,
         IProgress<string>? progress = null)
@@ -47,7 +47,7 @@ public class ModImportService
             throw new FileNotFoundException("Archive not found", archivePath);
 
         var archiveName = Path.GetFileNameWithoutExtension(archivePath);
-        progress?.Report($"ÕýÔÚ½âÑ¹: {Path.GetFileName(archivePath)}...");
+        progress?.Report($"ï¿½ï¿½ï¿½Ú½ï¿½Ñ¹: {Path.GetFileName(archivePath)}...");
 
         var tempExtractDir = Path.Combine(_storage.GetModsDirectory(), 
             "_tmp_" + Guid.NewGuid().ToString("N")[..8]);
@@ -57,7 +57,7 @@ public class ModImportService
         bool extracted = await Task.Run(() => ExtractArchive(archivePath, tempExtractDir));
         if (!extracted)
         {
-            progress?.Report("½âÑ¹Ê§°Ü");
+            progress?.Report("ï¿½ï¿½Ñ¹Ê§ï¿½ï¿½");
             return new List<ModEntry>();
         }
 
@@ -67,7 +67,7 @@ public class ModImportService
         // Step 0: Detect bundle-patching mods (quickbms + .bms)
         if (IsBundlePatchMod(tempExtractDir))
         {
-            progress?.Report("²»Ö§³Ö´ËÀàÄ£×é£ºBundle ²¹¶¡Ä£×éÐèÊÖ¶¯ÔËÐÐ Install.bat");
+            progress?.Report("ï¿½ï¿½Ö§ï¿½Ö´ï¿½ï¿½ï¿½Ä£ï¿½é£ºBundle ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ Install.bat");
             try { Directory.Delete(tempExtractDir, true); } catch { }
             return results;
         }
@@ -115,6 +115,22 @@ public class ModImportService
                         if (Directory.Exists(md.FullName))
                             Directory.Move(md.FullName, modStorageDir);
                     }
+
+                    // Scan and store bin files
+                    var binFiles = ScanBinFiles(tempExtractDir);
+                    if (binFiles.Count > 0)
+                    {
+                        var binStorageDir = _storage.GetModBinDirectory(entry.Id);
+                        entry.BinStoragePath = binStorageDir;
+                        entry.GameBinFiles.AddRange(binFiles);
+                        foreach (var bf in binFiles)
+                        {
+                            var src = Path.Combine(tempExtractDir, "bin", bf.Replace('/', Path.DirectorySeparatorChar));
+                            var dest = Path.Combine(binStorageDir, bf.Replace('/', Path.DirectorySeparatorChar));
+                            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                            if (File.Exists(src)) File.Copy(src, dest, true);
+                        }
+                    }
                     results.Add(entry);
                 }
             }
@@ -141,7 +157,7 @@ public class ModImportService
             else
             {
                 // Step 3: Can't identify
-                progress?.Report($"ÎÞ·¨×Ô¶¯Ê¶±ðÄ£×é½á¹¹: {archiveName}");
+                progress?.Report($"ï¿½Þ·ï¿½ï¿½Ô¶ï¿½Ê¶ï¿½ï¿½Ä£ï¿½ï¿½á¹¹: {archiveName}");
             }
         }
 
@@ -155,11 +171,11 @@ public class ModImportService
 #endif
             if (_storage.AddMod(entry)) continue;
 
-            // Duplicate ¡ª ask user
+            // Duplicate ï¿½ï¿½ ask user
             var overwrite = Application.Current.Dispatcher.Invoke(() =>
                 MessageBox.Show(
-                    $"¸ÃÄ£×éÒÑ´æÔÚ: {entry.Name}\n\nÊÇ·ñÖØÐÂµ¼Èë²¢¸²¸Ç£¿",
-                    "ÖØ¸´Ä£×é",
+                    $"ï¿½ï¿½Ä£ï¿½ï¿½ï¿½Ñ´ï¿½ï¿½ï¿½: {entry.Name}\n\nï¿½Ç·ï¿½ï¿½ï¿½ï¿½Âµï¿½ï¿½ë²¢ï¿½ï¿½ï¿½Ç£ï¿½",
+                    "ï¿½Ø¸ï¿½Ä£ï¿½ï¿½",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question) == MessageBoxResult.Yes);
 
@@ -168,8 +184,8 @@ public class ModImportService
         }
 
         progress?.Report(results.Count > 0 
-            ? $"µ¼ÈëÍê³É: {results.Count} ¸öÄ£×é"
-            : $"µ¼ÈëÊ§°Ü: {archiveName} - ÎÞ·¨Ê¶±ð");
+            ? $"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: {results.Count} ï¿½ï¿½Ä£ï¿½ï¿½"
+            : $"ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½: {archiveName} - ï¿½Þ·ï¿½Ê¶ï¿½ï¿½");
         
         return results;
     }
@@ -178,6 +194,15 @@ public class ModImportService
     /// Recursively scan for mod*/dlc* folders that directly contain a "content" subfolder.
     /// Deduplicates nested matches (keeps deepest).
     /// </summary>
+    private static List<string> ScanBinFiles(string extractDir)
+    {
+        var binDir = Path.Combine(extractDir, "bin");
+        if (!Directory.Exists(binDir)) return new List<string>();
+
+        var files = Directory.GetFiles(binDir, "*.*", SearchOption.AllDirectories);
+        return files.Select(f => f.Substring(binDir.Length + 1).Replace('\\', '/')).ToList();
+    }
+
     private static List<DirectoryInfo> ScanModDlcRoots(string extractDir)
     {
         var allDirs = new DirectoryInfo(extractDir).GetDirectories("*", SearchOption.AllDirectories);
@@ -212,7 +237,7 @@ public class ModImportService
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
         string archivePath, string archiveName, IProgress<string>? progress)
     {
-        progress?.Report($"ÕýÔÚ·ÖÎö: {Path.GetFileName(modRoot)}...");
+        progress?.Report($"ï¿½ï¿½ï¿½Ú·ï¿½ï¿½ï¿½: {Path.GetFileName(modRoot)}...");
 
         var originalName = Path.GetFileName(modRoot);
         var gameFolderName = EnsureModPrefix(originalName, modType);
@@ -251,12 +276,12 @@ public class ModImportService
     private static ModType? AskModOrDlc(string archiveName)
     {
         var result = MessageBox.Show(
-            $"ÎÞ·¨×Ô¶¯Ê¶±ð \"{archiveName}\" µÄ°²×°Î»ÖÃ¡£\n\n" +
-            "Õâ¸öÄ£×éÓ¦°²×°µ½ÄÄ¸öÄ¿Â¼£¿\n\n" +
-            "ÊÇ = Mods ÎÄ¼þ¼Ð\n" +
-            "·ñ = DLC ÎÄ¼þ¼Ð\n" +
-            "È¡Ïû = Ìø¹ý´ËÄ£×é",
-            "Ñ¡Ôñ°²×°Î»ÖÃ",
+            $"ï¿½Þ·ï¿½ï¿½Ô¶ï¿½Ê¶ï¿½ï¿½ \"{archiveName}\" ï¿½Ä°ï¿½×°Î»ï¿½Ã¡ï¿½\n\n" +
+            "ï¿½ï¿½ï¿½Ä£ï¿½ï¿½Ó¦ï¿½ï¿½×°ï¿½ï¿½ï¿½Ä¸ï¿½Ä¿Â¼ï¿½ï¿½\n\n" +
+            "ï¿½ï¿½ = Mods ï¿½Ä¼ï¿½ï¿½ï¿½\n" +
+            "ï¿½ï¿½ = DLC ï¿½Ä¼ï¿½ï¿½ï¿½\n" +
+            "È¡ï¿½ï¿½ = ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½",
+            "Ñ¡ï¿½ï¿½×°Î»ï¿½ï¿½",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
 
@@ -286,7 +311,7 @@ private static string FindModRoot(string sourceDir)
                 break;
             }
 
-            // Exactly one subfolder, no files ¡ú drill in
+            // Exactly one subfolder, no files ï¿½ï¿½ drill in
             if (subDirs.Length == 1 && files.Length == 0)
             {
                 current = subDirs[0];
@@ -343,7 +368,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             var subDirs = Directory.GetDirectories(current);
             var files = Directory.GetFiles(current);
 
-            // If this folder has a "content" subfolder, it's a mod root ¡ª stop here
+            // If this folder has a "content" subfolder, it's a mod root ï¿½ï¿½ stop here
             if (subDirs.Any(d => string.Equals(Path.GetFileName(d), "content", StringComparison.OrdinalIgnoreCase)))
                 break;
 
@@ -354,7 +379,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 continue;
             }
 
-            // Multiple items or single item with files ¡ª this is likely the mod root
+            // Multiple items or single item with files ï¿½ï¿½ this is likely the mod root
             break;
         }
 
@@ -544,7 +569,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 try
                 {
                     var text = File.ReadAllText(files[0]);
-                    if (text.Length > 2000) text = text[..2000] + "\n\n... (ÄÚÈÝ¹ý³¤£¬ÒÑ½Ø¶Ï)";
+                    if (text.Length > 2000) text = text[..2000] + "\n\n... (ï¿½ï¿½ï¿½Ý¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ½Ø¶ï¿½)";
                     return text;
                 }
                 catch { }
@@ -556,7 +581,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             try
             {
                 var text = File.ReadAllText(anyTxt[0]);
-                if (text.Length > 2000) text = text[..2000] + "\n\n... (ÄÚÈÝ¹ý³¤£¬ÒÑ½Ø¶Ï)";
+                if (text.Length > 2000) text = text[..2000] + "\n\n... (ï¿½ï¿½ï¿½Ý¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ½Ø¶ï¿½)";
                 return text;
             }
             catch { }

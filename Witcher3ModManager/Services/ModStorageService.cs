@@ -8,6 +8,7 @@ public class ModStorageService
 {
     private readonly string _dataDir;
     private readonly string _modsDir;
+    private readonly string _binDir;
     private readonly string _dbPath;
     private List<ModEntry> _mods = new();
 
@@ -17,10 +18,12 @@ public class ModStorageService
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             AppDataPath.FolderName);
         _modsDir = Path.Combine(_dataDir, "mods");
+        _binDir = Path.Combine(_dataDir, "bin");
         _dbPath = Path.Combine(_dataDir, "mods.json");
         
         Directory.CreateDirectory(_dataDir);
         Directory.CreateDirectory(_modsDir);
+        Directory.CreateDirectory(_binDir);
         Load();
     }
 
@@ -190,6 +193,15 @@ public class ModStorageService
         }
         _mods = sorted;
         Save();
+    }
+
+    public string GetBinDirectory() => _binDir;
+
+    public string GetModBinDirectory(string modId)
+    {
+        var dir = Path.Combine(_binDir, modId);
+        Directory.CreateDirectory(dir);
+        return dir;
     }
 
     public string GetModsDirectory() => _modsDir;
