@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Witcher3ModManager.Models;
@@ -326,7 +326,7 @@ public class Witcher3Service
 
     public void UpdateAllPriorities(List<(string? GameModFolderName, int Priority)> mods)
     {
-        WriteModsSettings(mods);
+        WriteModsSettings(mods.Select(m => (m.GameModFolderName ?? "", m.Priority)).ToList());
     }
 
     public void LaunchGame()
@@ -420,7 +420,7 @@ public class Witcher3Service
 
     private void CopyDlcToGame(ModEntry mod, string dlcPath)
     {
-        if (string.IsNullOrEmpty(dlcPath)) return;
+        if (string.IsNullOrEmpty(dlcPath) || string.IsNullOrEmpty(mod.GameDlcFolderName)) return;
         var storageDlc = Path.Combine(Path.GetDirectoryName(mod.InstalledPath) ?? "", mod.GameDlcFolderName);
         if (Directory.Exists(storageDlc))
         {

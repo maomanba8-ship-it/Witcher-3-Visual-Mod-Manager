@@ -1,0 +1,60 @@
+using Witcher3ModManager.Models;
+
+// ORPHAN_INSERT_FIELD
+    private List<OrphanModInfo> _orphans = new();
+
+// ORPHAN_INSERT_SETORPHANS
+    public void SetOrphans(List<OrphanModInfo> orphans)
+    {
+        _orphans = orphans ?? new();
+        if (_orphans.Count == 0)
+        {
+            OrphanBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+        OrphanBannerText.Text = "发现 " + _orphans.Count + " 个未被管理的 Mod";
+        OrphanBanner.Visibility = Visibility.Visible;
+    }
+
+// ORPHAN_INSERT_HANDLERS
+    private void OrphanImportAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (_storage == null || _orphans.Count == 0) return;
+        var imported = 0;
+        foreach (var orphan in _orphans)
+        {
+            try
+            {
+                _storage.ImportOrphanMod(orphan);
+                imported++;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(string.Format("Orphan import failed: {0} - {1}", orphan.FolderName, ex.Message));
+            }
+        }
+        _orphans.Clear();
+        OrphanBanner.Visibility = Visibility.Collapsed;
+        RefreshModList();
+        MessageBox.Show("成功导入 " + imported + " 个 Mod。", "孤儿 Mod 导入", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void OrphanViewDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_orphans.Count == 0) return;
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("以下 Mod 已安装在游戏目录中，但尚未被管理器管理：");
+        sb.AppendLine();
+        foreach (var o in _orphans)
+        {
+            var status = o.IsEnabled ? "已启用" : "已停用";
+            sb.AppendLine("  " + o.FolderName + "  [" + status + "]  " + o.DisplaySize + "  " + o.DisplayLocation);
+        }
+        MessageBox.Show(sb.ToString(), "未管理 Mod 详情 (" + _orphans.Count + ")", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void OrphanIgnore_Click(object sender, RoutedEventArgs e)
+    {
+        _orphans.Clear();
+        OrphanBanner.Visibility = Visibility.Collapsed;
+    }

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -69,7 +69,9 @@ public partial class ModListPage : UserControl
     }
 
     public void SetOrphans(List<OrphanModInfo> orphans)
-    {        if (_orphans.Count == 0)
+    {
+        _orphans = orphans ?? new List<OrphanModInfo>();
+        if (_orphans.Count == 0)
         {
             OrphanBanner.Visibility = Visibility.Collapsed;
             return;
@@ -637,7 +639,7 @@ public partial class ModListPage : UserControl
 
     private void OrphanViewDetails_Click(object sender, RoutedEventArgs e)
     {
-        if (_orphans.Count == 0) return;
+        if (_storage == null || _orphans.Count == 0) return;
         var dialog = new OrphanDialog(_orphans);
         if (dialog.ShowDialog() == true && dialog.SelectedOrphans.Count > 0)
         {
