@@ -13,6 +13,7 @@ namespace Witcher3ModManager.Services;
 public class ModImportService
 {
     private readonly ModStorageService _storage;
+    private readonly SettingsService _settings;
     private readonly string _sevenZipPath;
 
     private static readonly string[] SevenZipCandidates =
@@ -22,32 +23,33 @@ public class ModImportService
         @"C:\Program Files (x86)\7-Zip\7z.exe"
     };
 
-    public ModImportService(ModStorageService storage)
+    public ModImportService(ModStorageService storage, SettingsService settings)
     {
         _storage = storage;
+        _settings = settings;
         _sevenZipPath = Find7Zip();
     }
 
     /// <summary>
-    /// [����ծ] Import �����ع� �� BuildModEntry ֻ�������� ModEntry����ֹ�����ļ�ϵͳ��
-    /// ImportArchiveAsync ͳһ���𣺽�ѹ��ɨ������������Move��SaveMod������temp��
-    /// ��ǰ BuildModEntry �� ImportArchiveAsync ��ְ��߽���ģ�������£�
+    /// [技术债] Import 流程重构 — BuildModEntry 只负责生成 ModEntry，禁止操作文件系统。
+    /// ImportArchiveAsync 统一负责：解压、扫描、重名处理、Move、SaveMod、清理 temp。
+    /// 当前 BuildModEntry 和 ImportArchiveAsync 的职责边界已模糊，请勿继续添加。
 
 
-    /// [����ծ] ��Ӣ���л� �� ��ǰ 150+ ��Ӳ�������ģ����Ϊ Loc �ֵ� + ��̬ˢ�£���ֹ�� resx������ BAML �ػ꣩��
-    /// [����ծ] bin/ Ŀ¼֧�� �� ���� Mod ��Ҫ�� bin\config\...\xxx.xml ������Ϸ bin Ŀ¼��������ģ��˵����ء�
-    /// ��Ҫ�Ķ�: ModEntry.GameBinFiles, ScanBinFiles(), EnableBin/DisableBin, ConflictService bin��⡣
-    /// ��ǰ״̬: bin �ļ���������Mod ���ܿ��ܲ��������޲˵����أ���
-    /// ʨ�ն��ļ��� / Bathhouse��dlc / �ظ����� / Ŀ¼���� �����ⷴ�����֡�
+    /// [技术债] 中英文切换 — 当前 150+ 处硬编码中文，计划改为 Loc 字典 + 动态刷新，避免用 resx（防止 BAML 脱壳）。
+    /// [技术债] bin/ 目录支持 — 部分 Mod 需要 bin\config\...\xxx.xml 复制到游戏 bin 目录，启动游戏菜单才能读取。
+    /// 需要改动: ModEntry.GameBinFiles, ScanBinFiles(), EnableBin/DisableBin, ConflictService bin检测。
+    /// 当前状态: bin 文件导入后无法在Mod 管理器里控制（游戏菜单读取）。
+    /// 狮鹫多文件 / Bathhouse重复dlc / 重复导入 / 目录改名 等问题反复出现。
     /// </summary>
-    public async Task<List<ModEntry>> ImportArchiveAsync(string archivePath,
+    public async Task<(List<ModEntry> Results, string? Error)> ImportArchiveAsync(string archivePath,
         IProgress<string>? progress = null)
     {
         if (!File.Exists(archivePath))
             throw new FileNotFoundException("Archive not found", archivePath);
 
         var archiveName = Path.GetFileNameWithoutExtension(archivePath);
-        progress?.Report($"���ڽ�ѹ: {Path.GetFileName(archivePath)}...");
+        progress?.Report($"正在解压: {Path.GetFileName(archivePath)}...");
 
         var tempExtractDir = Path.Combine(_storage.GetModsDirectory(), 
             "_tmp_" + Guid.NewGuid().ToString("N")[..8]);
@@ -57,19 +59,20 @@ public class ModImportService
         bool extracted = await Task.Run(() => ExtractArchive(archivePath, tempExtractDir));
         if (!extracted)
         {
-            progress?.Report("��ѹʧ��");
-            return new List<ModEntry>();
+            progress?.Report("解压失败");
+            return (new List<ModEntry>(), string.IsNullOrEmpty(_sevenZipPath) ? "7z_not_found" : "extract_failed");
         }
 
         var groupId = Guid.NewGuid().ToString("N")[..8];
         var results = new List<ModEntry>();
+        string? errorCode = null;
 
         // Step 0: Detect bundle-patching mods (quickbms + .bms)
         if (IsBundlePatchMod(tempExtractDir))
         {
-            progress?.Report("��֧�ִ���ģ�飺Bundle ����ģ�����ֶ����� Install.bat");
+            progress?.Report("不支持打包模块：Bundle 补丁模块请手动运行 Install.bat");
             try { Directory.Delete(tempExtractDir, true); } catch { }
-            return results;
+            return (new List<ModEntry>(), "bundle_patch");
         }
 
         // Step 1: Recursively scan for mod*/dlc* folders with content/
@@ -157,7 +160,8 @@ public class ModImportService
             else
             {
                 // Step 3: Can't identify
-                progress?.Report($"�޷��Զ�ʶ��ģ��ṹ: {archiveName}");
+                errorCode = "unknown_format";
+                progress?.Report($"无法自动识别模组结构: {archiveName}");
             }
         }
 
@@ -171,11 +175,11 @@ public class ModImportService
 #endif
             if (_storage.AddMod(entry)) continue;
 
-            // Duplicate �� ask user
+            // Duplicate — ask user
             var overwrite = Application.Current.Dispatcher.Invoke(() =>
                 MessageBox.Show(
-                    $"��ģ���Ѵ���: {entry.Name}\n\n�Ƿ����µ��벢���ǣ�",
-                    "�ظ�ģ��",
+                    $"该模组已存在: {entry.Name}\n\n是否替换并覆盖？",
+                    "重复模组",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question) == MessageBoxResult.Yes);
 
@@ -184,10 +188,10 @@ public class ModImportService
         }
 
         progress?.Report(results.Count > 0 
-            ? $"�������: {results.Count} ��ģ��"
-            : $"����ʧ��: {archiveName} - �޷�ʶ��");
+            ? $"导入完成: {results.Count} 个模组"
+            : $"导入失败: {archiveName} - 无法识别");
         
-        return results;
+        return (results, errorCode);
     }
 
     /// <summary>
@@ -237,7 +241,7 @@ public class ModImportService
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
         string archivePath, string archiveName, IProgress<string>? progress)
     {
-        progress?.Report($"���ڷ���: {Path.GetFileName(modRoot)}...");
+        progress?.Report($"正在分析: {Path.GetFileName(modRoot)}...");
 
         var originalName = Path.GetFileName(modRoot);
         var gameFolderName = EnsureModPrefix(originalName, modType);
@@ -276,12 +280,12 @@ public class ModImportService
     private static ModType? AskModOrDlc(string archiveName)
     {
         var result = MessageBox.Show(
-            $"�޷��Զ�ʶ�� \"{archiveName}\" �İ�װλ�á�\n\n" +
-            "���ģ��Ӧ��װ���ĸ�Ŀ¼��\n\n" +
-            "�� = Mods �ļ���\n" +
-            "�� = DLC �ļ���\n" +
-            "ȡ�� = ������ģ��",
-            "ѡ��װλ��",
+            $"无法自动识别 \"{archiveName}\" 的安装位置。\n\n" +
+            "该模组应该安装到哪个目录？\n\n" +
+            "是 = Mods 文件夹\n" +
+            "否 = DLC 文件夹\n" +
+            "取消 = 跳过该模组",
+            "选择安装位置",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
 
@@ -311,7 +315,7 @@ private static string FindModRoot(string sourceDir)
                 break;
             }
 
-            // Exactly one subfolder, no files �� drill in
+            // Exactly one subfolder, no files — drill in
             if (subDirs.Length == 1 && files.Length == 0)
             {
                 current = subDirs[0];
@@ -368,7 +372,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             var subDirs = Directory.GetDirectories(current);
             var files = Directory.GetFiles(current);
 
-            // If this folder has a "content" subfolder, it's a mod root �� stop here
+            // If this folder has a "content" subfolder, it's a mod root — stop here
             if (subDirs.Any(d => string.Equals(Path.GetFileName(d), "content", StringComparison.OrdinalIgnoreCase)))
                 break;
 
@@ -379,7 +383,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 continue;
             }
 
-            // Multiple items or single item with files �� this is likely the mod root
+            // Multiple items or single item with files — this is likely the mod root
             break;
         }
 
@@ -549,9 +553,44 @@ private static string DeepFlatten(string sourceDir, string targetDir)
 
     private string Find7Zip()
     {
+        // 1. Use user-configured path from settings
+        var configured = _settings.Current.SevenZipPath;
+        if (!string.IsNullOrEmpty(configured) && File.Exists(configured))
+            return configured;
+
+        // 2. Search system PATH
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "where.exe",
+                Arguments = "7z",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            if (proc != null)
+            {
+                var output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+                if (proc.ExitCode == 0)
+                {
+                    var firstLine = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault();
+                    if (!string.IsNullOrEmpty(firstLine) && File.Exists(firstLine))
+                        return firstLine;
+                }
+            }
+        }
+        catch { }
+
+        // 3. Fallback: hardcoded candidates
         foreach (var candidate in SevenZipCandidates)
             if (File.Exists(candidate)) return candidate;
-        return "7z.exe";
+
+        // 4. Nothing found
+        return "";
     }
 
     public bool IsSevenZipAvailable() => File.Exists(_sevenZipPath);
@@ -569,7 +608,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 try
                 {
                     var text = File.ReadAllText(files[0]);
-                    if (text.Length > 2000) text = text[..2000] + "\n\n... (���ݹ������ѽض�)";
+                    if (text.Length > 2000) text = text[..2000] + "\n\n... (内容过长已截断)";
                     return text;
                 }
                 catch { }
@@ -581,7 +620,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             try
             {
                 var text = File.ReadAllText(anyTxt[0]);
-                if (text.Length > 2000) text = text[..2000] + "\n\n... (���ݹ������ѽض�)";
+                if (text.Length > 2000) text = text[..2000] + "\n\n... (内容过长已截断)";
                 return text;
             }
             catch { }

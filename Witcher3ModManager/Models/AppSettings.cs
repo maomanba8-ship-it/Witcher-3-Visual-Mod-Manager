@@ -4,7 +4,7 @@ public class AppSettings
 {
     public string BackgroundImagePath { get; set; } = "";
     public string Witcher3GamePath { get; set; } = "";
-    public string SevenZipPath { get; set; } = @"D:\7-Zip\7z.exe";
+    public string SevenZipPath { get; set; } = "";
     public string Language { get; set; } = "zh-CN";
     public bool AutoBackup { get; set; } = true;
     public string ModStoragePath { get; set; } = "";

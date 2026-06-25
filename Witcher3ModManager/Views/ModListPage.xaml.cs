@@ -291,8 +291,8 @@ public partial class ModListPage : UserControl
         if (_importer == null || _storage == null) return;
         try
         {
-            var imported = await _importer.ImportArchiveAsync(filePath);
-            if (imported.Count > 0) 
+            var (imported, importError) = await _importer.ImportArchiveAsync(filePath);
+            if (imported.Count > 0)
             {
                 _conflict?.InvalidateCache();
                 RefreshModList();
@@ -300,10 +300,18 @@ public partial class ModListPage : UserControl
                     MessageBox.Show($"导入了 {imported.Count} 个模组（组合包已拆分）",
                         "导入完成", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            else MessageBox.Show("导入失败: " + Path.GetFileName(filePath) + "\n\n"
-                    + "该模组使用了 Bundle 补丁方式（quickbms），不是标准模组格式。\n"
-                    + "请手动解压后运行其中的 Install.bat 进行安装。",
-                    "导入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else if (importError != null)
+            {
+                var msg = importError switch
+                {
+                    "7z_not_found" => "未找到 7-Zip，请安装 7-Zip 或在设置中配置 7z.exe 路径。",
+                    "extract_failed" => "解压失败，压缩包可能已损坏或格式不受支持（支持 .rar / .zip / .7z）。",
+                    "bundle_patch" => "该模组使用了 Bundle 补丁方式（quickbms），不是标准模组格式。\n请手动解压后运行其中的 Install.bat 进行安装。",
+                    "unknown_format" => "无法识别模组结构，请确认压缩包内包含 mod 或 dlc 文件夹。",
+                    _ => $"未处理的错误码: {importError}"
+                };
+                MessageBox.Show(msg, "导入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
         catch (Exception ex)
         {

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -46,7 +46,7 @@ public partial class MainWindow : Window
             _storage.MigrateGroupedEntries();
             _storage.DeduplicateByGameFolderName();
             _settings = new SettingsService();
-            _importer = new ModImportService(_storage);
+            _importer = new ModImportService(_storage, _settings);
             _w3 = new Witcher3Service(_settings);
             _conflict = new ConflictService(_storage, _w3);
             _backup = new BackupService(_w3, _settings);

@@ -68,21 +68,23 @@ public partial class SettingsPage : UserControl
 
     private void BrowseGamePath_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFileDialog
+        var dlg = new OpenFolderDialog
         {
-            Title = "选择 witcher3.exe（位于游戏目录\\bin\\x64 或 \\bin\\x64_dx12 下）",
-            Filter = "witcher3.exe|witcher3.exe|可执行文件|*.exe"
+            Title = "选择巫师3游戏根目录（包含 content 文件夹的目录）"
         };
         if (dlg.ShowDialog() == true && _settings != null)
         {
-            // Navigate up from the exe to find the game root
-            // witcher3.exe is typically at: [GameRoot]\bin\x64[_dx12]\witcher3.exe
-            var exeDir = Path.GetDirectoryName(dlg.FileName) ?? "";
-            var gameRoot = ResolveGameRoot(exeDir);
-            
-            _settings.SetGamePath(gameRoot);
-            GamePathBox.Text = gameRoot;
-            MessageBox.Show($"游戏根目录已设置为:\n{gameRoot}", "路径已设置",
+            var selected = dlg.FolderName;
+            if (!Directory.Exists(Path.Combine(selected, "content")))
+            {
+                MessageBox.Show(
+                    "所选目录不包含 content 文件夹，不是有效的巫师3游戏根目录。\n\n请选择 The Witcher 3 根目录（例如：Steam\\steamapps\\common\\The Witcher 3）",
+                    "路径无效", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            _settings.SetGamePath(selected);
+            GamePathBox.Text = selected;
+            MessageBox.Show(string.Format("游戏根目录已设置为:\n{0}", selected), "路径已设置",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
@@ -96,9 +98,35 @@ public partial class SettingsPage : UserControl
         };
         if (dlg.ShowDialog() == true && _settings != null)
         {
+            if (!IsValid7Zip(dlg.FileName))
+            {
+                MessageBox.Show("所选文件不是有效的 7z.exe，请重新选择。", "路径无效",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             _settings.SetSevenZipPath(dlg.FileName);
             SevenZipBox.Text = dlg.FileName;
         }
+    }
+
+    private static bool IsValid7Zip(string path)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = path,
+                Arguments = "--help",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            proc?.WaitForExit(5000);
+            return proc?.ExitCode == 0;
+        }
+        catch { return false; }
     }
 
     private void BrowseModStorage_Click(object sender, RoutedEventArgs e)
@@ -153,27 +181,7 @@ public partial class SettingsPage : UserControl
     }
 
     // Navigate up from exe directory to find the actual game root
-    private static string ResolveGameRoot(string exeDir)
-    {
-        // witcher3.exe is in [GameRoot]\bin\x64_dx12\ or [GameRoot]\bin\x64\
-        // Go up until we find the "content" folder or "bin" as a subfolder
-        var dir = exeDir;
-        for (int i = 0; i < 5; i++)
-        {
-            var parent = Path.GetDirectoryName(dir);
-            if (parent == null) break;
-            
-            // Check if this looks like game root (has content/ or mods/ folders)
-            if (Directory.Exists(Path.Combine(parent, "content")) ||
-                Directory.Exists(Path.Combine(parent, "bin")))
-            {
-                return parent;
-            }
-            dir = parent;
-        }
-        // Fallback: use the original path
-        return exeDir;
-    }
+    
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {
