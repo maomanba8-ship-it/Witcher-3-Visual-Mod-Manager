@@ -404,7 +404,13 @@ public partial class ModListPage : UserControl
         DetailName.Text = mod.DisplayName;
         DetailOriginalName.Text = mod.GameModFolders.Count > 0 ? "文件名： " + string.Join(", ", mod.GameModFolders) : "";
         DetailDlcLabel.Text = mod.GameDlcFolders.Count > 0 ? "DLC： " + string.Join(", ", mod.GameDlcFolders) : "";
-        DetailBinLabel.Text = mod.GameBinFiles.Count > 0 ? "Bin： " + mod.GameBinFiles.Count + " 个文件 (" + string.Join(", ", mod.GameBinFiles.Take(3)) + (mod.GameBinFiles.Count > 3 ? "…" : "") + ")" : "";
+        DetailBinLabel.Text = mod.GameBinFiles.Count > 0
+            ? (mod.GameModFolders.Count == 0 && mod.GameDlcFolders.Count == 0
+                ? "类型：纯 Bin 组件（无 Mod/DLC 文件）\nBin： " : "Bin： ")
+              + mod.GameBinFiles.Count + " 个文件 ("
+              + string.Join(", ", mod.GameBinFiles.Take(3))
+              + (mod.GameBinFiles.Count > 3 ? "…" : "") + ")"
+            : "";
         RenameBtn.Tag = mod;
         DetailAuthor.Text = "作者： " + mod.Author;
         DetailVersion.Text = "版本： " + mod.Version;

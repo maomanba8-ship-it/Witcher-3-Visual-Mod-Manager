@@ -77,6 +77,7 @@ public class ModImportService
 
         // Step 1: Recursively scan for mod*/dlc* folders with content/
         var candidates = ScanModDlcRoots(tempExtractDir);
+        var binFiles = ScanBinFiles(tempExtractDir);
 
         if (candidates.Count > 0)
         {
@@ -119,21 +120,9 @@ public class ModImportService
                             Directory.Move(md.FullName, modStorageDir);
                     }
 
-                    // Scan and store bin files
-                    var binFiles = ScanBinFiles(tempExtractDir);
+                    // Attach bin files
                     if (binFiles.Count > 0)
-                    {
-                        var binStorageDir = _storage.GetModBinDirectory(entry.Id);
-                        entry.BinStoragePath = binStorageDir;
-                        entry.GameBinFiles.AddRange(binFiles);
-                        foreach (var bf in binFiles)
-                        {
-                            var src = Path.Combine(tempExtractDir, "bin", bf.Replace('/', Path.DirectorySeparatorChar));
-                            var dest = Path.Combine(binStorageDir, bf.Replace('/', Path.DirectorySeparatorChar));
-                            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                            if (File.Exists(src)) File.Copy(src, dest, true);
-                        }
-                    }
+                        AttachBinFiles(entry, tempExtractDir, binFiles);
                     results.Add(entry);
                 }
             }
@@ -145,23 +134,32 @@ public class ModImportService
         }
         else
         {
-            // Step 2: Fallback to FindModRoot
-            var root = FindModRoot(tempExtractDir);
-            if (root != null)
+            // No mod*/dlc* candidates — check for pure bin or try FindModRoot
+            if (binFiles.Count > 0)
             {
-                // Ask user: Mods or DLC?
-                var modType = Application.Current.Dispatcher.Invoke(() => AskModOrDlc(archiveName));
-                if (modType != null)
-                {
-                    var entry = await BuildModEntry(root, modType.Value, groupId, archivePath, archiveName, progress);
-                    if (entry != null) results.Add(entry);
-                }
+                // Pure bin mod — no mod/dlc folders
+                var entry = CreatePureBinEntry(archivePath, archiveName, groupId, tempExtractDir, binFiles);
+                if (entry != null) results.Add(entry);
             }
             else
             {
-                // Step 3: Can't identify
-                errorCode = "unknown_format";
-                progress?.Report($"无法自动识别模组结构: {archiveName}");
+                // Step 2: Fallback to FindModRoot
+                var root = FindModRoot(tempExtractDir);
+                if (root != null)
+                {
+                    var modType = Application.Current.Dispatcher.Invoke(() => AskModOrDlc(archiveName));
+                    if (modType != null)
+                    {
+                        var entry = await BuildModEntry(root, modType.Value, groupId, archivePath, archiveName, progress);
+                        if (entry != null) results.Add(entry);
+                    }
+                }
+                else
+                {
+                    // Step 3: Can't identify
+                    errorCode = "unknown_format";
+                    progress?.Report($"无法自动识别模组结构: {archiveName}");
+                }
             }
         }
 
@@ -200,11 +198,15 @@ public class ModImportService
     /// </summary>
     private static List<string> ScanBinFiles(string extractDir)
     {
-        var binDir = Path.Combine(extractDir, "bin");
-        if (!Directory.Exists(binDir)) return new List<string>();
-
-        var files = Directory.GetFiles(binDir, "*.*", SearchOption.AllDirectories);
-        return files.Select(f => f.Substring(binDir.Length + 1).Replace('\\', '/')).ToList();
+        // Search recursively for bin/ directories (mods may nest bin inside a named folder)
+        var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
+        var results = new List<string>();
+        foreach (var binDir in binDirs)
+        {
+            var files = Directory.GetFiles(binDir.FullName, "*.*", SearchOption.AllDirectories);
+            results.AddRange(files.Select(f => f.Substring(binDir.FullName.Length + 1).Replace('\\', '/')));
+        }
+        return results;
     }
 
     private static List<DirectoryInfo> ScanModDlcRoots(string extractDir)
@@ -628,7 +630,58 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         return "";
     }
 
-    private static void MoveDirectory(string sourceDir, string targetDir)
+    /// <summary>
+    /// Create a ModEntry for a pure bin mod (no mod/dlc folders).
+    /// </summary>
+    private ModEntry? CreatePureBinEntry(string archivePath, string archiveName, string groupId,
+        string extractDir, List<string> binFiles)
+    {
+        // Infer name from the parent of the bin/ directory (may be nested)
+        var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
+        var binRoot = binDirs.Length > 0 ? binDirs[0].FullName : Path.Combine(extractDir, "bin");
+        var parentDir = new DirectoryInfo(binRoot).Parent;
+        var inferredName = parentDir != null && !string.Equals(parentDir.Name, Path.GetFileName(extractDir), StringComparison.OrdinalIgnoreCase)
+            ? parentDir.Name
+            : new DirectoryInfo(extractDir).Name;
+
+        var entry = new ModEntry
+        {
+            Name = inferredName,
+            ModType = ModType.Mod,
+            GroupId = groupId,
+            InstalledPath = _storage.GetModsDirectory(),
+            IsEnabled = false
+        };
+
+        AttachBinFiles(entry, extractDir, binFiles);
+        return entry;
+    }
+
+    /// <summary>
+    /// Copy bin files from extract directory to mod storage and populate GameBinFiles.
+    /// </summary>
+    private void AttachBinFiles(ModEntry entry, string extractDir, List<string> binFiles)
+    {
+        if (binFiles.Count == 0) return;
+
+        // Find actual bin directory (may be nested: ModName/bin/..., not just bin/...)
+        var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
+        var binRoot = binDirs.Length > 0 ? binDirs[0].FullName : Path.Combine(extractDir, "bin");
+
+        var binStorageDir = _storage.GetModBinDirectory(entry.Id);
+        entry.BinStoragePath = binStorageDir;
+        entry.GameBinFiles.AddRange(binFiles);
+
+        foreach (var bf in binFiles)
+        {
+            var src = Path.Combine(binRoot, bf.Replace('/', Path.DirectorySeparatorChar));
+            var dest = Path.Combine(binStorageDir, bf.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+            if (File.Exists(src)) File.Copy(src, dest, true);
+        }
+    }
+
+        private static void MoveDirectory(string sourceDir, string targetDir)
     {
         if (Directory.Exists(targetDir))
             Directory.Delete(targetDir, true);
