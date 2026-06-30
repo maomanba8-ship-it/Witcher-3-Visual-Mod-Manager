@@ -47,7 +47,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Content="&#xE921;" FontSize="10" Width="32" Height="32"
-                            Click="BtnMinimize_Click" ToolTip="最小化"
+                            x:Name="BtnMinimize" Click="BtnMinimize_Click" ToolTip="最小化"
                             Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
                             Cursor="Hand" FontFamily="Segoe MDL2 Assets">
                         <Button.Template>
@@ -85,7 +85,7 @@
                         </Button.Template>
                     </Button>
                     <Button Content="&#xE8BB;" FontSize="10" Width="32" Height="32"
-                            Click="BtnClose_Click" ToolTip="关闭"
+                            x:Name="BtnClose" Click="BtnClose_Click" ToolTip="关闭"
                             Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
                             Cursor="Hand" FontFamily="Segoe MDL2 Assets">
                         <Button.Template>

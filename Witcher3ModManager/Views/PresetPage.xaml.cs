@@ -18,10 +18,17 @@ public partial class PresetPage : UserControl
     public PresetPage()
     {
         InitializeComponent();
-        BackBtnText.Text = "返回";
-        PageTitleText.Text = "预设管理";
-        SaveBtnText.Text = "保存当前配置";
-        EmptyText.Text = "暂无预设";
+        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(RefreshLanguage);
+        RefreshLanguage();
+    }
+
+    private void RefreshLanguage()
+    {
+        var ts = TranslationService.Instance;
+        BackBtnText.Text = ts.T("settings.back");
+        PageTitleText.Text = ts.T("preset.title");
+        SaveBtnText.Text = ts.T("preset.save_current");
+        EmptyText.Text = ts.T("preset.no_presets");
     }
 
     public void Initialize(PresetService presetService, ModStorageService storage, Witcher3Service w3)
@@ -67,7 +74,7 @@ public partial class PresetPage : UserControl
             });
             leftStack.Children.Add(new TextBlock
             {
-                Text = $"创建于 {preset.CreatedAt:yyyy-MM-dd HH:mm}",
+                Text = string.Format(TranslationService.Instance.T("preset.created_at"), preset.CreatedAt),
                 FontSize = 11,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#5E626E")),
@@ -75,7 +82,7 @@ public partial class PresetPage : UserControl
             });
             leftStack.Children.Add(new TextBlock
             {
-                Text = $"包含 {preset.ModStates.Count} 个模组",
+                Text = string.Format(TranslationService.Instance.T("preset.mod_count"), preset.ModStates.Count),
                 FontSize = 11,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#9A9EAA")),
@@ -88,7 +95,7 @@ public partial class PresetPage : UserControl
 
             var loadBtn = new Button
             {
-                Content = "加载",
+                Content = TranslationService.Instance.T("preset.load_btn"),
                 Width = 60,
                 Height = 30,
                 FontSize = 11,
@@ -112,7 +119,7 @@ public partial class PresetPage : UserControl
                 Height = 30,
                 Tag = preset.Name,
                 Cursor = Cursors.Hand,
-                ToolTip = "删除预设",
+                ToolTip = TranslationService.Instance.T("preset.delete_tooltip"),
                 Background = new System.Windows.Media.SolidColorBrush(Colors.Transparent),
                 BorderThickness = new Thickness(0)
             };
@@ -141,7 +148,7 @@ public partial class PresetPage : UserControl
     {
         if (_presetService == null || _storage == null) return;
 
-        var result = InputDialog.Show("保存预设", "\uE8EC", "输入预设名称：", "我的配置", "确定", "取消");
+        var result = InputDialog.Show(TranslationService.Instance.T("preset.save_title"), "\uE8EC", TranslationService.Instance.T("preset.save_prompt"), TranslationService.Instance.T("preset.save_default_name"), TranslationService.Instance.T("dialog.ok"), TranslationService.Instance.T("dialog.cancel"));
         if (!string.IsNullOrWhiteSpace(result))
         {
             var allMods = _storage.GetAllMods().ToList();
@@ -158,10 +165,9 @@ public partial class PresetPage : UserControl
             var preset = _presetService.GetPreset(presetName);
             if (preset == null) return;
 
-            var confirmed = ConfirmDialog.Show("加载预设",
-                $"加载预设[{presetName}]？" + "\n\n" +
-                "当前模组状态将被替换。",
-                "\uE81E", "确认加载", "取消",
+            var confirmed = ConfirmDialog.Show(TranslationService.Instance.T("preset.load_title"),
+                string.Format(TranslationService.Instance.T("preset.load_message"), presetName),
+                "\uE81E", TranslationService.Instance.T("preset.load_confirm"), TranslationService.Instance.T("dialog.cancel"),
                 (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#8BA4B5"));
 
             if (!confirmed) return;
@@ -192,10 +198,8 @@ public partial class PresetPage : UserControl
             }
 
             PresetApplied?.Invoke();
-            var msg = $"棰勮 [{presetName}] 已加载。";
-            var enabledCount = allMods.Count(m => m.IsEnabled);
-            msg += $"\n已启用：{enabledCount} 个模组。";
-            MessageBox.Show(msg, "预设已加载", MessageBoxButton.OK, MessageBoxImage.Information);
+var msg = string.Format(TranslationService.Instance.T("preset.load_ok"), presetName, allMods.Count(m => m.IsEnabled));
+            MessageBox.Show(msg, TranslationService.Instance.T("preset.load_done"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -204,9 +208,9 @@ public partial class PresetPage : UserControl
         if (_presetService == null) return;
         if (sender is Button btn && btn.Tag is string presetName)
         {
-            var confirmed = ConfirmDialog.Show("删除预设",
-                $"删除预设[{presetName}]？",
-                "\uE74D", "确认删除", "取消");
+            var confirmed = ConfirmDialog.Show(TranslationService.Instance.T("preset.delete_title"),
+                string.Format(TranslationService.Instance.T("preset.delete_message"), presetName),
+                "\uE74D", TranslationService.Instance.T("preset.delete_confirm"), TranslationService.Instance.T("dialog.cancel"));
 
             if (confirmed)
             {

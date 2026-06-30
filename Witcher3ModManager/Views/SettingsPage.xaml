@@ -35,10 +35,10 @@
                     </Button.Template>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE72B;" FontSize="14"/>
-                        <TextBlock Text="返回" FontSize="13" FontFamily="Microsoft YaHei UI" Margin="6,0,0,0"/>
+                        <TextBlock x:Name="BackBtnText" Text="返回" FontSize="13" FontFamily="Microsoft YaHei UI" Margin="6,0,0,0"/>
                     </StackPanel>
                 </Button>
-                <TextBlock Grid.Column="1" Text="设置" FontSize="15" FontWeight="SemiBold"
+                <TextBlock x:Name="SettingsTitle" Grid.Column="1" Text="设置" FontSize="15" FontWeight="SemiBold"
                            Foreground="#E2E4E9"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Margin="0,0,80,0"/>
@@ -51,9 +51,9 @@
                 <Border Background="#1814161E" CornerRadius="8" Padding="20"
                         BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
                     <StackPanel>
-                        <TextBlock Text="外观" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock x:Name="AppearanceHeader" Text="外观" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#E2E4E9" Margin="0,0,0,16"/>
-                        <TextBlock Text="自定义背景图" FontSize="12"
+                        <TextBlock x:Name="CustomBgLabel" Text="自定义背景图" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -65,7 +65,7 @@
                                      IsReadOnly="True" Background="#1C1F2A"
                                      Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                      CaretBrush="#E2E4E9" Padding="8,5"/>
-                            <Button Grid.Column="1" Content="浏览"
+                            <Button x:Name="BrowseBgBtn" Grid.Column="1" Content="浏览"
                                     Margin="8,0,4,0" Click="BrowseBg_Click"
                                     Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
                                     FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
@@ -83,7 +83,7 @@
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
-                            <Button Grid.Column="2" Content="&#xE74D;"
+                            <Button x:Name="ResetBgBtn" Grid.Column="2" Content="&#xE74D;"
                                     ToolTip="重置默认背景" Click="ResetBg_Click"
                                     Width="34" Height="34"
                                     Background="Transparent" Foreground="#9A9EAA" BorderThickness="0"
@@ -104,7 +104,7 @@
                                 </Button.Template>
                             </Button>
                         </Grid>
-                        <TextBlock Text="支持 .jpg / .png 格式，推荐 1920x1080" FontSize="11"
+                        <TextBlock x:Name="BgHintText" Text="支持 .jpg / .png 格式，推荐 1920x1080" FontSize="11"
                                    Foreground="#5E626E" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
@@ -112,9 +112,9 @@
                 <Border Background="#1814161E" CornerRadius="8" Padding="20"
                         BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
                     <StackPanel>
-                        <TextBlock Text="路径配置" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock x:Name="PathConfigHeader" Text="路径配置" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#E2E4E9" Margin="0,0,0,16"/>
-                        <TextBlock Text="巫师3 游戏路径" FontSize="12"
+                        <TextBlock x:Name="GamePathLabel" Text="巫师3 游戏路径" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
@@ -125,7 +125,7 @@
                                      IsReadOnly="True" Background="#1C1F2A"
                                      Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                      CaretBrush="#E2E4E9" Padding="8,5"/>
-                            <Button Grid.Column="1" Content="浏览"
+                            <Button x:Name="BrowseGameBtn" Grid.Column="1" Content="浏览"
                                     Margin="8,0,0,0" Click="BrowseGamePath_Click"
                                     Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
                                     FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
@@ -145,7 +145,7 @@
                             </Button>
                         </Grid>
 
-                        <TextBlock Text="7-Zip 路径" FontSize="12"
+                        <TextBlock x:Name="SevenZipLabel" Text="7-Zip 路径" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
@@ -156,7 +156,7 @@
                                      IsReadOnly="True" Background="#1C1F2A"
                                      Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                      CaretBrush="#E2E4E9" Padding="8,5"/>
-                            <Button Grid.Column="1" Content="浏览"
+                            <Button x:Name="BrowseZipBtn" Grid.Column="1" Content="浏览"
                                     Margin="8,0,0,0" Click="Browse7Zip_Click"
                                     Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
                                     FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
@@ -176,7 +176,7 @@
                             </Button>
                         </Grid>
 
-                        <TextBlock Text="备份文件夹路径" FontSize="12"
+                        <TextBlock x:Name="BackupPathLabel" Text="备份文件夹路径" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
@@ -187,7 +187,7 @@
                                      IsReadOnly="True" Background="#1C1F2A"
                                      Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                      CaretBrush="#E2E4E9" Padding="8,5"/>
-                            <Button Grid.Column="1" Content="浏览"
+                            <Button x:Name="BrowseBackupBtn" Grid.Column="1" Content="浏览"
                                     Margin="8,0,0,0" Click="BrowseBackupPath_Click"
                                     Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
                                     FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
@@ -207,7 +207,7 @@
                             </Button>
                         </Grid>
 
-                        <TextBlock Text="Script Merger 路径" FontSize="12"
+                        <TextBlock x:Name="ScriptMergerLabel" Text="Script Merger 路径" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
@@ -218,7 +218,7 @@
                                      IsReadOnly="True" Background="#1C1F2A"
                                      Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                      CaretBrush="#E2E4E9" Padding="8,5"/>
-                            <Button Grid.Column="1" Content="浏览"
+                            <Button x:Name="BrowseMergerBtn" Grid.Column="1" Content="浏览"
                                     Margin="8,0,0,0" Click="BrowseScriptMerger_Click"
                                     Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
                                     FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
@@ -238,7 +238,7 @@
                             </Button>
                         </Grid>
 
-                        <TextBlock Text="模组存储路径" FontSize="12"
+                        <TextBlock x:Name="ModStorageLabel" Text="模组存储路径" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
@@ -249,7 +249,7 @@
                                      IsReadOnly="True" Background="#1C1F2A"
                                      Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                      CaretBrush="#E2E4E9" Padding="8,5"/>
-                            <Button Grid.Column="1" Content="浏览"
+                            <Button x:Name="BrowseStorageBtn" Grid.Column="1" Content="浏览"
                                     Margin="8,0,0,0" Click="BrowseModStorage_Click"
                                     Background="#8BA4B5" Foreground="#14161E" BorderThickness="0"
                                     FontSize="13" FontWeight="SemiBold" Cursor="Hand" Padding="16,9">
@@ -274,16 +274,16 @@
                 <Border Background="#1814161E" CornerRadius="8" Padding="20"
                         BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
                     <StackPanel>
-                        <TextBlock Text="游戏选项" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock x:Name="GameOptionsHeader" Text="游戏选项" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#E2E4E9" Margin="0,0,0,16"/>
-                        <TextBlock Text="启动参数" FontSize="12"
+                        <TextBlock x:Name="LaunchArgsLabel" Text="启动参数" FontSize="12"
                                    Foreground="#9A9EAA" Margin="0,0,0,6"/>
                         <TextBox x:Name="LaunchArgsBox" Background="#1C1F2A"
                                  Foreground="#E2E4E9" BorderBrush="#2A2E3C"
                                  CaretBrush="#E2E4E9" Padding="8,5"
                                  TextChanged="LaunchArgs_Changed"
                                  ToolTip="例如: -dx12 --launcher-skip"/>
-                        <TextBlock Text="例如: -dx12 (DirectX 12模式) 或 --launcher-skip (跳过启动器)" FontSize="11"
+                        <TextBlock x:Name="LaunchArgsHint" Text="例如: -dx12 (DirectX 12模式) 或 --launcher-skip (跳过启动器)" FontSize="11"
                                    Foreground="#5E626E" Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
@@ -291,7 +291,7 @@
                 <Border Background="#1814161E" CornerRadius="8" Padding="20"
                         BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
                     <StackPanel>
-                        <TextBlock Text="工具" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock x:Name="ToolsHeader" Text="工具" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#E2E4E9" Margin="0,0,0,16"/>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
@@ -299,9 +299,9 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="启用前自动备份" FontSize="12"
+                                <TextBlock x:Name="AutoBackupCheckText" Text="启用前自动备份" FontSize="12"
                                            Foreground="#9A9EAA"/>
-                                <TextBlock Text="启用模组前自动备份原始游戏文件" FontSize="11"
+                                <TextBlock x:Name="AutoBackupDescText" Text="启用模组前自动备份原始游戏文件" FontSize="11"
                                            Foreground="#5E626E"/>
                             </StackPanel>
                             <ToggleButton x:Name="AutoBackupToggle" Grid.Column="1"
@@ -334,15 +334,15 @@
                 <Border Background="#1814161E" CornerRadius="8" Padding="20"
                         BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,20">
                     <StackPanel>
-                        <TextBlock Text="更多功能（即将推出）" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock x:Name="MoreFeaturesHeader" Text="更多功能（即将推出）" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#5E626E" Margin="0,0,0,12"/>
-                        <TextBlock Text=". 模组优先级拖拽排序" FontSize="12"
+                        <TextBlock x:Name="MoreFeature1Text" Text=". 模组优先级拖拽排序" FontSize="12"
                                    Foreground="#5E626E" Margin="0,0,0,4"/>
-                        <TextBlock Text=". 脚本合并工具集成" FontSize="12"
+                        <TextBlock x:Name="MoreFeature2Text" Text=". 脚本合并工具集成" FontSize="12"
                                    Foreground="#5E626E" Margin="0,0,0,4"/>
-                        <TextBlock Text=". Nexus Mods 链接配置" FontSize="12"
+                        <TextBlock x:Name="MoreFeature3Text" Text=". Nexus Mods 链接配置" FontSize="12"
                                    Foreground="#5E626E" Margin="0,0,0,4"/>
-                        <TextBlock Text=". 主题配色方案" FontSize="12"
+                        <TextBlock x:Name="MoreFeature4Text" Text=". 主题配色方案" FontSize="12"
                                    Foreground="#5E626E"/>
                     </StackPanel>
                 </Border>
@@ -350,11 +350,11 @@
                 <Border Background="#1814161E" CornerRadius="8" Padding="20"
                         BorderBrush="#1E2230" BorderThickness="1" Margin="0,0,0,30">
                     <StackPanel>
-                        <TextBlock Text="关于" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock x:Name="AboutHeader" Text="关于" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#E2E4E9" Margin="0,0,0,8"/>
-                        <TextBlock Text="巫师3 Mod 管理器 v0.8.1" FontSize="12"
+                        <TextBlock x:Name="AboutVersionText" Text="巫师3 Mod 管理器 v0.8.1" FontSize="12"
                                    Foreground="#9A9EAA"/>
-                        <TextBlock Text="基于 .NET 10 + WPF 构建" FontSize="11"
+                        <TextBlock x:Name="AboutTechText" Text="基于 .NET 10 + WPF 构建" FontSize="11"
                                    Foreground="#5E626E" Margin="0,2,0,0"/>
                     </StackPanel>
                 </Border>

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Witcher3ModManager.Models;
+using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager.Views;
 
@@ -11,24 +12,24 @@ public partial class PotentialOverlapDialog : Window
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
+        TitleText.Text = TranslationService.Instance.T("potential.title");
+        CloseBtn.Content = TranslationService.Instance.T("conflict.close");
 
         var total = overlaps.Values.Sum(v => v.Count * (v.Count - 1) / 2);
-        SummaryText.Text = $"检测到 {total} 组潜在覆盖，" +
-                          $"涉及 {overlaps.Values.SelectMany(v => v).Distinct().Count()} 个模组。\n" +
-                          "同分类模组可能修改同一游戏内容，游戏将根据优先级(Priority)决定最终效果。";
+        SummaryText.Text = string.Format(TranslationService.Instance.T("overlap.summary"), total, overlaps.Values.SelectMany(v => v).Distinct().Count());
 
         foreach (var kvp in overlaps)
         {
             var catDisplay = kvp.Key switch
             {
-                CategoryType.Geralt => "杰洛特",
-                CategoryType.Yennefer => "叶奈法",
-                CategoryType.Triss => "特莉丝",
-                CategoryType.Graphics => "图形",
-                CategoryType.Characters => "角色",
-                CategoryType.ArmorWeapons => "护甲武器",
-                CategoryType.Gameplay => "玩法",
-                CategoryType.Quests => "任务",
+                CategoryType.Geralt => TranslationService.Instance.T("category.geralt"),
+                CategoryType.Yennefer => TranslationService.Instance.T("category.yennefer"),
+                CategoryType.Triss => TranslationService.Instance.T("category.triss"),
+                CategoryType.Graphics => TranslationService.Instance.T("category.graphics"),
+                CategoryType.Characters => TranslationService.Instance.T("category.characters"),
+                CategoryType.ArmorWeapons => TranslationService.Instance.T("category.armor_weapons"),
+                CategoryType.Gameplay => TranslationService.Instance.T("category.gameplay"),
+                CategoryType.Quests => TranslationService.Instance.T("category.quests"),
                 CategoryType.UI => "UI",
                 _ => kvp.Key.ToString()
             };
@@ -48,7 +49,7 @@ public partial class PotentialOverlapDialog : Window
             var stack = new System.Windows.Controls.StackPanel();
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = $"\uE74B {catDisplay}（{kvp.Value.Count} 个模组）",
+                Text = string.Format(TranslationService.Instance.T("overlap.cat_count"), catDisplay, kvp.Value.Count),
                 FontSize = 12,
                 FontWeight = System.Windows.FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(

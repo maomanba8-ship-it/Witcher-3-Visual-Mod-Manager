@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using Witcher3ModManager.Models;
+using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager.Services;
 
@@ -56,7 +57,7 @@ public class BackupService
         }
         catch (Exception ex)
         {
-            result.Errors.Add($"备份 {mod.Name} 失败: {ex.Message}");
+            result.Errors.Add(string.Format(TranslationService.Instance.T("backup.failed"), mod.Name, ex.Message));
         }
 
         return result;

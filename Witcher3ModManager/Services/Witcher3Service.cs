@@ -485,8 +485,8 @@ public class Witcher3Service
             var fileList = string.Join("\n\uff65 ", mod.GameBinFiles.Take(5));
             if (mod.GameBinFiles.Count > 5) fileList += "\n\uff65 ...";
             System.Windows.MessageBox.Show(
-                $"该 Mod 包含 {mod.GameBinFiles.Count} 个 bin 文件：\n\uff65 {fileList}\n\n\u26a0 bin 文件保留在游戏目录中，未被删除。\n如果其他 Mod 也使用这些文件，删除会导致它们失效。\n请手动检查 game/bin/ 目录。",
-                "Bin \u6587\u4ef6\u63d0\u793a",
+                string.Format(TranslationService.Instance.T("bin.delete_warning"), mod.GameBinFiles.Count,fileList),
+                TranslationService.Instance.T("bin.notice"),
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
         }

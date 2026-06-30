@@ -16,6 +16,8 @@ public partial class SettingsPage : UserControl
     public SettingsPage()
     {
         InitializeComponent();
+            TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(RefreshLanguage);
+            RefreshLanguage();
     }
 
     public void Initialize(SettingsService settings)
@@ -30,16 +32,16 @@ public partial class SettingsPage : UserControl
 
         var s = _settings.Current;
         BgPathBox.Text = string.IsNullOrEmpty(s.BackgroundImagePath) 
-            ? "（使用默认背景）" : s.BackgroundImagePath;
+            ? TranslationService.Instance.T("settings.default_bg") : s.BackgroundImagePath;
         GamePathBox.Text = string.IsNullOrEmpty(s.Witcher3GamePath) 
-            ? "（未设置）" : s.Witcher3GamePath;
+            ? TranslationService.Instance.T("settings.not_set") : s.Witcher3GamePath;
         SevenZipBox.Text = s.SevenZipPath;
         ModStorageBox.Text = string.IsNullOrEmpty(s.ModStoragePath)
-            ? "（使用默认路径）" : s.ModStoragePath;
+            ? TranslationService.Instance.T("settings.default_path") : s.ModStoragePath;
         BackupPathBox.Text = string.IsNullOrEmpty(s.BackupPath)
-            ? "（使用默认路径）" : s.BackupPath;
+            ? TranslationService.Instance.T("settings.default_path") : s.BackupPath;
         ScriptMergerBox.Text = string.IsNullOrEmpty(s.ScriptMergerPath)
-            ? "（未设置）" : s.ScriptMergerPath;
+            ? TranslationService.Instance.T("settings.not_set") : s.ScriptMergerPath;
         LaunchArgsBox.Text = s.LaunchArgs;
         AutoBackupToggle.IsChecked = s.AutoBackup;
     }
@@ -48,7 +50,7 @@ public partial class SettingsPage : UserControl
     {
         var dlg = new OpenFileDialog
         {
-            Title = "选择背景图片",
+            Title = TranslationService.Instance.T("settings.dlg_bg"),
             Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*"
         };
         if (dlg.ShowDialog() == true)
@@ -62,7 +64,7 @@ public partial class SettingsPage : UserControl
     private void ResetBg_Click(object sender, RoutedEventArgs e)
     {
         _settings?.SetBackgroundImage("");
-        BgPathBox.Text = "（使用默认背景）";
+        BgPathBox.Text = TranslationService.Instance.T("settings.default_bg");
         BackgroundImageChanged?.Invoke("");
     }
 
@@ -70,7 +72,7 @@ public partial class SettingsPage : UserControl
     {
         var dlg = new OpenFolderDialog
         {
-            Title = "选择巫师3游戏根目录（包含 content 文件夹的目录）"
+            Title = TranslationService.Instance.T("settings.dlg_game_path")
         };
         if (dlg.ShowDialog() == true && _settings != null)
         {
@@ -78,13 +80,13 @@ public partial class SettingsPage : UserControl
             if (!Directory.Exists(Path.Combine(selected, "content")))
             {
                 MessageBox.Show(
-                    "所选目录不包含 content 文件夹，不是有效的巫师3游戏根目录。\n\n请选择 The Witcher 3 根目录（例如：Steam\\steamapps\\common\\The Witcher 3）",
-                    "路径无效", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    TranslationService.Instance.T("settings.game_path_invalid_msg"),
+                    TranslationService.Instance.T("settings.path_invalid"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             _settings.SetGamePath(selected);
             GamePathBox.Text = selected;
-            MessageBox.Show(string.Format("游戏根目录已设置为:\n{0}", selected), "路径已设置",
+            MessageBox.Show(string.Format(TranslationService.Instance.T("settings.game_path_set"), selected), TranslationService.Instance.T("settings.path_set"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
@@ -93,14 +95,14 @@ public partial class SettingsPage : UserControl
     {
         var dlg = new OpenFileDialog
         {
-            Title = "选择 7z.exe",
+            Title = TranslationService.Instance.T("settings.dlg_7zip"),
             Filter = "7z.exe|7z.exe|可执行文件|*.exe"
         };
         if (dlg.ShowDialog() == true && _settings != null)
         {
             if (!IsValid7Zip(dlg.FileName))
             {
-                MessageBox.Show("所选文件不是有效的 7z.exe，请重新选择。", "路径无效",
+                MessageBox.Show(TranslationService.Instance.T("settings.invalid_7zip"), TranslationService.Instance.T("settings.path_invalid"),
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -133,7 +135,7 @@ public partial class SettingsPage : UserControl
     {
         var dlg = new OpenFolderDialog
         {
-            Title = "选择模组存储文件夹"
+            Title = TranslationService.Instance.T("settings.dlg_mod_storage")
         };
         if (dlg.ShowDialog() == true && _settings != null)
         {
@@ -147,7 +149,7 @@ public partial class SettingsPage : UserControl
     {
         var dlg = new OpenFolderDialog
         {
-            Title = "选择备份文件夹"
+            Title = TranslationService.Instance.T("settings.dlg_backup")
         };
         if (dlg.ShowDialog() == true && _settings != null)
         {
@@ -160,7 +162,7 @@ public partial class SettingsPage : UserControl
     {
         var dlg = new OpenFileDialog
         {
-            Title = "选择 WitcherScriptMerger.exe",
+            Title = TranslationService.Instance.T("settings.dlg_script_merger"),
             Filter = "可执行文件|*.exe"
         };
         if (dlg.ShowDialog() == true && _settings != null)
@@ -182,6 +184,48 @@ public partial class SettingsPage : UserControl
 
     // Navigate up from exe directory to find the actual game root
     
+
+    private void RefreshLanguage()
+    {
+        var ts = TranslationService.Instance;
+        BackBtnText.Text = ts.T("settings.back");
+        SettingsTitle.Text = ts.T("settings.title");
+        AppearanceHeader.Text = ts.T("settings.appearance");
+        CustomBgLabel.Text = ts.T("settings.custom_bg");
+        BgHintText.Text = ts.T("settings.bg_hint");
+        PathConfigHeader.Text = ts.T("settings.path_config");
+        GamePathLabel.Text = ts.T("settings.game_path");
+        SevenZipLabel.Text = ts.T("settings.zip_path");
+        BackupPathLabel.Text = ts.T("settings.backup_path");
+        ScriptMergerLabel.Text = ts.T("settings.script_merger");
+        ModStorageLabel.Text = ts.T("settings.mod_storage");
+        GameOptionsHeader.Text = ts.T("settings.game_options");
+        LaunchArgsLabel.Text = ts.T("settings.launch_args");
+        LaunchArgsHint.Text = ts.T("settings.launch_args_hint");
+        ToolsHeader.Text = ts.T("settings.tools");
+        AutoBackupCheckText.Text = ts.T("settings.auto_backup");
+        AutoBackupDescText.Text = ts.T("settings.auto_backup_desc");
+        MoreFeaturesHeader.Text = ts.T("settings.more");
+        AboutHeader.Text = ts.T("settings.about");
+        AboutVersionText.Text = ts.T("settings.about_text");
+        AboutTechText.Text = ts.T("settings.about_tech");
+        MoreFeature1Text.Text = ts.T("settings.more1");
+        MoreFeature2Text.Text = ts.T("settings.more2");
+        MoreFeature3Text.Text = ts.T("settings.more3");
+        MoreFeature4Text.Text = ts.T("settings.more4");
+        LaunchArgsBox.ToolTip = ts.T("settings.launch_args_tooltip");
+
+        // Browse buttons
+        BrowseBgBtn.Content = ts.T("settings.bg_browse");
+        BrowseGameBtn.Content = ts.T("settings.bg_browse");
+        BrowseZipBtn.Content = ts.T("settings.bg_browse");
+        BrowseBackupBtn.Content = ts.T("settings.bg_browse");
+        BrowseMergerBtn.Content = ts.T("settings.bg_browse");
+        BrowseStorageBtn.Content = ts.T("settings.bg_browse");
+
+        // ToolTips
+        ResetBgBtn.ToolTip = ts.T("settings.bg_reset");
+    }
 
     private void BackButton_Click(object sender, RoutedEventArgs e)
     {

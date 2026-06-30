@@ -29,7 +29,7 @@ public partial class MainWindow : Window
         try { InitializeComponent(); }
         catch (Exception ex)
         {
-            MessageBox.Show($"界面初始化失败: {ex.Message}", "错误",
+            MessageBox.Show(string.Format(Services.TranslationService.Instance.T("error.ui_init"), ex.Message), Services.TranslationService.Instance.T("dialog.error"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Application.Current.Shutdown();
             return;
@@ -57,10 +57,19 @@ public partial class MainWindow : Window
             LoadBackgroundImage();
             DetectAndShowGamePath();
             NavigateToHome();
+
+            // Language switching
+            TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() =>
+            {
+                TitleText.Text = TranslationService.Instance.T("app.title");
+                BtnMinimize.ToolTip = TranslationService.Instance.T("window.minimize");
+                BtnMaximize.ToolTip = TranslationService.Instance.T("window.maximize");
+                BtnClose.ToolTip = TranslationService.Instance.T("window.close");
+            });
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"启动失败: {ex.Message}", "错误",
+            MessageBox.Show(string.Format(Services.TranslationService.Instance.T("error.startup"), ex.Message), Services.TranslationService.Instance.T("dialog.error"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -118,11 +127,12 @@ public partial class MainWindow : Window
         try
         {
             var path = _w3?.GetGamePath();
+            var ts = Services.TranslationService.Instance;
             StatusGamePath.Text = path != null
-                ? $"巫师3: {Path.GetFileName(path)}"
-                : "巫师3: 未检测";
+                ? string.Format(ts.T("status.game_path"), Path.GetFileName(path))
+                : ts.T("status.game_not_detected");
         }
-        catch { StatusGamePath.Text = "巫师3: 未检测"; }
+        catch { StatusGamePath.Text = Services.TranslationService.Instance.T("status.game_not_detected"); }
     }
 
     private void NavigateToHome()
@@ -224,15 +234,15 @@ public partial class MainWindow : Window
         var path = _w3.GetGamePath();
         if (path == null)
         {
-            MessageBox.Show("δ��⵽��ʦ3��װ·���������������ֶ����á�",
-                "��ʾ", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(TranslationService.Instance.T("game.not_detected"),
+                TranslationService.Instance.T("dialog.hint"), MessageBoxButton.OK, MessageBoxImage.Information);
             NavigateToSettings();
             return;
         }
         try { _w3.LaunchGame(); }
         catch (Exception ex)
         {
-            MessageBox.Show($"启动失败: {ex.Message}", "错误",
+            MessageBox.Show(string.Format(Services.TranslationService.Instance.T("error.startup"), ex.Message), Services.TranslationService.Instance.T("dialog.error"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -244,10 +254,10 @@ public partial class MainWindow : Window
 
     private void OnStatusUpdated(int enabled, int total, int conflicts, int potential)
     {
-        StatusEnabled.Text = $"已启用 {enabled}";
-        StatusTotal.Text = $"总计 {total}";
-        StatusConflicts.Text = $"冲突 {conflicts}";
-        StatusPotential.Text = $"潜在覆盖 {potential}";
+        StatusEnabled.Text = string.Format(Services.TranslationService.Instance.T("status.enabled"), enabled);
+        StatusTotal.Text = string.Format(Services.TranslationService.Instance.T("status.total"), total);
+        StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), conflicts);
+        StatusPotential.Text = string.Format(Services.TranslationService.Instance.T("status.potential"), potential);
     }
 
     private void ConflictStatus_Click(object sender, RoutedEventArgs e)
@@ -273,8 +283,8 @@ public partial class MainWindow : Window
         var overlaps = _conflict.GetPotentialOverrides();
         if (overlaps.Count == 0)
         {
-            System.Windows.MessageBox.Show("未检测到潜在覆盖",
-                "潜在覆盖", System.Windows.MessageBoxButton.OK,
+            System.Windows.MessageBox.Show(Services.TranslationService.Instance.T("potential.no_overlaps"),
+                Services.TranslationService.Instance.T("potential.title"), System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Information);
             return;
         }
@@ -286,10 +296,10 @@ public partial class MainWindow : Window
     {
         if (_storage == null || _conflict == null) return;
         var allMods = _storage.GetAllMods();
-        StatusEnabled.Text = $"已启用 {allMods.Count(m => m.IsEnabled)}";
-        StatusTotal.Text = $"总计 {allMods.Count}";
-        StatusConflicts.Text = $"冲突 {_conflict.DetectConflicts().Count}";
-        StatusPotential.Text = $"潜在覆盖 {_conflict.DetectPotentialOverrideCount()}";
+        StatusEnabled.Text = string.Format(Services.TranslationService.Instance.T("status.enabled"), allMods.Count(m => m.IsEnabled));
+        StatusTotal.Text = string.Format(Services.TranslationService.Instance.T("status.total"), allMods.Count);
+        StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), _conflict.DetectConflicts().Count);
+        StatusPotential.Text = string.Format(Services.TranslationService.Instance.T("status.potential"), _conflict.DetectPotentialOverrideCount());
     }
 
 
@@ -312,7 +322,7 @@ public partial class MainWindow : Window
 
     private void ApplyTestMode()
     {
-        TitleText.Text = "Witcher 3 Mod Manager [TEST]";
+        TitleText.Text = TranslationService.Instance.T("app.title") + " [TEST]";
         TestBanner.Visibility = Visibility.Visible;
     }
 

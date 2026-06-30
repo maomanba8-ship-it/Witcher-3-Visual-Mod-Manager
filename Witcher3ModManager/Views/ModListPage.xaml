@@ -21,19 +21,19 @@
                     <Button Content="&#xE72B; Back" FontFamily="Segoe MDL2 Assets" FontSize="14"
                             Foreground="#9A9EAA" Click="BackButton_Click" Cursor="Hand"
                             Background="Transparent" BorderThickness="0" Padding="10,6"/>
-                    <TextBlock Text="模组" FontSize="15" FontWeight="SemiBold"
+                    <TextBlock x:Name="PageTitleText" Text="模组" FontSize="15" FontWeight="SemiBold"
                                Foreground="#E2E4E9" VerticalAlignment="Center" Margin="20,0,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <TextBox x:Name="SearchBox" Width="160" Padding="8,5" Background="#1C1F2A" Foreground="#E2E4E9"
                              BorderBrush="#2A2E3C" CaretBrush="#E2E4E9" TextChanged="SearchBox_TextChanged"/>
-                    <Button Content="冲突检测" Margin="6,0,0,0" Padding="10,6" Foreground="#C9A96E" Cursor="Hand"
+                    <Button x:Name="BtnConflictCheck" Content="冲突检测" Margin="6,0,0,0" Padding="10,6" Foreground="#C9A96E" Cursor="Hand"
                             Click="ConflictCheck_Click" Background="Transparent" BorderBrush="#2A2E3C"/>
-                    <Button Content="备份" Margin="4,0,0,0" Padding="10,6" Foreground="#9A9EAA" Cursor="Hand"
+                    <Button x:Name="BtnBackupAll" Content="备份" Margin="4,0,0,0" Padding="10,6" Foreground="#9A9EAA" Cursor="Hand"
                             Click="BackupAll_Click" Background="Transparent" BorderBrush="#2A2E3C"/>
-                    <Button Content="导入" Margin="4,0,0,0" Padding="10,6" Foreground="#8BA4B5" Cursor="Hand"
+                    <Button x:Name="BtnImportMod" Content="导入" Margin="4,0,0,0" Padding="10,6" Foreground="#8BA4B5" Cursor="Hand"
                             Click="ImportButton_Click" Background="Transparent" BorderBrush="#2A2E3C"/>
-                    <Button Content="全部卸载" Margin="8,0,0,0" Padding="10,6" Foreground="#E0556A" Cursor="Hand"
+                    <Button x:Name="BtnUninstallAll" Content="全部卸载" Margin="8,0,0,0" Padding="10,6" Foreground="#E0556A" Cursor="Hand"
                             Click="UninstallAll_Click" Background="Transparent" BorderBrush="#E0556A"/>
                 </StackPanel>
             </Grid>
@@ -56,13 +56,13 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Content="全部导入" Padding="10,5" FontSize="12" Cursor="Hand"
                             Foreground="#E2E4E9" Background="#251C6B9E" BorderBrush="#1C6B9E" BorderThickness="1"
-                            Click="OrphanImportAll_Click" Margin="0,0,4,0"/>
+                            x:Name="BtnOrphanImportAll" Click="OrphanImportAll_Click" Margin="0,0,4,0"/>
                     <Button Content="查看详情" Padding="10,5" FontSize="12" Cursor="Hand"
                             Foreground="#9A9EAA" Background="#25FFFFFF" BorderBrush="#2A2E3C" BorderThickness="1"
-                            Click="OrphanViewDetails_Click" Margin="0,0,4,0"/>
+                            x:Name="BtnOrphanViewAll" Click="OrphanViewDetails_Click" Margin="0,0,4,0"/>
                     <Button Content="忽略" Padding="10,5" FontSize="12" Cursor="Hand"
                             Foreground="#5E626E" Background="Transparent" BorderBrush="#2A2E3C" BorderThickness="1"
-                            Click="OrphanIgnore_Click"/>
+                            x:Name="BtnOrphanIgnore" Click="OrphanIgnore_Click"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -85,7 +85,7 @@
         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0" Padding="16,14" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
-                        <TextBlock Text="分类" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
+                        <TextBlock x:Name="CategoryHeaderText" Text="分类" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
                     </Border>
                     <ListBox x:Name="CategoryListBox" Grid.Row="1" Background="Transparent" BorderThickness="0"
                              SelectionChanged="CategoryListBox_SelectionChanged" Padding="0,4,0,0">
@@ -126,8 +126,8 @@
 
             <Grid Grid.Column="2">
                 <StackPanel x:Name="WelcomePanel" VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="暂无模组" FontSize="16" Foreground="#9A9EAA"/>
-                    <TextBlock Text="拖拽 .rar / .zip / .7z 文件到此处" FontSize="12"
+                    <TextBlock x:Name="EmptyModsText" Text="暂无模组" FontSize="16" Foreground="#9A9EAA"/>
+                    <TextBlock x:Name="DropHintText" Text="拖拽 .rar / .zip / .7z 文件到此处" FontSize="12"
                                Foreground="#5E626E" Margin="0,6,0,0"/>
                 </StackPanel>
                 <ScrollViewer x:Name="ModListScroll" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
@@ -145,7 +145,7 @@
         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <Border Grid.Row="0" Padding="16,14" BorderBrush="#1E2230" BorderThickness="0,0,0,1">
-                        <TextBlock Text="详情" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
+                        <TextBlock x:Name="DetailHeaderText" Text="详情" FontSize="13" FontWeight="SemiBold" Foreground="#9A9EAA"/>
                     </Border>
                     <Border Grid.Row="1" Height="180" Background="#1C1F2A" Margin="12,12,12,0"
                             CornerRadius="6" BorderBrush="#1E2230" BorderThickness="1">
@@ -192,7 +192,7 @@
                         </StackPanel>
                     </ScrollViewer>
                     <StackPanel x:Name="DetailEmptyPanel" Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <TextBlock Text="选择一个模组" FontSize="12" Foreground="#5E626E"/>
+                        <TextBlock x:Name="SelectModText" Text="选择一个模组" FontSize="12" Foreground="#5E626E"/>
                     </StackPanel>
                 </Grid>
             </Border>

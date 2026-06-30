@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Threading;
+using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager;
 
@@ -13,9 +14,8 @@ public partial class App : Application
         DispatcherUnhandledException += (s, args) =>
         {
             MessageBox.Show(
-                "程序发生未处理的错误：\n\n" + args.Exception.Message + 
-                "\n\n" + args.Exception.StackTrace?.Substring(0, Math.Min(args.Exception.StackTrace?.Length ?? 0, 500)),
-                "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                string.Format(TranslationService.Instance.T("error.ui_crash"), args.Exception.Message, args.Exception.StackTrace?.Substring(0, Math.Min(args.Exception.StackTrace?.Length ?? 0, 500)) ?? ""),
+                TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
 
@@ -25,8 +25,8 @@ public partial class App : Application
             if (args.ExceptionObject is Exception ex)
             {
                 MessageBox.Show(
-                    "程序发生严重错误：\n\n" + ex.Message,
-                    "严重错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    string.Format(TranslationService.Instance.T("error.fatal_msg"), ex.Message),
+                    TranslationService.Instance.T("error.fatal"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
         };
     }

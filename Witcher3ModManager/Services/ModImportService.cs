@@ -49,7 +49,7 @@ public class ModImportService
             throw new FileNotFoundException("Archive not found", archivePath);
 
         var archiveName = Path.GetFileNameWithoutExtension(archivePath);
-        progress?.Report($"正在解压: {Path.GetFileName(archivePath)}...");
+        progress?.Report(string.Format(TranslationService.Instance.T("import.progress.extracting"), Path.GetFileName(archivePath)));
 
         var tempExtractDir = Path.Combine(_storage.GetModsDirectory(), 
             "_tmp_" + Guid.NewGuid().ToString("N")[..8]);
@@ -59,7 +59,7 @@ public class ModImportService
         bool extracted = await Task.Run(() => ExtractArchive(archivePath, tempExtractDir));
         if (!extracted)
         {
-            progress?.Report("解压失败");
+            progress?.Report(TranslationService.Instance.T("import.progress.extract_failed"));
             return (new List<ModEntry>(), string.IsNullOrEmpty(_sevenZipPath) ? "7z_not_found" : "extract_failed");
         }
 
@@ -70,7 +70,7 @@ public class ModImportService
         // Step 0: Detect bundle-patching mods (quickbms + .bms)
         if (IsBundlePatchMod(tempExtractDir))
         {
-            progress?.Report("不支持打包模块：Bundle 补丁模块请手动运行 Install.bat");
+            progress?.Report(TranslationService.Instance.T("import.progress.bundle_unsupported"));
             try { Directory.Delete(tempExtractDir, true); } catch { }
             return (new List<ModEntry>(), "bundle_patch");
         }
@@ -158,7 +158,7 @@ public class ModImportService
                 {
                     // Step 3: Can't identify
                     errorCode = "unknown_format";
-                    progress?.Report($"无法自动识别模组结构: {archiveName}");
+                    progress?.Report(string.Format(TranslationService.Instance.T("import.progress.unrecognized"), archiveName));
                 }
             }
         }
@@ -176,8 +176,8 @@ public class ModImportService
             // Duplicate — ask user
             var overwrite = Application.Current.Dispatcher.Invoke(() =>
                 MessageBox.Show(
-                    $"该模组已存在: {entry.Name}\n\n是否替换并覆盖？",
-                    "重复模组",
+                    string.Format(TranslationService.Instance.T("import.duplicate_msg"), entry.Name),
+                    TranslationService.Instance.T("import.duplicate_title"),
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question) == MessageBoxResult.Yes);
 
@@ -186,8 +186,8 @@ public class ModImportService
         }
 
         progress?.Report(results.Count > 0 
-            ? $"导入完成: {results.Count} 个模组"
-            : $"导入失败: {archiveName} - 无法识别");
+            ? string.Format(TranslationService.Instance.T("import.progress.done"), results.Count)
+            : string.Format(TranslationService.Instance.T("import.progress.failed"), archiveName));
         
         return (results, errorCode);
     }
@@ -243,7 +243,7 @@ public class ModImportService
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
         string archivePath, string archiveName, IProgress<string>? progress)
     {
-        progress?.Report($"正在分析: {Path.GetFileName(modRoot)}...");
+        progress?.Report(string.Format(TranslationService.Instance.T("import.progress.analyzing"), Path.GetFileName(modRoot)));
 
         var originalName = Path.GetFileName(modRoot);
         var gameFolderName = EnsureModPrefix(originalName, modType);
@@ -282,12 +282,8 @@ public class ModImportService
     private static ModType? AskModOrDlc(string archiveName)
     {
         var result = MessageBox.Show(
-            $"无法自动识别 \"{archiveName}\" 的安装位置。\n\n" +
-            "该模组应该安装到哪个目录？\n\n" +
-            "是 = Mods 文件夹\n" +
-            "否 = DLC 文件夹\n" +
-            "取消 = 跳过该模组",
-            "选择安装位置",
+            string.Format(TranslationService.Instance.T("import.ask_location_msg"), archiveName),
+            TranslationService.Instance.T("import.ask_location_title"),
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
 
@@ -610,7 +606,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
                 try
                 {
                     var text = File.ReadAllText(files[0]);
-                    if (text.Length > 2000) text = text[..2000] + "\n\n... (内容过长已截断)";
+                    if (text.Length > 2000) text = text[..2000] + TranslationService.Instance.T("import.text_truncated");
                     return text;
                 }
                 catch { }
@@ -622,7 +618,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             try
             {
                 var text = File.ReadAllText(anyTxt[0]);
-                if (text.Length > 2000) text = text[..2000] + "\n\n... (内容过长已截断)";
+                if (text.Length > 2000) text = text[..2000] + TranslationService.Instance.T("import.text_truncated");
                 return text;
             }
             catch { }

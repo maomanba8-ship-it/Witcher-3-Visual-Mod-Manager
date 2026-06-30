@@ -42,6 +42,11 @@ public partial class ModListPage : UserControl
         _backup = backup;
         LoadCategories();
         RefreshModList();
+        RefreshLanguage();
+        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => {
+            RefreshLanguage();
+            if (_selectedMod != null) ShowModDetail(_selectedMod);
+        });
     }
 
     private void LoadCategories()
@@ -53,7 +58,7 @@ public partial class ModListPage : UserControl
             var count = cat.Type == CategoryType.All 
                 ? allMods.Count 
                 : allMods.Count(m => m.Category == cat.Type);
-            var display = count > 0 ? $"{cat.DisplayName} ({count})" : cat.DisplayName;
+            var display = count > 0 ? $"{TranslationService.Instance.T(cat.DisplayName)} ({count})" : TranslationService.Instance.T(cat.DisplayName);
             CategoryListBox.Items.Add(new ListBoxItem { Content = display, Tag = cat });
         }
         CategoryListBox.SelectedIndex = 0;
@@ -76,7 +81,7 @@ public partial class ModListPage : UserControl
             OrphanBanner.Visibility = Visibility.Collapsed;
             return;
         }
-        OrphanBannerText.Text = "发现 " + _orphans.Count + " 个未被管理的 Mod";
+        OrphanBannerText.Text = string.Format(TranslationService.Instance.T("orphan.banner"), _orphans.Count);
         OrphanBanner.Visibility = Visibility.Visible;
     }
     private void ApplyCategoryFilter()
@@ -297,25 +302,25 @@ public partial class ModListPage : UserControl
                 _conflict?.InvalidateCache();
                 RefreshModList();
                 if (imported.Count > 1)
-                    MessageBox.Show($"导入了 {imported.Count} 个模组（组合包已拆分）",
-                        "导入完成", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(string.Format(TranslationService.Instance.T("import.split_done"), imported.Count),
+                        TranslationService.Instance.T("import.complete"), MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else if (importError != null)
             {
                 var msg = importError switch
                 {
-                    "7z_not_found" => "未找到 7-Zip，请安装 7-Zip 或在设置中配置 7z.exe 路径。",
-                    "extract_failed" => "解压失败，压缩包可能已损坏或格式不受支持（支持 .rar / .zip / .7z）。",
-                    "bundle_patch" => "该模组使用了 Bundle 补丁方式（quickbms），不是标准模组格式。\n请手动解压后运行其中的 Install.bat 进行安装。",
-                    "unknown_format" => "无法识别模组结构，请确认压缩包内包含 mod 或 dlc 文件夹。",
-                    _ => $"未处理的错误码: {importError}"
+                    "7z_not_found" => TranslationService.Instance.T("import.error.7z_not_found"),
+                    "extract_failed" => TranslationService.Instance.T("import.error.extract_failed"),
+                    "bundle_patch" => TranslationService.Instance.T("import.error.bundle_patch"),
+                    "unknown_format" => TranslationService.Instance.T("import.error.unknown_format"),
+                    _ => string.Format(TranslationService.Instance.T("import.error.unhandled"), importError)
                 };
-                MessageBox.Show(msg, "导入错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(msg, TranslationService.Instance.T("import.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Import error: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show("Import error: " + ex.Message, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
     #endregion
@@ -338,9 +343,9 @@ public partial class ModListPage : UserControl
         {
             var mod = _allMods.FirstOrDefault(m => m.Id == modId);
             if (mod == null) return;
-            var confirmed = ConfirmDialog.Show("确认删除",
+            var confirmed = ConfirmDialog.Show(TranslationService.Instance.T("mods.confirm_delete"),
                 "Delete [" + mod.Name + "]?\n\nThis cannot be undone.",
-                "\uE74D", "Delete", "取消");
+                "\uE74D", "Delete", TranslationService.Instance.T("dialog.cancel"));
             if (!confirmed) return;
             _conflict?.InvalidateCache();
             if (_w3 != null) _w3.DeleteMod(mod);
@@ -356,11 +361,11 @@ public partial class ModListPage : UserControl
         if (sender is FrameworkElement el && el.Tag is ModEntry mod)
         {
             var menu = new ContextMenu();
-            var setCoverItem = new MenuItem { Header = "\uE722  设置预览图片" };
+            var setCoverItem = new MenuItem { Header = TranslationService.Instance.T("mods.context_set_cover") };
             setCoverItem.Click += (s, args) => SetCoverImage(mod);
             menu.Items.Add(setCoverItem);
 
-            var clearCoverItem = new MenuItem { Header = "\uE74D  清除封面" };
+            var clearCoverItem = new MenuItem { Header = TranslationService.Instance.T("mods.context_clear_cover") };
             clearCoverItem.Click += (s, args) => { mod.CoverImagePath = ""; _storage?.UpdateMod(mod); ShowModDetail(mod); };
             menu.Items.Add(clearCoverItem);
 
@@ -372,7 +377,7 @@ public partial class ModListPage : UserControl
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "选择预览图片",
+            Title = TranslationService.Instance.T("mods.cover_select"),
             Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*"
         };
         if (dlg.ShowDialog() == true)
@@ -402,36 +407,36 @@ public partial class ModListPage : UserControl
         DetailEmptyPanel.Visibility = Visibility.Collapsed;
         DetailPanel.Visibility = Visibility.Visible;
         DetailName.Text = mod.DisplayName;
-        DetailOriginalName.Text = mod.GameModFolders.Count > 0 ? "文件名： " + string.Join(", ", mod.GameModFolders) : "";
-        DetailDlcLabel.Text = mod.GameDlcFolders.Count > 0 ? "DLC： " + string.Join(", ", mod.GameDlcFolders) : "";
+        DetailOriginalName.Text = mod.GameModFolders.Count > 0 ? TranslationService.Instance.T("mods.filename") + "： " + string.Join(", ", mod.GameModFolders) : "";
+        DetailDlcLabel.Text = mod.GameDlcFolders.Count > 0 ? TranslationService.Instance.T("mods.dlc_label") + "： " + string.Join(", ", mod.GameDlcFolders) : "";
         DetailBinLabel.Text = mod.GameBinFiles.Count > 0
             ? (mod.GameModFolders.Count == 0 && mod.GameDlcFolders.Count == 0
-                ? "类型：纯 Bin 组件（无 Mod/DLC 文件）\nBin： " : "Bin： ")
-              + mod.GameBinFiles.Count + " 个文件 ("
+                ? TranslationService.Instance.T("mods.bin_only") + "： " : TranslationService.Instance.T("mods.bin_label") + "： ")
+              + mod.GameBinFiles.Count + " " + TranslationService.Instance.T("mods.files") + " ("
               + string.Join(", ", mod.GameBinFiles.Take(3))
               + (mod.GameBinFiles.Count > 3 ? "…" : "") + ")"
             : "";
         RenameBtn.Tag = mod;
-        DetailAuthor.Text = "作者： " + mod.Author;
-        DetailVersion.Text = "版本： " + mod.Version;
-        DetailCategory.Text = "分类： " + mod.DisplayCategory + " | " + mod.DisplayModType;
+        DetailAuthor.Text = TranslationService.Instance.T("mods.author") + "： " + mod.Author;
+        DetailVersion.Text = TranslationService.Instance.T("mods.version") + "： " + mod.Version;
+        DetailCategory.Text = TranslationService.Instance.T("mods.category") + "： " + mod.DisplayCategory + " | " + mod.DisplayModType;
         DetailPriority.Text = mod.Priority.ToString();
-        DetailImportDate.Text = "安装日期： " + mod.ImportDate.ToString("yyyy-MM-dd HH:mm");
+        DetailImportDate.Text = TranslationService.Instance.T("mods.install_date") + "： " + mod.ImportDate.ToString("yyyy-MM-dd HH:mm");
         try
         {
             if (Directory.Exists(mod.InstalledPath))
             {
                 var size = new DirectoryInfo(mod.InstalledPath)
                     .GetFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
-                DetailSize.Text = string.Format("大小： {0:F2} MB", size / 1024.0 / 1024.0);
+                DetailSize.Text = TranslationService.Instance.T("mods.size") + "： " + string.Format("{0:F2} MB", size / 1024.0 / 1024.0);
             }
         }
-        catch { DetailSize.Text = "大小： 未知"; }
+        catch { DetailSize.Text = TranslationService.Instance.T("mods.size") + "： " + TranslationService.Instance.T("mods.size_unknown"); }
         DetailLocation.Text = mod.InstalledPath;
-        DetailDescription.Text = string.IsNullOrEmpty(mod.Description) ? "（无描述）" : mod.Description;
+        DetailDescription.Text = string.IsNullOrEmpty(mod.Description) ? TranslationService.Instance.T("mods.no_description") : mod.Description;
         // Warn if storage directory is missing
         if (!string.IsNullOrEmpty(mod.InstalledPath) && !Directory.Exists(mod.InstalledPath))
-            DetailDescription.Text = "⚠ 存储目录已丢失！\n" + DetailDescription.Text;
+            DetailDescription.Text = TranslationService.Instance.T("mods.storage_lost") + DetailDescription.Text;
         var imagePath = !string.IsNullOrEmpty(mod.CoverImagePath) && File.Exists(mod.CoverImagePath)
             ? mod.CoverImagePath : mod.ScreenshotPath;
         if (!string.IsNullOrEmpty(imagePath) && File.Exists(imagePath))
@@ -468,7 +473,7 @@ public partial class ModListPage : UserControl
                 if (success) { mod.IsEnabled = true; _conflict?.InvalidateCache(); }
                 else
                 {
-                    MessageBox.Show("启用失败： " + mod.Name, "错误", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(TranslationService.Instance.T("mods.enable_failed") + "： " + mod.Name, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
                     chk.IsChecked = false;
                     return;
                 }
@@ -569,19 +574,19 @@ public partial class ModListPage : UserControl
         if (_backup == null) return;
         var results = _backup.BackupAllEnabledMods(_allMods);
         var count = results.Count(r => r.Success);
-        MessageBox.Show("已备份 " + count + " 个模组。", "备份", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show(string.Format(TranslationService.Instance.T("mods.backup_done"), count), TranslationService.Instance.T("dialog.backup"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void UninstallAll_Click(object sender, RoutedEventArgs e)
     {
-        var confirmed = ConfirmDialog.Show("全部卸载",
-            "卸载所有已启用模组？\n\n这将禁用并从游戏中移除它们。",
-            "\uEA3B", "卸载", "取消");
+        var confirmed = ConfirmDialog.Show(TranslationService.Instance.T("mods.uninstall_all"),
+            TranslationService.Instance.T("mods.uninstall_confirm"),
+            "\uEA3B", TranslationService.Instance.T("dialog.uninstall"), TranslationService.Instance.T("dialog.cancel"));
         if (!confirmed) return;
         if (_backup != null) _backup.UninstallAllMods(_allMods);
         _conflict?.InvalidateCache();
         RefreshModList();
-        MessageBox.Show("所有模组已卸载。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+        MessageBox.Show(TranslationService.Instance.T("mods.uninstall_done"), TranslationService.Instance.T("dialog.done"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void CoverBtn_Click(object sender, RoutedEventArgs e)
@@ -589,7 +594,7 @@ public partial class ModListPage : UserControl
         if (_selectedMod == null) return;
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "选择预览图片",
+            Title = TranslationService.Instance.T("mods.cover_select"),
             Filter = "图片文件|*.jpg;*.jpeg;*.png|所有文件|*.*"
         };
         if (dlg.ShowDialog() == true)
@@ -611,10 +616,10 @@ public partial class ModListPage : UserControl
     {
         if (sender is Button btn && btn.Tag is ModEntry mod)
         {
-            var newName = InputDialog.Show("编辑显示名", "\uE8EC",
-                "输入自定义显示名称（不影响原始文件）：",
+            var newName = InputDialog.Show(TranslationService.Instance.T("mods.rename_title"), "\uE8EC",
+                TranslationService.Instance.T("mods.rename_prompt"),
                 mod.UserDisplayName ?? mod.Name,
-                "确定", "取消");
+                TranslationService.Instance.T("dialog.ok"), TranslationService.Instance.T("dialog.cancel"));
             if (newName != null)
             {
                 mod.UserDisplayName = newName.Trim();
@@ -647,7 +652,7 @@ public partial class ModListPage : UserControl
             _orphans.Clear();
             OrphanBanner.Visibility = Visibility.Collapsed;
             RefreshModList();
-            MessageBox.Show("成功导入 " + imported + " 个 Mod。", "孤儿 Mod 导入", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(string.Format(TranslationService.Instance.T("orphan.import_ok"), imported), TranslationService.Instance.T("orphan.import_title"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -666,7 +671,7 @@ public partial class ModListPage : UserControl
             _orphans.Clear();
             OrphanBanner.Visibility = Visibility.Collapsed;
             RefreshModList();
-            MessageBox.Show("成功导入 " + imported + " 个 Mod。", "孤儿 Mod 导入", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(string.Format(TranslationService.Instance.T("orphan.import_ok"), imported), TranslationService.Instance.T("orphan.import_title"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -676,4 +681,32 @@ public partial class ModListPage : UserControl
         OrphanBanner.Visibility = Visibility.Collapsed;
     }
     #endregion
+    private void RefreshLanguage()
+    {
+        var t = TranslationService.Instance;
+        if (OrphanBannerText != null)
+            OrphanBannerText.Text = string.Format(t.T("orphan.banner"), _orphans.Count);
+        if (BtnOrphanImportAll != null)
+            BtnOrphanImportAll.Content = t.T("orphan.import_all");
+        if (BtnOrphanViewAll != null)
+            BtnOrphanViewAll.Content = t.T("orphan.view_details");
+        if (BtnOrphanIgnore != null)
+            BtnOrphanIgnore.Content = t.T("orphan.ignore");
+        if (PageTitleText != null) PageTitleText.Text = t.T("home.mods");
+        if (BtnConflictCheck != null) BtnConflictCheck.Content = t.T("mods.conflict_check");
+        if (BtnImportMod != null) BtnImportMod.Content = t.T("mods.import");
+        if (EmptyModsText != null) EmptyModsText.Text = t.T("mods.no_mods");
+        if (SelectModText != null) SelectModText.Text = t.T("mods.select_mod");
+        if (BtnBackupAll != null) BtnBackupAll.Content = t.T("mods.backup_all");
+        if (BtnUninstallAll != null) BtnUninstallAll.Content = t.T("mods.uninstall_all");
+        if (DetailHeaderText != null) DetailHeaderText.Text = t.T("mods.detail_header");
+        if (CoverBtn != null) { CoverBtn.Content = " " + t.T("mods.set_cover"); CoverBtn.ToolTip = t.T("mods.cover_tooltip"); }
+        if (CategoryHeaderText != null) CategoryHeaderText.Text = t.T("mods.categories");
+        if (DropHintText != null) DropHintText.Text = t.T("mods.drop_hint");
+
+        // TODO(v1.x): Language refresh currently rebuilds the category list.
+        // Consider separating data loading from display refresh.
+        LoadCategories();
+    }
+
 }

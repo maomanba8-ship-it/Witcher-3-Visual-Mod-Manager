@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Serialization;
+using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager.Models;
 
@@ -55,17 +56,17 @@ public class ModEntry
     [JsonIgnore]
     public string DisplayCategory => Category switch
     {
-        CategoryType.All => "全部",
-        CategoryType.Geralt => "杰洛特",
-        CategoryType.Yennefer => "叶奈法",
-        CategoryType.Triss => "特莉丝",
-        CategoryType.Graphics => "图形",
-        CategoryType.Characters => "角色",
-        CategoryType.ArmorWeapons => "护甲武器",
-        CategoryType.Gameplay => "玩法",
-        CategoryType.Quests => "任务",
-        CategoryType.UI => "UI",
-        _ => "其他"
+        CategoryType.All => TranslationService.Instance.T("category.all"),
+        CategoryType.Geralt => TranslationService.Instance.T("category.geralt"),
+        CategoryType.Yennefer => TranslationService.Instance.T("category.yennefer"),
+        CategoryType.Triss => TranslationService.Instance.T("category.triss"),
+        CategoryType.Graphics => TranslationService.Instance.T("category.graphics"),
+        CategoryType.Characters => TranslationService.Instance.T("category.characters"),
+        CategoryType.ArmorWeapons => TranslationService.Instance.T("category.armor_weapons"),
+        CategoryType.Gameplay => TranslationService.Instance.T("category.gameplay"),
+        CategoryType.Quests => TranslationService.Instance.T("category.quests"),
+        CategoryType.UI => TranslationService.Instance.T("category.ui"),
+        _ => TranslationService.Instance.T("category.other")
     };
 
     [JsonIgnore]

@@ -30,9 +30,7 @@
                                         <TextBlock Text="&#xEC7A;" FontFamily="Segoe MDL2 Assets"
                                                    FontSize="22" Foreground="#C8D0D8"
                                                    HorizontalAlignment="Center"/>
-                                        <TextBlock Text="模组" FontSize="10" FontFamily="Microsoft YaHei UI"
-                                                   Foreground="#A0A8B0"
-                                                   HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                        <TextBlock Text="{TemplateBinding Content}" FontSize="10" FontFamily="Microsoft YaHei UI" Foreground="#A0A8B0" HorizontalAlignment="Center" Margin="0,3,0,0"/>
                                     </StackPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
@@ -55,9 +53,7 @@
                                         <TextBlock Text="&#xEA3B;" FontFamily="Segoe MDL2 Assets"
                                                    FontSize="22" Foreground="#C8D0D8"
                                                    HorizontalAlignment="Center"/>
-                                        <TextBlock Text="冲突" FontSize="10" FontFamily="Microsoft YaHei UI"
-                                                   Foreground="#A0A8B0"
-                                                   HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                        <TextBlock Text="{TemplateBinding Content}" FontSize="10" FontFamily="Microsoft YaHei UI" Foreground="#A0A8B0" HorizontalAlignment="Center" Margin="0,3,0,0"/>
                                     </StackPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
@@ -80,7 +76,7 @@
                                         <TextBlock Text="&#xE74C;" FontFamily="Segoe MDL2 Assets"
                                                    FontSize="22" Foreground="#C8D0D8"
                                                    HorizontalAlignment="Center"/>
-                                        <TextBlock Text="预设" FontSize="10" FontFamily="Microsoft YaHei UI"
+                                        <TextBlock Text="{TemplateBinding Content}" FontSize="10" FontFamily="Microsoft YaHei UI"
                                                    Foreground="#A0A8B0"
                                                    HorizontalAlignment="Center" Margin="0,3,0,0"/>
                                     </StackPanel>
@@ -105,9 +101,7 @@
                                         <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets"
                                                    FontSize="22" Foreground="#C8D0D8"
                                                    HorizontalAlignment="Center"/>
-                                        <TextBlock Text="导入" FontSize="10" FontFamily="Microsoft YaHei UI"
-                                                   Foreground="#A0A8B0"
-                                                   HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                        <TextBlock Text="{TemplateBinding Content}" FontSize="10" FontFamily="Microsoft YaHei UI" Foreground="#A0A8B0" HorizontalAlignment="Center" Margin="0,3,0,0"/>
                                     </StackPanel>
                                 </Border>
                                 <ControlTemplate.Triggers>
@@ -130,7 +124,7 @@
                                         <TextBlock Text="&#xE7FC;" FontFamily="Segoe MDL2 Assets"
                                                    FontSize="22" Foreground="#C8D0D8"
                                                    HorizontalAlignment="Center"/>
-                                        <TextBlock Text="启动" FontSize="10" FontFamily="Microsoft YaHei UI"
+                                        <TextBlock Text="{TemplateBinding Content}" FontSize="10" FontFamily="Microsoft YaHei UI"
                                                    Foreground="#A0A8B0"
                                                    HorizontalAlignment="Center" Margin="0,3,0,0"/>
                                     </StackPanel>
@@ -147,8 +141,24 @@
                     </Button>
                 </StackPanel>
 
-                <Button x:Name="BtnSettings" Grid.Row="2" Width="72" Height="56"
-                        ToolTip="设置" Click="BtnSettings_Click" Cursor="Hand" Margin="0,0,0,8">
+                <StackPanel Grid.Row="2" VerticalAlignment="Bottom">
+                    <!-- Language Toggle -->
+                    <Border x:Name="LangToggle" Width="52" Height="28"
+                            CornerRadius="14" Background="#1814161E"
+                            BorderBrush="#2AFFFFFF" BorderThickness="1"
+                            Cursor="Hand" ToolTip="中 / EN"
+                            MouseLeftButtonDown="LangToggle_Click"
+                            MouseEnter="LangToggle_MouseEnter"
+                            MouseLeave="LangToggle_MouseLeave"
+                            HorizontalAlignment="Center" Margin="0,0,0,6">
+                        <TextBlock x:Name="LangToggleText" Text="中" FontSize="12"
+                                   Foreground="#C8D0D8"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   FontFamily="Microsoft YaHei UI"/>
+                    </Border>
+                    <Border Height="8"/>
+                    <Button x:Name="BtnSettings" Width="72" Height="56"
+                            ToolTip="设置" Click="BtnSettings_Click" Cursor="Hand" Margin="0,0,0,8">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="border" Background="Transparent" CornerRadius="4" Margin="6,2">
@@ -156,7 +166,7 @@
                                     <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets"
                                                FontSize="22" Foreground="#C8D0D8"
                                                HorizontalAlignment="Center"/>
-                                    <TextBlock Text="设置" FontSize="10" FontFamily="Microsoft YaHei UI"
+                                    <TextBlock Text="{TemplateBinding Content}" FontSize="10" FontFamily="Microsoft YaHei UI"
                                                Foreground="#A0A8B0"
                                                HorizontalAlignment="Center" Margin="0,3,0,0"/>
                                 </StackPanel>
@@ -171,6 +181,7 @@
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -179,11 +190,11 @@
                 <TextBlock Text="&#xED35;" FontFamily="Segoe MDL2 Assets"
                            FontSize="52" Foreground="#8898A4"
                            HorizontalAlignment="Center" Opacity="0.45"/>
-                <TextBlock Text="巫师3 Mod 管理器" FontSize="30" FontWeight="Light"
+                <TextBlock x:Name="WelcomeTitle" Text="巫师3 Mod 管理器" FontSize="30" FontWeight="Light"
                            Foreground="#C8D0D8"
                            HorizontalAlignment="Center" Margin="0,18,0,4"
                            FontFamily="Microsoft YaHei UI"/>
-                <TextBlock Text="选择一个功能开始" FontSize="13"
+                <TextBlock x:Name="WelcomeSubtitle" Text="选择一个功能开始" FontSize="13"
                            Foreground="#6E7480"
                            HorizontalAlignment="Center"/>
             </StackPanel>

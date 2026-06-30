@@ -9,7 +9,7 @@ public partial class ConfirmDialog : Window
     private readonly Brush _confirmBrush;
 
     public ConfirmDialog(string title, string message, string iconGlyph = "\uEA3B",
-        string confirmText = "确认", string cancelText = "取消",
+        string confirmText = "OK", string cancelText = "Cancel",
         Color? confirmColor = null)
     {
         InitializeComponent();
@@ -27,8 +27,8 @@ public partial class ConfirmDialog : Window
     }
 
     public static bool Show(string title, string message,
-        string iconGlyph = "\uEA3B", string confirmText = "确认",
-        string cancelText = "取消", Color? confirmColor = null)
+        string iconGlyph = "\uEA3B", string confirmText = "OK",
+        string cancelText = "Cancel", Color? confirmColor = null)
     {
         var color = confirmColor ?? (Color)ColorConverter.ConvertFromString("#E0556A");
         var dlg = new ConfirmDialog(title, message, iconGlyph, confirmText, cancelText, color);

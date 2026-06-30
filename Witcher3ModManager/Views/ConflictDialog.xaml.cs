@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Witcher3ModManager.Models;
+using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager.Views;
 
@@ -18,7 +19,8 @@ public partial class ConflictDialog : Window
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
-        CloseBtn.Content = "关闭";
+        Title = TranslationService.Instance.T("conflict.title");
+        CloseBtn.Content = TranslationService.Instance.T("conflict.close");
         _conflicts = conflicts;
         LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
@@ -63,12 +65,12 @@ public partial class ConflictDialog : Window
         Dictionary<CategoryType, List<string>>? potentialOverrides)
     {
         // Set default texts in code to avoid XAML encoding issues
-        ScriptWarning.Text = "检测到脚本冲突，建议使用 Witcher Script Merger 工具处理";
+        ScriptWarning.Text = TranslationService.Instance.T("conflict.script_warning");
 
         if (conflicts.Count == 0)
         {
-            SummaryText.Text = "未检测到模组冲突。";
-            NoConflictsText.Text = "未检测到冲突";
+            SummaryText.Text = TranslationService.Instance.T("conflict.no_conflicts");
+            NoConflictsText.Text = TranslationService.Instance.T("conflict.no_conflicts_title");
             NoConflictsPanel.Visibility = Visibility.Visible;
             ConflictStackPanel.Visibility = Visibility.Collapsed;
             return;
@@ -78,13 +80,12 @@ public partial class ConflictDialog : Window
         ConflictStackPanel.Visibility = Visibility.Visible;
 
         var scriptCount = conflicts.Count(c => c.IsScriptConflict);
-        SummaryText.Text = $"检测到  {conflicts.Count} 个文件冲突，" +
-                          $"涉及 {conflicts.SelectMany(c => c.ConflictingMods).Distinct().Count()} 个模组。";
+        SummaryText.Text = string.Format(TranslationService.Instance.T("conflict.summary"), conflicts.Count, conflicts.SelectMany(c => c.ConflictingMods).Distinct().Count());
 
         if (scriptCount > 0)
         {
             ScriptWarning.Visibility = Visibility.Visible;
-            ScriptWarning.Text = $"⚠ 其中 {scriptCount} 个为脚本冲突，建议使用脚本合并工具处理";
+            ScriptWarning.Text = string.Format(TranslationService.Instance.T("conflict.script_summary"), scriptCount);
             BtnScriptMerger.Visibility = Visibility.Visible;
         }
 
@@ -93,7 +94,7 @@ public partial class ConflictDialog : Window
             var modNames = c.ConflictingMods.Select(m =>
             {
                 if (modDates != null && modDates.TryGetValue(m, out var date))
-                    return $"{m} (安装于 {date:yyyy-MM-dd HH:mm}）";
+                    return string.Format(TranslationService.Instance.T("conflict.install_date"), m, date);
                 return m;
             }).ToList();
 
@@ -169,7 +170,7 @@ public partial class ConflictDialog : Window
 
             var sectionTitle = new System.Windows.Controls.TextBlock
             {
-                Text = "潜在覆盖（同分类模组）",
+                Text = TranslationService.Instance.T("conflict.potential_section"),
                 FontSize = 13,
                 FontWeight = System.Windows.FontWeights.SemiBold,
                 Foreground = new System.Windows.Media.SolidColorBrush(
@@ -180,7 +181,7 @@ public partial class ConflictDialog : Window
 
             var sectionHint = new System.Windows.Controls.TextBlock
             {
-                Text = "以下模组属于同一分类，可能存在逻辑覆盖，建议检查优先级。",
+                Text = TranslationService.Instance.T("conflict.potential_hint"),
                 FontSize = 11,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#5E626E")),
@@ -193,15 +194,15 @@ public partial class ConflictDialog : Window
             {
                 var catDisplay = kvp.Key switch
                 {
-                    CategoryType.Geralt => "杰洛特",
-                    CategoryType.Yennefer => "叶奈法",
-                    CategoryType.Triss => "特莉丝",
-                    CategoryType.Graphics => "图形",
-                    CategoryType.Characters => "角色",
-                    CategoryType.ArmorWeapons => "护甲武器",
-                    CategoryType.Gameplay => "玩法",
-                    CategoryType.Quests => "任务",
-                    CategoryType.UI => "UI",
+                    CategoryType.Geralt => TranslationService.Instance.T("category.geralt"),
+                    CategoryType.Yennefer => TranslationService.Instance.T("category.yennefer"),
+                    CategoryType.Triss => TranslationService.Instance.T("category.triss"),
+                    CategoryType.Graphics => TranslationService.Instance.T("category.graphics"),
+                    CategoryType.Characters => TranslationService.Instance.T("category.characters"),
+                    CategoryType.ArmorWeapons => TranslationService.Instance.T("category.armor_weapons"),
+                    CategoryType.Gameplay => TranslationService.Instance.T("category.gameplay"),
+                    CategoryType.Quests => TranslationService.Instance.T("category.quests"),
+                    CategoryType.UI => TranslationService.Instance.T("category.ui"),
                     _ => kvp.Key.ToString()
                 };
 
@@ -255,15 +256,15 @@ public partial class ConflictDialog : Window
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"无法启动脚本合并工具： {ex.Message}",
-                    "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(string.Format(TranslationService.Instance.T("conflict.merger_failed"), ex.Message),
+                    TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         else
         {
             MessageBox.Show(
-                "未找到脚本合并工具。\n\n请在设置中配置脚本合并工具路径。",
-                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                TranslationService.Instance.T("conflict.merger_not_found"),
+                TranslationService.Instance.T("dialog.hint"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 

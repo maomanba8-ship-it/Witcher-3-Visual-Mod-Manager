@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Witcher3ModManager.Models;
+using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager.Views;
 
@@ -18,12 +19,22 @@ public partial class OrphanDialog : Window
         InitializeComponent();
         Owner = Application.Current.MainWindow;
         _orphans = orphans;
-        TitleText.Text = "未管理 Mod (" + orphans.Count + ")";
+        Translate();
+        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => Translate());
+    }
+
+    private void Translate()
+    {
+        var t = TranslationService.Instance;
+        TitleText.Text = string.Format(t.T("orphan.dialog.title"), _orphans.Count);
+        SelectAllCheckBox.Content = t.T("orphan.dialog.select_all");
+        ImportBtn.Content = t.T("orphan.dialog.import_selected");
+        CancelBtn.Content = t.T("dialog.cancel");
         BuildOrphanList();
         UpdateSelectionCount();
     }
 
-        private void BuildOrphanList()
+    private void BuildOrphanList()
     {
         OrphanListPanel.Children.Clear();
         _checkBoxes.Clear();
@@ -102,7 +113,7 @@ public partial class OrphanDialog : Window
                 };
                 pairBadge.Child = new TextBlock
                 {
-                    Text = "Mod + DLC",
+                    Text = TranslationService.Instance.T("orphan.dialog.pair_badge"),
                     FontSize = 10,
                     Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1C6B9E"))
                 };
@@ -119,7 +130,7 @@ public partial class OrphanDialog : Window
             };
             statusBadge.Child = new TextBlock
             {
-                Text = orphan.IsEnabled ? "\u5df2\u542f\u7528" : "\u5df2\u505c\u7528",
+                Text = orphan.IsEnabled ? TranslationService.Instance.T("orphan.dialog.enabled") : TranslationService.Instance.T("orphan.dialog.disabled"),
                 FontSize = 10,
                 Foreground = orphan.IsEnabled
                     ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6BAF7B"))
@@ -148,7 +159,7 @@ public partial class OrphanDialog : Window
     private void UpdateSelectionCount()
     {
         var selected = _checkBoxes.Count(cb => cb.IsChecked == true);
-        SelectionCount.Text = "已选 " + selected + " / " + _orphans.Count;
+        SelectionCount.Text = string.Format(TranslationService.Instance.T("orphan.dialog.selected_count"), selected, _orphans.Count);
     }
 
     private void SelectAll_Changed(object sender, RoutedEventArgs e)
@@ -167,7 +178,7 @@ public partial class OrphanDialog : Window
 
         if (SelectedOrphans.Count == 0)
         {
-            MessageBox.Show("请至少选择一个 Mod。", "提示",
+            MessageBox.Show(TranslationService.Instance.T("orphan.dialog.select_one"), TranslationService.Instance.T("dialog.hint"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
