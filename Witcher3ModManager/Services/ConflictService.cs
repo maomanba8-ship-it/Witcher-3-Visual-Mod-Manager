@@ -245,6 +245,21 @@ public class ConflictService
         return bundleMods;
     }
 
+    public bool IsBundleMod(ModEntry mod)
+    {
+        if (!mod.IsEnabled) return false;
+        var gamePath = _w3.GetGamePath();
+        if (string.IsNullOrEmpty(gamePath)) return false;
+        var modsRoot = Path.Combine(gamePath, "mods");
+        foreach (var folder in mod.GameModFolders)
+        {
+            if (string.IsNullOrEmpty(folder)) continue;
+            if (File.Exists(Path.Combine(modsRoot, folder, "content", "blob0.bundle")))
+                return true;
+        }
+        return false;
+    }
+
     public int DetectPotentialOverrideCount()
     {
         var enabled = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();

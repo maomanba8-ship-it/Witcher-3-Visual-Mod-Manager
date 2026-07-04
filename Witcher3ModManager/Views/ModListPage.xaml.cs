@@ -211,6 +211,14 @@ public partial class ModListPage : UserControl
                 Margin = new Thickness(0, 0, 4, 0)
             });
 
+        if (_conflict != null && _conflict.IsBundleMod(mod))
+            dotsPanel.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 7, Height = 7,
+                Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#8BA4B5")),
+                Margin = new Thickness(0, 0, 4, 0)
+            });
+
         dotsPanel.Children.Add(delBtn);
         Grid.SetColumn(dotsPanel, 1);
         row1.Children.Add(dotsPanel);
