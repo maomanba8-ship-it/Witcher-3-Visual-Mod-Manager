@@ -252,12 +252,13 @@ public partial class MainWindow : Window
 
     private void OnBackgroundChanged(string path) => LoadBackgroundImage();
 
-    private void OnStatusUpdated(int enabled, int total, int conflicts, int potential)
+    private void OnStatusUpdated(int enabled, int total, int conflicts, int potential, int bundleCount)
     {
         StatusEnabled.Text = string.Format(Services.TranslationService.Instance.T("status.enabled"), enabled);
         StatusTotal.Text = string.Format(Services.TranslationService.Instance.T("status.total"), total);
         StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), conflicts);
         StatusPotential.Text = string.Format(Services.TranslationService.Instance.T("status.potential"), potential);
+        StatusBundle.Text = string.Format(Services.TranslationService.Instance.T("status.bundle"), bundleCount);
     }
 
     private void ConflictStatus_Click(object sender, RoutedEventArgs e)

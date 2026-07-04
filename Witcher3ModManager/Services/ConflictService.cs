@@ -100,7 +100,7 @@ public class ConflictService
     {
         var conflicts = new List<ConflictInfo>();
         var enabledMods = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
-        if (enabledMods.Count < 2) return conflicts;
+        if (enabledMods.Count < 2) {  return conflicts; }
 
         var gamePath = _w3.GetGamePath();
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
@@ -108,6 +108,7 @@ public class ConflictService
 
         var fileModMap = new Dictionary<string, List<string>>(
             StringComparer.OrdinalIgnoreCase);
+
 
         // Scan mod folders
         var modsRoot = Path.Combine(gamePath, "mods");
@@ -124,6 +125,7 @@ public class ConflictService
                     try
                     {
                         var files = Directory.GetFiles(modDir, "*.*", SearchOption.AllDirectories);
+                        
                         foreach (var file in files)
                         {
                             var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
@@ -215,6 +217,33 @@ public class ConflictService
     }
 
     // ���� Potential Override ��������������������������������������������������������������������������������
+
+    /// <summary>
+    /// Returns enabled mods that use WolvenKit bundle packaging (contain blob0.bundle).
+    /// </summary>
+    public List<ModEntry> GetBundleMods()
+    {
+        var enabled = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
+        var gamePath = _w3.GetGamePath();
+        if (string.IsNullOrEmpty(gamePath)) return new();
+        var bundleMods = new List<ModEntry>();
+        var modsRoot = Path.Combine(gamePath, "mods");
+        if (!Directory.Exists(modsRoot)) return bundleMods;
+        foreach (var mod in enabled)
+        {
+            foreach (var folder in mod.GameModFolders)
+            {
+                if (string.IsNullOrEmpty(folder)) continue;
+                var bundlePath = Path.Combine(modsRoot, folder, "content", "blob0.bundle");
+                if (File.Exists(bundlePath))
+                {
+                    bundleMods.Add(mod);
+                    break;
+                }
+            }
+        }
+        return bundleMods;
+    }
 
     public int DetectPotentialOverrideCount()
     {

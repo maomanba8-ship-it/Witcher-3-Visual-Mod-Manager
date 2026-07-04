@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Witcher3ModManager.Models;
+using System.Linq;
 using Witcher3ModManager.Services;
 
 namespace Witcher3ModManager.Views;
@@ -12,16 +13,19 @@ public partial class ConflictDialog : Window
 {
     private readonly List<ConflictInfo> _conflicts;
     private string? _scriptMergerPath;
+    private readonly List<ModEntry>? _bundleMods;
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
-        Dictionary<CategoryType, List<string>>? potentialOverrides = null)
+        Dictionary<CategoryType, List<string>>? potentialOverrides = null,
+        List<ModEntry>? bundleMods = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
         Title = TranslationService.Instance.T("conflict.title");
         CloseBtn.Content = TranslationService.Instance.T("conflict.close");
         _conflicts = conflicts;
+        _bundleMods = bundleMods;
         LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
     }
@@ -66,6 +70,15 @@ public partial class ConflictDialog : Window
     {
         // Set default texts in code to avoid XAML encoding issues
         ScriptWarning.Text = TranslationService.Instance.T("conflict.script_warning");
+
+        // Bundle mod hint
+        if (_bundleMods != null && _bundleMods.Count >= 2)
+        {
+            BundleHintPanel.Visibility = Visibility.Visible;
+            BundleTitleText.Text = TranslationService.Instance.T("conflict.bundle_detected");
+            BundleModListText.Text = "● " + string.Join("\n● ", _bundleMods.Select(m => m.Name));
+            BundleSuggestionText.Text = TranslationService.Instance.T("conflict.bundle_suggest");
+        }
 
         if (conflicts.Count == 0)
         {

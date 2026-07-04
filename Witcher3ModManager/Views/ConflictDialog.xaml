@@ -72,6 +72,21 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Bundle Mod Hint -->
+                    <Border x:Name="BundleHintPanel" Visibility="Collapsed"
+                            Background="#1A8BA4B5" CornerRadius="6"
+                            Padding="14,12" Margin="0,0,0,16"
+                            BorderBrush="#338BA4B5" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="BundleTitleText" Foreground="#8BA4B5" FontSize="13" FontWeight="SemiBold"
+                                       Text="🔵 Bundle Mod(s) Detected"/>
+                            <TextBlock x:Name="BundleModListText" Foreground="#C8D0D8"
+                                       FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="BundleSuggestionText" Foreground="#9A9EAA"
+                                       FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
                     <StackPanel x:Name="ConflictStackPanel"/>
 
                     <StackPanel x:Name="NoConflictsPanel" Visibility="Collapsed"
