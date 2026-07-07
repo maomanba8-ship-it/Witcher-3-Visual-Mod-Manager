@@ -22,6 +22,18 @@ public class ModImportService
         @"C:\Program Files\7-Zip\7z.exe",
         @"C:\Program Files (x86)\7-Zip\7z.exe"
     };
+    /// <summary>
+    /// Data model produced by the scan phase. Group a mod/dlc root with
+    /// any nested folders of the opposite type (e.g. a mod containing a dlc).
+    /// Build phase uses this to install everything without touching tempExtractDir.
+    /// </summary>
+    private class ModCandidate
+    {
+        public required DirectoryInfo Root;
+        public readonly List<DirectoryInfo> AttachedDlcs = new();
+        public readonly List<DirectoryInfo> AttachedMods = new();
+    }
+
 
     public ModImportService(ModStorageService storage, SettingsService settings)
     {
@@ -75,61 +87,109 @@ public class ModImportService
             return (new List<ModEntry>(), "bundle_patch");
         }
 
-        // Step 1: Recursively scan for mod*/dlc* folders with content/
-        var candidates = ScanModDlcRoots(tempExtractDir);
+        // Step 1: Scan for mod candidates (read-only, no file system changes)
+        var modCandidates = ScanModCandidates(tempExtractDir);
         var binFiles = ScanBinFiles(tempExtractDir);
 
-        if (candidates.Count > 0)
+        if (modCandidates.Count > 0)
         {
-            // Separate mod and dlc candidates
-            var modDirs = candidates.Where(c => c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)).ToList();
-#if DEBUG
-            File.AppendAllText(@"Z:\griffin_import.log", $"mods={string.Join(",", modDirs.Select(x => x.Name))}\r\n");
-#endif
-            var dlcDirs = candidates.Where(c => c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase)).ToList();
-            var other = candidates.FirstOrDefault(c => !c.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
-                                                     && !c.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase));
+            // Collect all mod and dlc roots (flatten ModCandidate)
+            var modRoots = new List<DirectoryInfo>();
+            var dlcRoots = new List<DirectoryInfo>();
+            var allAttachedDlcs = new List<DirectoryInfo>();
+            var allAttachedMods = new List<DirectoryInfo>();
 
-            if (modDirs.Count > 0 || dlcDirs.Count > 0)
+            foreach (var cand in modCandidates)
             {
-                // Merge into single ModEntry
-                var primary = modDirs.Count > 0 ? modDirs[0] : dlcDirs[0];
+                bool isDlc = cand.Root.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase);
+                if (isDlc)
+                    dlcRoots.Add(cand.Root);
+                else
+                    modRoots.Add(cand.Root);
+
+                foreach (var ad in cand.AttachedDlcs)
+                    if (!allAttachedDlcs.Any(x => x.Name.Equals(ad.Name, StringComparison.OrdinalIgnoreCase)))
+                        allAttachedDlcs.Add(ad);
+                foreach (var am in cand.AttachedMods)
+                    if (!allAttachedMods.Any(x => x.Name.Equals(am.Name, StringComparison.OrdinalIgnoreCase)))
+                        allAttachedMods.Add(am);
+            }
+
+            // Merge all mod + dlc roots into a single ModEntry (package grouping)
+            if (modRoots.Count > 0 || dlcRoots.Count > 0)
+            {
+                var primary = modRoots.Count > 0 ? modRoots[0] : dlcRoots[0];
                 var entry = await BuildModEntry(primary.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
                 if (entry != null)
                 {
-                    entry.GameModFolders.Clear(); foreach (var md in modDirs) entry.GameModFolders.Add(md.Name);
-#if DEBUG
-                    File.AppendAllText(@"Z:\griffin_import.log", $"entry={string.Join(",", entry.GameModFolders)}\r\n");
-#endif
-                    if (dlcDirs.Count > 0)
+                    entry.GameModFolders.Clear();
+                    foreach (var mr in modRoots)
+                        entry.GameModFolders.Add(mr.Name);
+
+                    // Add attached mods (e.g. DLC root containing nested mods)
+                    foreach (var am in allAttachedMods)
+                        if (!entry.GameModFolders.Contains(am.Name))
+                            entry.GameModFolders.Add(am.Name);
+
+                    // DLC roots
+                    if (dlcRoots.Count > 0)
                     {
-                        entry.GameDlcFolders.Clear(); foreach (var dd in dlcDirs) entry.GameDlcFolders.Add(dd.Name);
-                        // Also move dlc folder to storage
-                        foreach (var dd in dlcDirs) { if (!Directory.Exists(dd.FullName)) continue; var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dd.Name);
+                        entry.GameDlcFolders.Clear();
+                        foreach (var dr in dlcRoots)
+                            entry.GameDlcFolders.Add(dr.Name);
+
+                        // Move dlc root folders to storage
+                        foreach (var dr in dlcRoots)
+                        {
+                            if (!Directory.Exists(dr.FullName)) continue;
+                            var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dr.Name);
+                            if (Directory.Exists(dlcStorageDir))
+                                Directory.Delete(dlcStorageDir, true);
+                            Directory.Move(dr.FullName, dlcStorageDir);
+                        }
+                    }
+
+                    // Move attached DLCs to storage
+                    foreach (var ad in allAttachedDlcs)
+                    {
+                        if (!entry.GameDlcFolders.Contains(ad.Name))
+                            entry.GameDlcFolders.Add(ad.Name);
+                        if (!Directory.Exists(ad.FullName)) continue;
+                        var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), ad.Name);
                         if (Directory.Exists(dlcStorageDir))
                             Directory.Delete(dlcStorageDir, true);
-                        Directory.Move(dd.FullName, dlcStorageDir); }
+                        Directory.Move(ad.FullName, dlcStorageDir);
                     }
-                    // Move remaining mod folders to storage (primary already moved by BuildModEntry)
-                    for (int mi = 1; mi < modDirs.Count; mi++)
+
+                    // Move remaining mod roots to storage (primary already moved by BuildModEntry)
+                    for (int mi = 1; mi < modRoots.Count; mi++)
                     {
-                        var md = modDirs[mi]; if (!Directory.Exists(md.FullName)) continue; var modStorageDir = Path.Combine(_storage.GetModsDirectory(), md.Name);
+                        var mr = modRoots[mi];
+                        if (!Directory.Exists(mr.FullName)) continue;
+                        var modStorageDir = Path.Combine(_storage.GetModsDirectory(), mr.Name);
                         if (Directory.Exists(modStorageDir))
                             Directory.Delete(modStorageDir, true);
-                        if (Directory.Exists(md.FullName))
-                            Directory.Move(md.FullName, modStorageDir);
+                        if (Directory.Exists(mr.FullName))
+                            Directory.Move(mr.FullName, modStorageDir);
+                    }
+
+                    // Move attached mods to storage
+                    foreach (var am in allAttachedMods)
+                    {
+                        if (!Directory.Exists(am.FullName)) continue;
+                        var modStorageDir = Path.Combine(_storage.GetModsDirectory(), am.Name);
+                        if (Directory.Exists(modStorageDir))
+                            Directory.Delete(modStorageDir, true);
+                        if (Directory.Exists(am.FullName))
+                            Directory.Move(am.FullName, modStorageDir);
                     }
 
                     // Attach bin files
                     if (binFiles.Count > 0)
                         AttachBinFiles(entry, tempExtractDir, binFiles);
+
                     results.Add(entry);
                 }
-            }
-            if (other != null)
-            {
-                var entry = await BuildModEntry(other.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
-                if (entry != null) results.Add(entry);
             }
         }
         else
@@ -208,35 +268,86 @@ public class ModImportService
         }
         return results;
     }
-
-    private static List<DirectoryInfo> ScanModDlcRoots(string extractDir)
+    /// <summary>
+    /// Scan phase (read-only). Build ModCandidate objects grouping each mod/dlc root
+    /// with any nested folders of the opposite type. Same-type nesting is deduplicated.
+    /// Does NOT modify the file system.
+    /// </summary>
+    private static List<ModCandidate> ScanModCandidates(string extractDir)
     {
         var allDirs = new DirectoryInfo(extractDir).GetDirectories("*", SearchOption.AllDirectories);
 
-        var candidates = allDirs.Where(d =>
+        var allCandidates = allDirs.Where(d =>
             (d.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase) ||
              d.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase)) &&
             d.GetDirectories("content", SearchOption.TopDirectoryOnly).Length > 0
         ).ToList();
 
-        // Deduplicate: if modX and modX/sub/modX both found, keep deepest
-        for (int i = candidates.Count - 1; i >= 0; i--)
+        var result = new List<ModCandidate>();
+        var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Process shallowest first so outer containers are established before inner ones
+        var sorted = allCandidates.OrderBy(d => d.FullName.Length).ToList();
+
+        foreach (var cand in sorted)
         {
-            for (int j = candidates.Count - 1; j >= 0; j--)
+            if (processed.Contains(cand.FullName)) continue;
+
+            // Check if contained by an already-registered candidate of the SAME type
+            // (dedup: keep outermost)
+            bool isDedup = false;
+            foreach (var mc in result)
             {
-                if (i != j && candidates[i].FullName.StartsWith(
-                    candidates[j].FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                bool sameType = cand.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
+                    == mc.Root.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase);
+                if (sameType && cand.FullName.StartsWith(
+                    mc.Root.FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 {
-                    candidates.RemoveAt(j);
-                    i = candidates.Count - 1;
+                    isDedup = true;
                     break;
                 }
             }
+            if (isDedup) { processed.Add(cand.FullName); continue; }
+
+            var mcNew = new ModCandidate { Root = cand };
+            processed.Add(cand.FullName);
+
+            // Scan for nested folders of the OPPOSITE type inside this root
+            foreach (var inner in sorted)
+            {
+                if (processed.Contains(inner.FullName)) continue;
+                if (!inner.FullName.StartsWith(
+                    cand.FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
+
+                bool sameType = inner.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
+                    == cand.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase);
+                if (sameType) continue; // same-type handled by dedup above
+
+                if (inner.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase))
+                    mcNew.AttachedDlcs.Add(inner);
+                else
+                    mcNew.AttachedMods.Add(inner);
+                processed.Add(inner.FullName);
+            }
+
+            result.Add(mcNew);
         }
 
-        return candidates
-            .OrderBy(d => d.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
-            .ThenBy(d => d.Name)
+#if DEBUG
+        File.AppendAllText(@"Z:\griffin_import.log", $"ScanModCandidates: {result.Count} root(s)\r\n");
+        foreach (var mc in result)
+        {
+            File.AppendAllText(@"Z:\griffin_import.log", $"  Root: {mc.Root.FullName}\r\n");
+            foreach (var ad in mc.AttachedDlcs)
+                File.AppendAllText(@"Z:\griffin_import.log", $"    AttachedDlc: {ad.FullName}\r\n");
+            foreach (var am in mc.AttachedMods)
+                File.AppendAllText(@"Z:\griffin_import.log", $"    AttachedMod: {am.FullName}\r\n");
+        }
+#endif
+
+        return result
+            .OrderBy(mc => mc.Root.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenBy(mc => mc.Root.Name)
             .ToList();
     }
 
@@ -250,8 +361,10 @@ public class ModImportService
 
         var finalModDir = Path.Combine(_storage.GetModsDirectory(), gameFolderName);
         if (Directory.Exists(finalModDir))
-            finalModDir = Path.Combine(_storage.GetModsDirectory(), 
-                gameFolderName + "_" + DateTime.Now.ToString("yyyyMMddHHmmss"));
+        {
+            gameFolderName = gameFolderName + "_" + DateTime.Now.ToString("yyyyMMddHHmmss");
+            finalModDir = Path.Combine(_storage.GetModsDirectory(), gameFolderName);
+        }
 
         await Task.Run(() => MoveDirectory(modRoot, finalModDir));
 
