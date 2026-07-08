@@ -352,7 +352,7 @@
                     <StackPanel>
                         <TextBlock x:Name="AboutHeader" Text="关于" FontSize="14" FontWeight="SemiBold"
                                    Foreground="#E2E4E9" Margin="0,0,0,8"/>
-                        <TextBlock x:Name="AboutVersionText" Text="巫师3 Mod 管理器 v0.9.2" FontSize="12"
+                        <TextBlock x:Name="AboutVersionText" Text="巫师3 Mod 管理器 v0.9.3" FontSize="12"
                                    Foreground="#9A9EAA"/>
                         <TextBlock x:Name="AboutTechText" Text="基于 .NET 10 + WPF 构建" FontSize="11"
                                    Foreground="#5E626E" Margin="0,2,0,0"/>

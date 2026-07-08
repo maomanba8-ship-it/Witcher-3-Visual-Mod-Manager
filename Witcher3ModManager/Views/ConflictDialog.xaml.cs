@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -63,7 +63,6 @@ public partial class ConflictDialog : Window
         }
         catch { }
     }
-
     private void LoadConflicts(List<ConflictInfo> conflicts, 
         Dictionary<string, DateTime>? modDates,
         Dictionary<CategoryType, List<string>>? potentialOverrides)
@@ -264,6 +263,7 @@ public partial class ConflictDialog : Window
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = _scriptMergerPath,
+                    WorkingDirectory = Path.GetDirectoryName(_scriptMergerPath),
                     UseShellExecute = true
                 });
             }
@@ -288,5 +288,3 @@ public partial class ConflictDialog : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }
-
-
