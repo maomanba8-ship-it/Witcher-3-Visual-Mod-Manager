@@ -22,13 +22,21 @@ public partial class ConflictDialog : Window
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
-        Title = TranslationService.Instance.T("conflict.title");
-        CloseBtn.Content = TranslationService.Instance.T("conflict.close");
         _conflicts = conflicts;
         _bundleMods = bundleMods;
         LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
+        Translate();
+        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => Translate());
     }
+    private void Translate()
+    {
+        var t = TranslationService.Instance;
+        Title = t.T("conflict.title");
+        CloseBtn.Content = t.T("conflict.close");
+        BtnScriptMerger.Content = t.T("conflict.script_merger_btn");
+    }
+
 
     private void AutoDetectScriptMerger()
     {
