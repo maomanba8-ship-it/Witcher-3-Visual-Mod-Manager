@@ -14,23 +14,23 @@ public partial class ConflictDialog : Window
     private readonly List<ConflictInfo> _conflicts;
     private string? _scriptMergerPath;
     private readonly List<ModEntry>? _bundleMods;
+    private List<(string Folder, List<string> Mods)> _sharedFolders = new();
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
         Dictionary<CategoryType, List<string>>? potentialOverrides = null,
-        List<ModEntry>? bundleMods = null)
+        List<ModEntry>? bundleMods = null,
+        List<(string Folder, List<string> Mods)>? sharedFolders = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
         _conflicts = conflicts;
         _bundleMods = bundleMods;
+        _sharedFolders = sharedFolders ?? new();
         LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
         Translate();
         TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => Translate());
-    }
-    private void Translate()
-    {
         var t = TranslationService.Instance;
         Title = t.T("conflict.title");
         CloseBtn.Content = t.T("conflict.close");
@@ -85,6 +85,16 @@ public partial class ConflictDialog : Window
             BundleTitleText.Text = TranslationService.Instance.T("conflict.bundle_detected");
             BundleModListText.Text = "● " + string.Join("\n● ", _bundleMods.Select(m => m.Name));
             BundleSuggestionText.Text = TranslationService.Instance.T("conflict.bundle_suggest");
+        }
+
+
+        // Shared folder hint
+        if (_sharedFolders.Count > 0)
+        {
+            SharedHintPanel.Visibility = Visibility.Visible;
+            var sharedLines = _sharedFolders.Select(sf =>
+                string.Format(TranslationService.Instance.T("conflict.shared_folder_item"), sf.Folder, string.Join(", ", sf.Mods)));
+            SharedModListText.Text = string.Join("\n", sharedLines);
         }
 
         if (conflicts.Count == 0)
@@ -287,6 +297,16 @@ public partial class ConflictDialog : Window
                 TranslationService.Instance.T("conflict.merger_not_found"),
                 TranslationService.Instance.T("dialog.hint"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
+    }
+
+    private void Translate()
+    {
+        var t = TranslationService.Instance;
+        Title = t.T("conflict.title");
+        CloseBtn.Content = t.T("conflict.close");
+        BtnScriptMerger.Content = t.T("conflict.script_merger_btn");
+        SharedTitleText.Text = t.T("conflict.shared_title");
+        SharedSuggestionText.Text = t.T("conflict.shared_suggestion");
     }
 
     private void TitleBar_Drag(object sender, MouseButtonEventArgs e)

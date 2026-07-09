@@ -117,6 +117,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,16,0">
@@ -146,12 +148,20 @@
                                        Foreground="#C9A96E" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="0,0,16,0">
+                    <Button Grid.Column="4" Click="SharedStatus_Click" Cursor="Hand"
+                            Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,16,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE71B;" FontSize="11" Foreground="#6BA5B5" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusShared" Text="共享 0" FontSize="12"
+                                       Foreground="#6BA5B5" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <StackPanel Grid.Column="5" Orientation="Horizontal" Margin="0,0,16,0">
                         <TextBlock Text="&#xEA3B;" FontSize="11" Foreground="#8BA4B5" Margin="0,0,4,0" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
                         <TextBlock x:Name="StatusBundle" Text="Bundle: 0" FontSize="12"
                                    Foreground="#8BA4B5" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Grid.Column="5" x:Name="StatusGamePath" Text="巫师3: 未检测" FontSize="12"
+                    <TextBlock Grid.Column="6" x:Name="StatusGamePath" Text="巫师3: 未检测" FontSize="12"
                                Foreground="#5E626E" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                 </Grid>
             </Border>

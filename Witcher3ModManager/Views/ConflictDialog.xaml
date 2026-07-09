@@ -1,4 +1,4 @@
-<Window x:Class="Witcher3ModManager.Views.ConflictDialog"
+﻿<Window x:Class="Witcher3ModManager.Views.ConflictDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="冲突检测结果" Width="700" Height="480"
@@ -87,6 +87,21 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Shared Resource Hint -->
+                    <Border x:Name="SharedHintPanel" Visibility="Collapsed"
+                            Background="#1A6BA5B5" CornerRadius="6"
+                            Padding="14,12" Margin="0,0,0,16"
+                            BorderBrush="#336BA5B5" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="SharedTitleText" Foreground="#6BA5B5" FontSize="13" FontWeight="SemiBold"
+                                       Text="🔗 Shared Resources"/>
+                            <TextBlock x:Name="SharedModListText" Foreground="#C8D0D8"
+                                       FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="SharedSuggestionText" Foreground="#9A9EAA"
+                                       FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                                       Text="These folders are shared by multiple mods. Disabling one won't remove the shared resource."/>
+                        </StackPanel>
+                    </Border>
                     <StackPanel x:Name="ConflictStackPanel"/>
 
                     <StackPanel x:Name="NoConflictsPanel" Visibility="Collapsed"

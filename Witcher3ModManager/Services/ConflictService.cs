@@ -111,7 +111,7 @@ public class ConflictService
 
 
         // Scan mod folders
-        var modsRoot = Path.Combine(gamePath, "mods");
+        var modsRoot = Path.Combine(gamePath, "mods"); var scannedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(modsRoot))
         {
             foreach (var mod in enabledMods)
@@ -121,6 +121,7 @@ public class ConflictService
                     if (string.IsNullOrEmpty(folderName)) continue;
                     var modDir = Path.Combine(modsRoot, folderName);
                     if (!Directory.Exists(modDir)) continue;
+                    if (!scannedDirs.Add(modDir)) continue;
 
                     try
                     {
@@ -152,6 +153,7 @@ public class ConflictService
                     if (string.IsNullOrEmpty(dlcFolderName)) continue;
                     var dlcDir = Path.Combine(dlcRoot, dlcFolderName);
                     if (!Directory.Exists(dlcDir)) continue;
+                    if (!scannedDirs.Add(dlcDir)) continue;
 
                     try
                     {
@@ -243,6 +245,43 @@ public class ConflictService
             }
         }
         return bundleMods;
+    
+    }
+    /// <summary>
+    /// Returns shared resources: folder names referenced by 2+ enabled mods
+    /// that physically exist only once (shared library, not a conflict).
+    /// </summary>
+    public List<(string Folder, List<string> Mods)> GetSharedResources()
+    {
+        var enabled = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
+        var folderMods = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mod in enabled)
+        {
+            foreach (var f in mod.GameModFolders)
+            {
+                if (string.IsNullOrEmpty(f)) continue;
+                if (!folderMods.ContainsKey(f)) folderMods[f] = new();
+                if (!folderMods[f].Contains(mod.Name)) folderMods[f].Add(mod.Name);
+            }
+            foreach (var f in mod.GameDlcFolders)
+            {
+                if (string.IsNullOrEmpty(f)) continue;
+                if (!folderMods.ContainsKey(f)) folderMods[f] = new();
+                if (!folderMods[f].Contains(mod.Name)) folderMods[f].Add(mod.Name);
+            }
+        }
+        return folderMods.Where(kv => kv.Value.Count >= 2)
+            .Select(kv => (kv.Key, kv.Value))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Alias for GetSharedResources() — returns folder/mod pairs where a folder
+    /// is referenced by multiple enabled mods (shared library, not a conflict).
+    /// </summary>
+    public List<(string Folder, List<string> Mods)> GetSharedFolderPairs()
+    {
+        return GetSharedResources();
     }
 
     public bool IsBundleMod(ModEntry mod)
