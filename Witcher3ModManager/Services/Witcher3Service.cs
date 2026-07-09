@@ -7,14 +7,14 @@ namespace Witcher3ModManager.Services;
 
 public class Witcher3Service
 {
-    private readonly SettingsService _settings;
+    private readonly SettingsService _settings; private readonly ModStorageService? _storage;
     private string? _gamePath;
     private string? _modsSettingsPath;
     private bool _isLaunching;
 
-    public Witcher3Service(SettingsService settings)
+    public Witcher3Service(SettingsService settings, ModStorageService? storage = null)
     {
-        _settings = settings;
+        _settings = settings; _storage = storage;
     }
 
     public string? GetGamePath()
@@ -183,6 +183,7 @@ public class Witcher3Service
             // Disable each mod folder
             foreach (var folder in mod.GameModFolders)
             {
+                if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
                 var enabledPath = Path.Combine(gameModsPath, folder);
                 var disabledPath = Path.Combine(gameModsPath, "~" + folder);
 
@@ -204,6 +205,7 @@ public class Witcher3Service
                 var gameDlcPath = GetGameDlcPath();
                 foreach (var dlcFolder in mod.GameDlcFolders)
                 {
+                    if (IsSharedFolder(dlcFolder, mod, m => m.GameDlcFolders)) continue;
                     ToggleFolder(gameDlcPath, dlcFolder, false);
                 }
             }
@@ -221,7 +223,6 @@ public class Witcher3Service
         }
         catch { return false; }
     }
-
     public bool DeleteMod(ModEntry mod)
     {
         try
@@ -492,4 +493,15 @@ public class Witcher3Service
         }
     }
 
+    private bool IsSharedFolder(string folder, ModEntry current, Func<ModEntry, List<string>> selector)
+    {
+        if (_storage == null) return false;
+        foreach (var other in _storage.GetAllMods())
+        {
+            if (other.Id == current.Id || !other.IsEnabled) continue;
+            if (selector(other).Contains(folder, StringComparer.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 }

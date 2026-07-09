@@ -47,7 +47,7 @@ public partial class MainWindow : Window
             _storage.DeduplicateByGameFolderName();
             _settings = new SettingsService();
             _importer = new ModImportService(_storage, _settings);
-            _w3 = new Witcher3Service(_settings);
+            _w3 = new Witcher3Service(_settings, _storage);
             _conflict = new ConflictService(_storage, _w3);
             _backup = new BackupService(_w3, _settings);
             _presets = new PresetService();
@@ -252,13 +252,14 @@ public partial class MainWindow : Window
 
     private void OnBackgroundChanged(string path) => LoadBackgroundImage();
 
-    private void OnStatusUpdated(int enabled, int total, int conflicts, int potential, int bundleCount)
+    private void OnStatusUpdated(int enabled, int total, int conflicts, int potential, int bundleCount, int sharedCount)
     {
         StatusEnabled.Text = string.Format(Services.TranslationService.Instance.T("status.enabled"), enabled);
         StatusTotal.Text = string.Format(Services.TranslationService.Instance.T("status.total"), total);
         StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), conflicts);
         StatusPotential.Text = string.Format(Services.TranslationService.Instance.T("status.potential"), potential);
         StatusBundle.Text = string.Format(Services.TranslationService.Instance.T("status.bundle"), bundleCount);
+        StatusShared.Text = string.Format(Services.TranslationService.Instance.T("status.shared"), sharedCount);
     }
 
     private void ConflictStatus_Click(object sender, RoutedEventArgs e)
@@ -276,6 +277,15 @@ public partial class MainWindow : Window
         var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides);
         dialog.ShowDialog();
         RefreshStatusBar();
+    }
+
+    private void SharedStatus_Click(object sender, RoutedEventArgs e)
+    {
+        if (_modListPage == null) return;
+        // Open conflict dialog — shared resources are shown inside it
+        var conflictBtn = typeof(ModListPage)
+            .GetMethod("ConflictCheck_Click", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        conflictBtn?.Invoke(_modListPage, new object[] { sender, e });
     }
 
     private void PotentialStatus_Click(object sender, RoutedEventArgs e)

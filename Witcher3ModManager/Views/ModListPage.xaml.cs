@@ -24,7 +24,7 @@ public partial class ModListPage : UserControl
     private ModEntry? _selectedMod;
 
     public event Action? NavigateBackRequested;
-    public event Action<int, int, int, int, int>? StatusUpdated;  // enabled, total, conflicts, potentialOverrides, bundleCount
+    public event Action<int, int, int, int, int, int>? StatusUpdated;  // enabled, total, conflicts, potentialOverrides, bundleCount, sharedCount
     private List<OrphanModInfo> _orphans = new();
 
     public ModListPage()
@@ -240,7 +240,8 @@ public partial class ModListPage : UserControl
         try { conflicts = _conflict?.DetectConflicts().Count ?? 0; } catch { }
         var overrides = _conflict?.DetectPotentialOverrideCount() ?? 0;
         var bundleCount = _conflict?.GetBundleMods().Count ?? 0;
-        StatusUpdated?.Invoke(enabled, total, conflicts, overrides, bundleCount);
+        var sharedCount = _conflict?.GetSharedResources().Count ?? 0;
+        StatusUpdated?.Invoke(enabled, total, conflicts, overrides, bundleCount, sharedCount);
     }
 
     #region Drag and Drop
@@ -573,8 +574,9 @@ public partial class ModListPage : UserControl
         var conflicts = _conflict.ForceDetectConflicts();
         var modDateMap = _allMods.GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.First().ImportDate);
         var overrides = _conflict.GetPotentialOverrides();
+        var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
-        var dialog = new ConflictDialog(conflicts, modDateMap, overrides, bundleMods);
+        var dialog = new ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders);
         dialog.ShowDialog();
         UpdateStatusBar();
     }
