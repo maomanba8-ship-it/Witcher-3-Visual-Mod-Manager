@@ -1,4 +1,12 @@
-﻿# 巫师3 Mod 管理器 (Witcher 3 Visual Mod Manager)
+﻿# Witcher 3 Visual Mod Manager
+
+An open-source native Windows desktop application for managing Witcher 3 mods.
+
+Built with C# / .NET 10 / WPF.
+
+---
+
+# 巫师3 Mod 管理器
 
 一个为巫师3次世代版设计的桌面 Mod 管理工具，支持拖拽安装、智能冲突检测、预设管理和中英双语。
 
@@ -34,10 +42,6 @@ dotnet publish -c Release -o publish_framework
 # 自包含版（无需安装 .NET）
 dotnet publish -c Release --self-contained true -r win-x64 -o publish_selfcontained
 ```
-
-## 技术栈
-
-.NET 10 / WPF / SQLite / 7-Zip
 
 ## 许可证
 
