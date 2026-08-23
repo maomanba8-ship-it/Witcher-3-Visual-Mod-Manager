@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using Witcher3ModManager.Core.Analysis;
 using Witcher3ModManager.Models;
 #if DEBUG
 using System.Text.Json;
@@ -96,6 +97,10 @@ public class ModImportService
 
         if (modCandidates.Count > 0)
         {
+            // Parallel (read-only) analyzer comparison. Does NOT change old install flow.
+#if DEBUG
+            LogAnalyzerComparison(tempExtractDir);
+#endif
             // Collect all mod and dlc roots (flatten ModCandidate)
             var modRoots = new List<DirectoryInfo>();
             var dlcRoots = new List<DirectoryInfo>();
@@ -913,4 +918,18 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         }
         return true;
     }
+
+#if DEBUG
+    private static void LogAnalyzerComparison(string extractDir)
+    {
+        try
+        {
+            var result = PackageAnalyzer.Analyze(extractDir);
+            File.AppendAllText(@"Z:\griffin_import.log", $"[Analyzer] components={result.Components.Count} warnings={result.Warnings.Count}\r\n");
+            foreach (var comp in result.Components)
+                File.AppendAllText(@"Z:\griffin_import.log", $"  {comp.Kind}: {comp.Name} ({comp.RootPath}) evidence={string.Join(",", comp.Evidence)}\r\n");
+        }
+        catch { }
+    }
+#endif
 }

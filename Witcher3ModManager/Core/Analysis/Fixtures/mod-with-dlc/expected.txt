@@ -1,0 +1,3 @@
+Expected components:
+- Mod: modSpawn
+- Dlc: dlcSpawn
