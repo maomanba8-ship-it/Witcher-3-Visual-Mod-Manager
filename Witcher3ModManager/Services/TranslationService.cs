@@ -7,6 +7,7 @@ public class TranslationService
 {
     public static TranslationService Instance { get; } = new();
     private readonly string _dir;
+    private readonly string _defaultDir;
     private Dictionary<string, string> _strings = new();
     private string _currentLang = "zh-CN";
 
@@ -15,31 +16,18 @@ public class TranslationService
 
     public TranslationService()
     {
-        // Primary: Languages/ folder next to exe (community can add languages)
-        var appDir = AppDomain.CurrentDomain.BaseDirectory;
-        _dir = Path.Combine(appDir, "Languages");
-        Directory.CreateDirectory(_dir);
-
-        // Fallback: also check LOCALAPPDATA for upgrade compatibility
-        var legacyDir = Path.Combine(
+        // Writable/override location: LocalAppData (user can write, even under Program Files install).
+        _dir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            AppDataPath.FolderName, "translations");
+            AppDataPath.FolderName, "Languages");
+        try { Directory.CreateDirectory(_dir); } catch { }
+
+        // Read-only bundled defaults next to exe (community can add languages).
+        _defaultDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Languages");
 
         EnsureDefaultTranslations();
 
-        // Copy default files to app dir if not already there
-        foreach (var lang in new[] { "zh-CN", "en" })
-        {
-            var appFile = Path.Combine(_dir, $"{lang}.json");
-            if (!File.Exists(appFile))
-            {
-                // Check legacy location
-                var legacyFile = Path.Combine(legacyDir, $"{lang}.json");
-                if (File.Exists(legacyFile))
-                    File.Copy(legacyFile, appFile);
-            }
-        }
-        // Load saved language preference
+        // Load saved language preference from user-writable location.
         var prefFile = Path.Combine(_dir, "lang_pref.json");
         try
         {
@@ -66,25 +54,25 @@ public class TranslationService
 
     private void LoadStrings()
     {
-        var path = Path.Combine(_dir, $"{_currentLang}.json");
-        if (File.Exists(path))
+        // Prefer user-writable override, then bundled default, then in-memory defaults.
+        _strings = new();
+        var userPath = Path.Combine(_dir, $"{_currentLang}.json");
+        if (File.Exists(userPath))
         {
-            try
-            {
-                var json = File.ReadAllText(path);
-                _strings = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new();
-            }
-            catch
-            {
-                _strings = new();
-            }
+            try { _strings = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(userPath)) ?? new(); }
+            catch { _strings = new(); }
         }
         else
         {
-            _strings = new();
+            var defaultPath = Path.Combine(_defaultDir, $"{_currentLang}.json");
+            if (File.Exists(defaultPath))
+            {
+                try { _strings = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(defaultPath)) ?? new(); }
+                catch { _strings = new(); }
+            }
         }
 
-        // Merge defaults to pick up newly added keys
+        // Merge in-memory defaults to pick up newly added keys.
         var defaults = GetDefaultStrings(_currentLang);
         foreach (var kvp in defaults)
         {
@@ -107,9 +95,13 @@ public class TranslationService
             var path = Path.Combine(_dir, $"{lang}.json");
             if (!File.Exists(path))
             {
-                _strings = GetDefaultStrings(lang);
-                var json = JsonSerializer.Serialize(_strings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(path, json);
+                try
+                {
+                    _strings = GetDefaultStrings(lang);
+                    var json = JsonSerializer.Serialize(_strings, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(path, json);
+                }
+                catch { /* user dir not writable; fall back to in-memory defaults */ }
             }
         }
     }
