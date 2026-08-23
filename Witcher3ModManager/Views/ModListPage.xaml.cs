@@ -358,7 +358,13 @@ public partial class ModListPage : UserControl
                 "\uE74D", "Delete", TranslationService.Instance.T("dialog.cancel"));
             if (!confirmed) return;
             _conflict?.InvalidateCache();
-            if (_w3 != null) _w3.DeleteMod(mod);
+            var deleteOk = true;
+            if (_w3 != null) deleteOk = _w3.DeleteMod(mod);
+            if (!deleteOk)
+            {
+                MessageBox.Show(TranslationService.Instance.T("mods.delete_failed") + "： " + mod.Name, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             _storage?.RemoveMod(modId);
             RefreshModList();
         }
