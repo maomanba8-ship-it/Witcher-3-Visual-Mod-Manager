@@ -109,7 +109,7 @@ public class ModImportService
 
             foreach (var cand in modCandidates)
             {
-                bool isDlc = cand.Root.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase);
+                bool isDlc = ClassifyRoot(cand.Root).IsDlc;
                 if (isDlc)
                     dlcRoots.Add(cand.Root);
                 else
@@ -288,6 +288,38 @@ public class ModImportService
         return results;
     }
     /// <summary>
+    /// Classify a directory as Mod or Dlc based on name prefix AND its container parent.
+    /// A folder directly under a dlc/ or mods/ container is classified accordingly even
+    /// when its name does not start with dlc/mod (e.g. dlc\MagicSpellsRevamped).
+    /// Structural rule only - never a per-mod special case.
+    /// </summary>
+    private static (bool IsMod, bool IsDlc) ClassifyRoot(DirectoryInfo dir)
+    {
+        var name = dir.Name;
+        var parent = dir.Parent?.Name ?? "";
+
+        if (name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase))
+            return (false, true);
+        if (name.StartsWith("mod", StringComparison.OrdinalIgnoreCase))
+            return (true, false);
+        if (parent.Equals("dlc", StringComparison.OrdinalIgnoreCase))
+            return (false, true);
+        if (parent.Equals("mods", StringComparison.OrdinalIgnoreCase))
+            return (true, false);
+        return (false, false);
+    }
+
+    private static bool IsCandidateDir(DirectoryInfo d)
+    {
+        var (isMod, isDlc) = ClassifyRoot(d);
+        if (!isMod && !isDlc) return false;
+        // A component root must contain a recognized capability marker (content/metadata/scripts).
+        return d.GetDirectories("content", SearchOption.TopDirectoryOnly).Length > 0 ||
+               d.GetDirectories("metadata", SearchOption.TopDirectoryOnly).Length > 0 ||
+               d.GetDirectories("scripts", SearchOption.TopDirectoryOnly).Length > 0;
+    }
+
+    /// <summary>
     /// Scan phase (read-only). Build ModCandidate objects grouping each mod/dlc root
     /// with any nested folders of the opposite type. Same-type nesting is deduplicated.
     /// Does NOT modify the file system.
@@ -296,11 +328,7 @@ public class ModImportService
     {
         var allDirs = new DirectoryInfo(extractDir).GetDirectories("*", SearchOption.AllDirectories);
 
-        var allCandidates = allDirs.Where(d =>
-            (d.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase) ||
-             d.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase)) &&
-            d.GetDirectories("content", SearchOption.TopDirectoryOnly).Length > 0
-        ).ToList();
+        var allCandidates = allDirs.Where(IsCandidateDir).ToList();
 
         var result = new List<ModCandidate>();
         var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -317,8 +345,7 @@ public class ModImportService
             bool isDedup = false;
             foreach (var mc in result)
             {
-                bool sameType = cand.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
-                    == mc.Root.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase);
+                bool sameType = ClassifyRoot(cand).IsMod == ClassifyRoot(mc.Root).IsMod;
                 if (sameType && cand.FullName.StartsWith(
                     mc.Root.FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 {
@@ -338,11 +365,10 @@ public class ModImportService
                 if (!inner.FullName.StartsWith(
                     cand.FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
 
-                bool sameType = inner.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase)
-                    == cand.Name.StartsWith("mod", StringComparison.OrdinalIgnoreCase);
+                bool sameType = ClassifyRoot(inner).IsMod == ClassifyRoot(cand).IsMod;
                 if (sameType) continue; // same-type handled by dedup above
 
-                if (inner.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase))
+                if (ClassifyRoot(inner).IsDlc)
                     mcNew.AttachedDlcs.Add(inner);
                 else
                     mcNew.AttachedMods.Add(inner);
@@ -365,7 +391,7 @@ public class ModImportService
 #endif
 
         return result
-            .OrderBy(mc => mc.Root.Name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .OrderBy(mc => ClassifyRoot(mc.Root).IsDlc ? 1 : 0)
             .ThenBy(mc => mc.Root.Name)
             .ToList();
     }
