@@ -9,7 +9,6 @@ public class Witcher3Service
 {
     private readonly SettingsService _settings; private readonly ModStorageService? _storage;
     private string? _gamePath;
-    private string? _modsSettingsPath;
     private bool _isLaunching;
 
     public Witcher3Service(SettingsService settings, ModStorageService? storage = null)
@@ -77,11 +76,13 @@ public class Witcher3Service
 
     public string? GetModsSettingsPath()
     {
-        if (_modsSettingsPath != null) return _modsSettingsPath;
+        return ComputeModsSettingsPath();
+    }
+
+    private string? ComputeModsSettingsPath()
+    {
         var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        var path = Path.Combine(docs, "The Witcher 3", "mods.settings");
-        _modsSettingsPath = File.Exists(path) ? path : null;
-        return _modsSettingsPath;
+        return Path.Combine(docs, "The Witcher 3", "mods.settings");
     }
 
     public string GetGameModsPath()
@@ -314,13 +315,36 @@ public class Witcher3Service
     {
         try
         {
-            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            var dir = Path.Combine(docs, "The Witcher 3");
-            Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, "mods.settings");
+            var path = ComputeModsSettingsPath();
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            // Preserve unknown entries (comments, blank lines, unmanaged/foreign mod rows).
+            // We only update the keys listed in `mods`; everything else stays byte-for-byte.
+            var managedKeys = new HashSet<string>(mods.Select(m => m.ModName), StringComparer.OrdinalIgnoreCase);
+            var preserved = new List<string>();
+            if (File.Exists(path))
+            {
+                foreach (var line in File.ReadAllLines(path))
+                {
+                    var match = Regex.Match(line, @"^\s*""([^""]+)""\s*=\s*(\d+)\s*$");
+                    if (match.Success && managedKeys.Contains(match.Groups[1].Value))
+                        continue; // drop old managed rows, we re-emit below
+                    preserved.Add(line);
+                }
+            }
+
             var sorted = mods.OrderBy(m => m.Priority).ToList();
-            var lines = sorted.Select(m => $@"""{m.ModName}"" = {m.Priority}");
-            File.WriteAllLines(path, lines);
+            var managedLines = sorted.Select(m => $@"""{m.ModName}"" = {m.Priority}");
+            var allLines = preserved.Concat(managedLines).ToList();
+
+            // Atomic write: temp file on same volume, then replace.
+            var tmp = path + ".tmp";
+            File.WriteAllLines(tmp, allLines);
+            if (File.Exists(path))
+                File.Replace(tmp, path!, null, true);
+            else
+                File.Move(tmp, path!);
         }
         catch { }
     }
