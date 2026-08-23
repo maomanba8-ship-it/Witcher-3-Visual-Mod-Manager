@@ -500,7 +500,15 @@ public partial class ModListPage : UserControl
         if (sender is CheckBox chk && chk.Tag is ModEntry mod)
         {
             if (_w3 != null && _w3.GetGamePath() != null)
-                _w3.DisableMod(mod);
+            {
+                var success = _w3.DisableMod(mod);
+                if (!success)
+                {
+                    MessageBox.Show(TranslationService.Instance.T("mods.disable_failed") + "： " + mod.Name, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    chk.IsChecked = true;
+                    return;
+                }
+            }
             mod.IsEnabled = false;
             _conflict?.InvalidateCache();
             _storage?.UpdateMod(mod);
