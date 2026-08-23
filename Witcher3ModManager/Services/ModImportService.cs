@@ -118,6 +118,17 @@ public class ModImportService
             // Merge all mod + dlc roots into a single ModEntry (package grouping)
             if (modRoots.Count > 0 || dlcRoots.Count > 0)
             {
+                // Pre-discussion: detect duplicate planned storage names BEFORE any move/delete.
+                // Cancel cleans temp and reports cancelled; confirm allows overwrite of listed targets only.
+                var plannedNames = CollectPlannedStorageNames(modRoots, dlcRoots, allAttachedDlcs, allAttachedMods);
+                var duplicateNames = FindExistingPlannedNames(plannedNames);
+                if (!ResolveDuplicateTargetsBeforeWrite(duplicateNames, tempExtractDir, out var cancelErr))
+                {
+                    errorCode = cancelErr;
+                    progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                    return (new List<ModEntry>(), errorCode);
+                }
+
                 var primary = modRoots.Count > 0 ? modRoots[0] : dlcRoots[0];
                 var entry = await BuildModEntry(primary.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
                 if (entry != null)
@@ -815,5 +826,75 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             var dest = Path.Combine(targetDir, Path.GetFileName(dir));
             CopyDirectoryRecursive(dir, dest);
         }
+    }
+
+    /// <summary>
+    /// Collect the storage directory names this import plans to write into (mod roots,
+    /// dlc roots, attached dlc/mod fetches). Used to detect duplicates before any move/delete.
+    /// </summary>
+    private List<string> CollectPlannedStorageNames(
+        IReadOnlyList<DirectoryInfo> modRoots,
+        IReadOnlyList<DirectoryInfo> dlcRoots,
+        IReadOnlyList<DirectoryInfo> attachedDlcs,
+        IReadOnlyList<DirectoryInfo> attachedMods)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mr in modRoots) names.Add(mr.Name);
+        foreach (var dr in dlcRoots) names.Add(dr.Name);
+        foreach (var ad in attachedDlcs) names.Add(ad.Name);
+        foreach (var am in attachedMods) names.Add(am.Name);
+        return names.ToList();
+    }
+
+    /// <summary>
+    /// Returns the subset of planned storage names that already exist either as a physical
+    /// directory under storage, or as a name already referenced by a stored mod/dlc entry.
+    /// </summary>
+    private List<string> FindExistingPlannedNames(List<string> plannedNames)
+    {
+        var existing = new List<string>();
+        var modsDir = _storage.GetModsDirectory();
+        var records = _storage.GetAllMods();
+
+        foreach (var name in plannedNames)
+        {
+            bool physical = Directory.Exists(Path.Combine(modsDir, name));
+            bool referenced = records.Any(r =>
+                (r.GameModFolders != null && r.GameModFolders.Contains(name, StringComparer.OrdinalIgnoreCase)) ||
+                (r.GameDlcFolders != null && r.GameDlcFolders.Contains(name, StringComparer.OrdinalIgnoreCase)) ||
+                string.Equals(r.GameModFolderName, name, StringComparison.OrdinalIgnoreCase));
+
+            if (physical || referenced) existing.Add(name);
+        }
+        return existing.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Pre-discussion guard: if any planned storage name already exists, ask the user once.
+    /// Returns true when it is safe to proceed (user confirmed overwrite, or no conflicts).
+    /// On cancel it cleans the temp dir and reports the caller.
+    /// </summary>
+    private bool ResolveDuplicateTargetsBeforeWrite(
+        List<string> duplicateNames,
+        string tempExtractDir,
+        out string? cancelReason)
+    {
+        cancelReason = null;
+        if (duplicateNames.Count == 0) return true;
+
+        var overwrite = Application.Current.Dispatcher.Invoke(() =>
+            MessageBox.Show(
+                string.Format(TranslationService.Instance.T("import.overwrite_msg"), string.Join(", ", duplicateNames)),
+                TranslationService.Instance.T("import.overwrite_title"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) == MessageBoxResult.Yes);
+
+        if (!overwrite)
+        {
+            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+            cancelReason = "cancelled";
+            return false;
+        }
+        return true;
     }
 }

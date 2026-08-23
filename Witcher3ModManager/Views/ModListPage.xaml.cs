@@ -317,6 +317,8 @@ public partial class ModListPage : UserControl
             }
             else if (importError != null)
             {
+                if (importError == "cancelled")
+                    return; // user intentionally cancelled; no error dialog
                 var msg = importError switch
                 {
                     "7z_not_found" => TranslationService.Instance.T("import.error.7z_not_found"),
