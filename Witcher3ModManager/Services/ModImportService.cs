@@ -14,7 +14,7 @@ public class ModImportService
 {
     private readonly ModStorageService _storage;
     private readonly SettingsService _settings;
-    private readonly string _sevenZipPath;
+    private string _sevenZipPath;
 
     private static readonly string[] SevenZipCandidates =
     {
@@ -59,6 +59,9 @@ public class ModImportService
     {
         if (!File.Exists(archivePath))
             throw new FileNotFoundException("Archive not found", archivePath);
+
+        // Always re-resolve 7-Zip so a changed setting or bundled path is used without restart.
+        RefreshSevenZipPath();
 
         var archiveName = Path.GetFileNameWithoutExtension(archivePath);
         progress?.Report(string.Format(TranslationService.Instance.T("import.progress.extracting"), Path.GetFileName(archivePath)));
@@ -675,12 +678,16 @@ private static string DeepFlatten(string sourceDir, string targetDir)
 
     private string Find7Zip()
     {
-        // 1. Use user-configured path from settings
+        // 1. User-configured path (if still valid).
         var configured = _settings.Current.SevenZipPath;
         if (!string.IsNullOrEmpty(configured) && File.Exists(configured))
             return configured;
 
-        // 2. Search system PATH
+        // 2. Bundled 7-Zip next to the executable (matches Inno Setup layout).
+        var bundled = Path.Combine(AppContext.BaseDirectory, "7zip", "7z.exe");
+        if (File.Exists(bundled)) return bundled;
+
+        // 3. Search system PATH.
         try
         {
             var psi = new ProcessStartInfo
@@ -707,12 +714,21 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         }
         catch { }
 
-        // 3. Fallback: hardcoded candidates
+        // 4. Common install locations.
         foreach (var candidate in SevenZipCandidates)
             if (File.Exists(candidate)) return candidate;
 
-        // 4. Nothing found
+        // 5. Nothing found.
         return "";
+    }
+
+    /// <summary>
+    /// Re-resolve the 7-Zip path on each extraction, so a changed setting or a newly
+    /// added bundled path is picked up without restarting the app.
+    /// </summary>
+    private void RefreshSevenZipPath()
+    {
+        _sevenZipPath = Find7Zip();
     }
 
     public bool IsSevenZipAvailable() => File.Exists(_sevenZipPath);
