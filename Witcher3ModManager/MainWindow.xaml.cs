@@ -43,8 +43,10 @@ public partial class MainWindow : Window
         try
         {
             _storage = new ModStorageService();
-            _storage.MigrateGroupedEntries();
-            _storage.DeduplicateByGameFolderName();
+            foreach (var warning in _storage.GetLegacyDataWarnings())
+            {
+                System.Diagnostics.Debug.WriteLine("[W3MM] 数据警告: " + warning);
+            }
             _settings = new SettingsService();
             _importer = new ModImportService(_storage, _settings);
             _w3 = new Witcher3Service(_settings, _storage);

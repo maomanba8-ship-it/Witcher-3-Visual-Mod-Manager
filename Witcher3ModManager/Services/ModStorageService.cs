@@ -40,6 +40,36 @@ public class ModStorageService
     public ModEntry? GetMod(string id) => _mods.FirstOrDefault(m => m.Id == id);
 
     /// <summary>
+    /// Read-only legacy data check. Returns warnings about data that would normally be
+    /// migrated/deduplicated, but does NOT modify the in-memory list and never calls Save().
+    /// Caller should surface these as a non-blocking notice or log.
+    /// </summary>
+    public List<string> GetLegacyDataWarnings()
+    {
+        var warnings = new List<string>();
+
+        var dupGroups = _mods
+            .Where(m => !string.IsNullOrEmpty(m.GameModFolderName))
+            .GroupBy(m => m.GameModFolderName!)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (dupGroups.Count > 0)
+            warnings.Add($"发现 {dupGroups.Count} 组重复的模组目录，建议手动去重（未自动处理）。");
+
+        var grouped = _mods
+            .Where(m => !string.IsNullOrEmpty(m.GroupId))
+            .GroupBy(m => m.GroupId!)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (grouped.Count > 0)
+            warnings.Add($"发现 {grouped.Count} 组旧版分组数据，建议手动迁移（未自动处理）。");
+
+        return warnings;
+    }
+
+    /// <summary>
     /// Migrate old multi-entry GroupId data to single-entry HasDlcComponent format.
     /// </summary>
     public void MigrateGroupedEntries()
