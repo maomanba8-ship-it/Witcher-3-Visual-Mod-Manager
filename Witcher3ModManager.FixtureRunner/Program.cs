@@ -38,8 +38,27 @@ internal static class Program
                 .ToList();
 
             var ok = expList.SequenceEqual(actualList);
+            var decisionActual = string.Join("\n", actual.RequiresUserDecision);
+            var warningActual = string.Join("\n", actual.Warnings);
+            foreach (var line in File.ReadAllLines(expectedPath))
+            {
+                var t2 = line.Trim();
+                if (t2.StartsWith("Decision:", StringComparison.Ordinal))
+                {
+                    var sub = t2["Decision:".Length..].Trim();
+                    if (sub.Length > 0 && !decisionActual.Contains(sub, StringComparison.OrdinalIgnoreCase)) ok = false;
+                }
+                else if (t2.StartsWith("Warning:", StringComparison.Ordinal))
+                {
+                    var sub = t2["Warning:".Length..].Trim();
+                    if (sub.Length > 0 && !warningActual.Contains(sub, StringComparison.OrdinalIgnoreCase)) ok = false;
+                }
+            }
             var rej = actual.RejectReason == null ? "" : " reject=" + actual.RejectReason;
-            Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {name}: expected=[{string.Join(", ", expList)}] actual=[{string.Join(", ", actualList)}]{rej}");
+            var extra = actual.RequiresUserDecision.Count > 0 || actual.Warnings.Count > 0
+                ? $" decisions=[{string.Join(";", actual.RequiresUserDecision)}] warnings=[{string.Join(";", actual.Warnings)}]"
+                : "";
+            Console.WriteLine($"{(ok ? "PASS" : "FAIL")} {name}: expected=[{string.Join(", ", expList)}] actual=[{string.Join(", ", actualList)}]{rej}{extra}");
             if (!ok) failure++;
         }
 
@@ -83,7 +102,9 @@ internal static class Program
         foreach (var line in lines)
         {
             var t = line.Trim();
-            if (t.StartsWith("- ", StringComparison.Ordinal)) t = t[2..].Trim();
+            // Only component lines use "- Kind: Name"; Decision:/Warning: are metadata, not components.
+            if (!t.StartsWith("- ", StringComparison.Ordinal)) continue;
+            t = t[2..].Trim();
             var idx = t.IndexOf(':');
             if (idx < 0) continue;
             var kind = t[..idx].Trim();

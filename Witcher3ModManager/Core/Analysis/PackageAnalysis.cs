@@ -117,6 +117,15 @@ public static class PackageAnalyzer
 
             if (kind != ComponentKind.Unsupported)
             {
+                // A component identified only by capability markers (no standard name and no
+                // recognized container parent) is non-standard: surface it for user confirmation.
+                var hasNameOrContainer = nameMod || nameDlc || parentIsDlc || parentIsMods;
+                if (!hasNameOrContainer)
+                {
+                    warnings.Add($"component '{name}' detected only by mod/dlc markers");
+                    decisions.Add($"confirm target for component '{name}' (mod/dlc markers present but no standard name/container)");
+                }
+
                 var evidence = new List<string>();
                 if (nameMod) evidence.Add("name starts with mod");
                 if (nameDlc) evidence.Add("name starts with dlc");

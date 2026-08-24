@@ -1,0 +1,4 @@
+Expected components:
+- Mod: Foo
+Decision: confirm target for component 'Foo' (mod/dlc markers present but no standard name/container)
+Warning: component 'Foo' detected only by mod/dlc markers
