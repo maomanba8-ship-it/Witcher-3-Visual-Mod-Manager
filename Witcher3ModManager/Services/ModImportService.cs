@@ -83,6 +83,10 @@ public class ModImportService
         var results = new List<ModEntry>();
         string? errorCode = null;
 
+        // Names the user confirmed to overwrite during pre-flight. Used to avoid a
+        // second duplicate prompt when committing entries (same final storage name).
+        var confirmedOverwriteNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         // Step 0: Detect bundle-patching mods (quickbms + .bms)
         if (IsBundlePatchMod(tempExtractDir))
         {
@@ -130,7 +134,7 @@ public class ModImportService
                 // Cancel cleans temp and reports cancelled; confirm allows overwrite of listed targets only.
                 var plannedNames = CollectPlannedStorageNames(modRoots, dlcRoots, allAttachedDlcs, allAttachedMods);
                 var duplicateNames = FindExistingPlannedNames(plannedNames);
-                if (!ResolveDuplicateTargetsBeforeWrite(duplicateNames, tempExtractDir, out var cancelErr))
+                if (!ResolveDuplicateTargetsBeforeWrite(duplicateNames, tempExtractDir, confirmedOverwriteNames, out var cancelErr))
                 {
                     errorCode = cancelErr;
                     progress?.Report(TranslationService.Instance.T("import.cancelled"));
@@ -138,7 +142,8 @@ public class ModImportService
                 }
 
                 var primary = modRoots.Count > 0 ? modRoots[0] : dlcRoots[0];
-                var entry = await BuildModEntry(primary.FullName, ModType.Mod, groupId, archivePath, archiveName, progress);
+                var primaryType = ClassifyRoot(primary).IsDlc ? ModType.Dlc : ModType.Mod;
+                var entry = await BuildModEntry(primary.FullName, primaryType, groupId, archivePath, archiveName, progress, Path.GetFileName(primary.FullName));
                 if (entry != null)
                 {
                     entry.GameModFolders.Clear();
@@ -229,8 +234,20 @@ public class ModImportService
                     var modType = Application.Current.Dispatcher.Invoke(() => AskModOrDlc(archiveName));
                     if (modType != null)
                     {
+                        // Fallback path bypasses the candidate planner, but must still
+                        // apply the same final-storage-name conflict gate before writing.
+                        var targetName = EnsureModPrefix(Path.GetFileName(root), modType.Value);
+                        var fbDuplicates = FindExistingPlannedNames(new List<string> { targetName });
+                        if (!ResolveDuplicateTargetsBeforeWrite(fbDuplicates, tempExtractDir, confirmedOverwriteNames, out var fbCancel))
+                        {
+                            errorCode = fbCancel;
+                            progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                            return (new List<ModEntry>(), errorCode);
+                        }
+
                         var entry = await BuildModEntry(root, modType.Value, groupId, archivePath, archiveName, progress);
-                        if (entry != null) results.Add(entry);
+                        if (entry != null)
+                            results.Add(entry);
                     }
                 }
                 else
@@ -252,7 +269,15 @@ public class ModImportService
 #endif
             if (_storage.AddMod(entry)) continue;
 
-            // Duplicate — ask user
+            // A duplicate key can only happen for a target already confirmed in
+            // pre-flight (same final storage name). Replace silently — no second dialog.
+            if (confirmedOverwriteNames.Contains(entry.GameModFolderName!))
+            {
+                _storage.AddOrReplaceMod(entry);
+                continue;
+            }
+
+            // Safety-net fallback for unanticipated duplicates.
             var overwrite = Application.Current.Dispatcher.Invoke(() =>
                 MessageBox.Show(
                     string.Format(TranslationService.Instance.T("import.duplicate_msg"), entry.Name),
@@ -397,19 +422,22 @@ public class ModImportService
     }
 
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
-        string archivePath, string archiveName, IProgress<string>? progress)
+        string archivePath, string archiveName, IProgress<string>? progress, string? canonicalName = null)
     {
         progress?.Report(string.Format(TranslationService.Instance.T("import.progress.analyzing"), Path.GetFileName(modRoot)));
 
         var originalName = Path.GetFileName(modRoot);
-        var gameFolderName = EnsureModPrefix(originalName, modType);
+        // Canonical deploy name: candidate-path roots are already container-typed (raw name is
+        // the storage name); only the fallback bare-folder path prefixes here. One name is used
+        // by planning, move and registration so record identity matches physical storage.
+        var gameFolderName = canonicalName ?? EnsureModPrefix(originalName, modType);
 
         var finalModDir = Path.Combine(_storage.GetModsDirectory(), gameFolderName);
+
+        // Overwrite semantics: duplicate targets are confirmed before this point,
+        // so a still-existing directory is a confirmed overwrite target — clear it first.
         if (Directory.Exists(finalModDir))
-        {
-            gameFolderName = gameFolderName + "_" + DateTime.Now.ToString("yyyyMMddHHmmss");
-            finalModDir = Path.Combine(_storage.GetModsDirectory(), gameFolderName);
-        }
+            Directory.Delete(finalModDir, true);
 
         await Task.Run(() => MoveDirectory(modRoot, finalModDir));
 
@@ -417,7 +445,7 @@ public class ModImportService
         var category = DetectCategory(finalModDir, archiveName, modInfo);
         var screenshot = FindScreenshot(finalModDir, modInfo);
 
-        return new ModEntry
+        var buildEntry = new ModEntry
         {
             Name = modInfo.TryGetValue("name", out var n) ? n : originalName,
             Author = modInfo.GetValueOrDefault("author", ""),
@@ -429,12 +457,20 @@ public class ModImportService
             ScreenshotPath = screenshot ?? "",
             SourceArchive = archivePath,
             InstalledPath = finalModDir,
-            GameModFolderName = gameFolderName,
             GroupId = groupId,
             ImportDate = DateTime.Now,
             IsEnabled = false,
             ModType = modType
         };
+
+        // Authoritative deployment folder registration: a component goes to exactly one
+        // bucket (mods/* for Mod, dlc/* for Dlc) so Enable/Disable/Delete never mix them.
+        if (modType == ModType.Dlc)
+            buildEntry.GameDlcFolderName = gameFolderName;
+        else
+            buildEntry.GameModFolderName = gameFolderName;
+
+        return buildEntry;
     }
 
     private static ModType? AskModOrDlc(string archiveName)
@@ -886,7 +922,11 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         IReadOnlyList<DirectoryInfo> attachedMods)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var mr in modRoots) names.Add(mr.Name);
+        // Candidate-path components are already container-typed; their raw root name is the
+        // canonical storage name (matches BuildModEntry canonicalName). Bare "Foo -> modFoo"
+        // is handled by the fallback path, which prefixes explicitly.
+        for (int i = 0; i < modRoots.Count; i++)
+            names.Add(modRoots[i].Name);
         foreach (var dr in dlcRoots) names.Add(dr.Name);
         foreach (var ad in attachedDlcs) names.Add(ad.Name);
         foreach (var am in attachedMods) names.Add(am.Name);
@@ -924,6 +964,7 @@ private static string DeepFlatten(string sourceDir, string targetDir)
     private bool ResolveDuplicateTargetsBeforeWrite(
         List<string> duplicateNames,
         string tempExtractDir,
+        HashSet<string> confirmedOverwriteNames,
         out string? cancelReason)
     {
         cancelReason = null;
@@ -941,6 +982,16 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
             cancelReason = "cancelled";
             return false;
+        }
+
+        // Overwrite confirmed once: remove existing physical targets so downstream
+        // deployment reuses the canonical name (no timestamp suffix), and record the
+        // names so the DB write can replace silently without a second prompt.
+        foreach (var name in duplicateNames)
+        {
+            var dir = Path.Combine(_storage.GetModsDirectory(), name);
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+            confirmedOverwriteNames.Add(name);
         }
         return true;
     }

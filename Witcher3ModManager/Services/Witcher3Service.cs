@@ -105,7 +105,7 @@ public class Witcher3Service
         try
         {
             var gameModsPath = GetGameModsPath();
-            var storageDir = System.IO.Path.GetDirectoryName(mod.InstalledPath) ?? "";
+            var storageDir = _storage?.GetModsDirectory() ?? System.IO.Path.GetDirectoryName(mod.InstalledPath) ?? "";
 
             // Enable each mod folder
             foreach (var folder in mod.GameModFolders)
@@ -228,17 +228,29 @@ public class Witcher3Service
     {
         try
         {
-            var deleted = false;
+            var failed = false;
             var gameModsPath = GetGameModsPath();
-            var storageDir = Path.GetDirectoryName(mod.InstalledPath) ?? "";
+            var storageDir = _storage?.GetModsDirectory() ?? Path.GetDirectoryName(mod.InstalledPath) ?? "";
+
+            // Recovery for records created before folder-list plumbing: when neither
+            // deployment list exists, derive it from the canonical GameModFolderName so
+            // Delete can clean legacy entries (structural rule, not a per-mod case).
+            if (mod.GameModFolders.Count == 0 && mod.GameDlcFolders.Count == 0
+                && !string.IsNullOrEmpty(mod.GameModFolderName))
+            {
+                if (mod.ModType == ModType.Dlc)
+                    mod.GameDlcFolders.Add(mod.GameModFolderName);
+                else
+                    mod.GameModFolders.Add(mod.GameModFolderName);
+            }
 
             // Delete all mod folders from game mods dir
             foreach (var folder in mod.GameModFolders)
             {
                 var enabledPath = Path.Combine(gameModsPath, folder);
                 var disabledPath = Path.Combine(gameModsPath, "~" + folder);
-                if (Directory.Exists(enabledPath)) { Directory.Delete(enabledPath, true); deleted = true; }
-                if (Directory.Exists(disabledPath)) { Directory.Delete(disabledPath, true); deleted = true; }
+                DeleteIfExists(enabledPath, ref failed);
+                DeleteIfExists(disabledPath, ref failed);
             }
 
             // Delete all DLC folders from game dlc dir
@@ -249,30 +261,20 @@ public class Witcher3Service
                 {
                     var dlcEnabled = Path.Combine(gameDlcPath, dlcFolder);
                     var dlcDisabled = Path.Combine(gameDlcPath, "~" + dlcFolder);
-                    try { if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true); } catch { }
-                    try { if (Directory.Exists(dlcDisabled)) Directory.Delete(dlcDisabled, true); } catch { }
+                    DeleteIfExists(dlcEnabled, ref failed);
+                    DeleteIfExists(dlcDisabled, ref failed);
                 }
             }
 
             // Delete storage folders
             foreach (var folder in mod.GameModFolders)
-            {
-                var storagePath = Path.Combine(storageDir, folder);
-                try { if (Directory.Exists(storagePath)) Directory.Delete(storagePath, true); } catch { }
-            }
+                DeleteIfExists(Path.Combine(storageDir, folder), ref failed);
             foreach (var dlcFolder in mod.GameDlcFolders)
-            {
-                var storagePath = Path.Combine(storageDir, dlcFolder);
-                try { if (Directory.Exists(storagePath)) Directory.Delete(storagePath, true); } catch { }
-            }
+                DeleteIfExists(Path.Combine(storageDir, dlcFolder), ref failed);
 
             // Delete primary installed path
-            try
-            {
-                if (!string.IsNullOrEmpty(mod.InstalledPath) && Directory.Exists(mod.InstalledPath))
-                { Directory.Delete(mod.InstalledPath, true); deleted = true; }
-            }
-            catch { }
+            if (!string.IsNullOrEmpty(mod.InstalledPath))
+                DeleteIfExists(mod.InstalledPath, ref failed);
 
             // Update mods.settings
             try
@@ -287,10 +289,23 @@ public class Witcher3Service
             // Delete bin files
             DeleteBinFiles(mod);
 
-            return deleted;
+            // A record with nothing left on disk is still successfully removed; only a
+            // real deletion failure (path exists but could not be deleted) means stale.
+            return !failed;
         }
         catch { return false; }
     }
+
+    private static void DeleteIfExists(string path, ref bool failed)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, true);
+        }
+        catch { failed = true; }
+    }
+
 
 
     public List<(string ModName, int Priority)> GetEnabledModsFromSettings()

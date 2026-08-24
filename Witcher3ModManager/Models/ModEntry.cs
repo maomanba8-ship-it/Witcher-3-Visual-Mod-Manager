@@ -33,7 +33,8 @@ public class ModEntry
     [JsonIgnore]
     public string? GameModFolderName
     {
-        get => GameModFolders.Count > 0 ? GameModFolders[0] : null;
+        get => GameModFolders.Count > 0 ? GameModFolders[0]
+            : (GameDlcFolders.Count > 0 ? GameDlcFolders[0] : null);
         set { GameModFolders.Clear(); if (value != null) GameModFolders.Add(value); }
     }
 
