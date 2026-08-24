@@ -326,6 +326,22 @@ public class Witcher3Service
         catch { }
         return result;
     }
+
+    private HashSet<string> GetManagedFolderKeys()
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (_storage == null) return keys;
+        foreach (var m in _storage.GetAllMods())
+        {
+            foreach (var f in m.GameModFolders)
+                if (!string.IsNullOrEmpty(f)) keys.Add(f);
+            foreach (var f in m.GameDlcFolders)
+                if (!string.IsNullOrEmpty(f)) keys.Add(f);
+            if (!string.IsNullOrEmpty(m.GameModFolderName))
+                keys.Add(m.GameModFolderName);
+        }
+        return keys;
+    }
     public void WriteModsSettings(List<(string ModName, int Priority)> mods)
     {
         try
@@ -334,22 +350,29 @@ public class Witcher3Service
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-            // Preserve unknown entries (comments, blank lines, unmanaged/foreign mod rows).
-            // We only update the keys listed in `mods`; everything else stays byte-for-byte.
-            var managedKeys = new HashSet<string>(mods.Select(m => m.ModName), StringComparer.OrdinalIgnoreCase);
+            // Only keys this manager owns (registered by a stored ModEntry) may be added,
+            // updated or removed. Foreign parseable rows, comments, blanks and unknown
+            // sections are preserved byte-for-byte and never re-sorted or re-written.
+            var owned = _storage != null
+                ? GetManagedFolderKeys()
+                : new HashSet<string>(mods.Select(m => m.ModName), StringComparer.OrdinalIgnoreCase);
+            var desired = mods.Where(m => owned.Contains(m.ModName)).ToList();
+
             var preserved = new List<string>();
             if (File.Exists(path))
             {
                 foreach (var line in File.ReadAllLines(path))
                 {
                     var match = Regex.Match(line, @"^\s*""([^""]+)""\s*=\s*(\d+)\s*$");
-                    if (match.Success && managedKeys.Contains(match.Groups[1].Value))
-                        continue; // drop old managed rows, we re-emit below
+                    // Drop an existing line only if it is one of OUR owned keys; the desired
+                    // list decides which of those survive (stale/disabled owned rows vanish).
+                    if (match.Success && owned.Contains(match.Groups[1].Value))
+                        continue;
                     preserved.Add(line);
                 }
             }
 
-            var sorted = mods.OrderBy(m => m.Priority).ToList();
+            var sorted = desired.OrderBy(m => m.Priority).ToList();
             var managedLines = sorted.Select(m => $@"""{m.ModName}"" = {m.Priority}");
             var allLines = preserved.Concat(managedLines).ToList();
 
