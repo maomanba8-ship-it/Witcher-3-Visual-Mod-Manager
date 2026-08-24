@@ -71,8 +71,11 @@ public static class ConflictAnalyzer
         var results = new List<ConflictEvidence>();
         foreach (var group in grouped)
         {
-            var distinct = group.ToList();
-            if (distinct.Count <= 1) continue; // no conflict
+            var distinct = group
+                .GroupBy(f => f.ComponentIdentity, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+            if (distinct.Count <= 1) continue; // a single component is not a conflict
 
             var identities = distinct.Select(f => f.ComponentIdentity).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var displayNames = distinct.Select(f => f.ComponentIdentity).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
