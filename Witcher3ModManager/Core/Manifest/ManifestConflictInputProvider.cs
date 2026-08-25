@@ -21,15 +21,51 @@ public static class ManifestConflictInputProvider
             return Array.Empty<ComponentFile>();
 
         var files = new List<ComponentFile>();
+        var claimedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var claim in claims)
         {
             if (string.IsNullOrWhiteSpace(claim.Folder)) continue;
-            var root = Path.Combine(storageModsDir, claim.Folder);
-            if (!Directory.Exists(root)) continue;
+            var root = ResolveStorageFolder(storageModsDir, claim.Folder, claim.Domain);
+            if (root is null) continue;
+
+            // A single component may list both a mod and a dlc claim that collapse onto the
+            // same physical storage folder (legacy records). Attribute it once so the same
+            // files are not double-counted under two domains for one component.
+            var dedupeKey = claim.ComponentId + "\u0001" + root;
+            if (!claimedFolders.Add(dedupeKey)) continue;
 
             var manifest = ManifestBuilder.Build(root, claim.ComponentId, claim.Domain);
             files.AddRange(manifest.Files);
         }
         return files;
+    }
+
+    /// <summary>
+    /// Resolve a claimed component folder to a folder that actually exists under the
+    /// storage root. The record stores the canonical deploy name (e.g. modFoo), but legacy
+    /// storage may keep the raw package folder name (e.g. Foo). We try the exact name, then
+    /// the deploy prefix stripped/added for the claim's domain. Pure name rule only - never a
+    /// per-mod special case. Returns null when no variant exists.
+    /// </summary>
+    private static string? ResolveStorageFolder(string storageModsDir, string folder, TargetDomain domain)
+    {
+        var exact = Path.Combine(storageModsDir, folder);
+        if (Directory.Exists(exact)) return exact;
+
+        var prefix = domain == TargetDomain.Dlc ? "dlc" : "mod";
+
+        if (folder.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var stripped = Path.Combine(storageModsDir, folder[prefix.Length..]);
+            if (Directory.Exists(stripped)) return stripped;
+        }
+
+        if (!folder.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var prefixed = Path.Combine(storageModsDir, prefix + folder);
+            if (Directory.Exists(prefixed)) return prefixed;
+        }
+
+        return null;
     }
 }

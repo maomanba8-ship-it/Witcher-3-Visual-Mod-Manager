@@ -79,4 +79,57 @@ public class ManifestConflictInputProviderTests
         Assert.Empty(ManifestConflictInputProvider.Build(null!, claims));
         Assert.Empty(ManifestConflictInputProvider.Build(@"C:\does-not-exist", null!));
     }
+
+    [Fact]
+    public void Build_resolves_legacy_unprefixed_storage_folder()
+    {
+        var storage = Path.Combine(Path.GetTempPath(), "w3mm_provider_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(storage, "EnableJumpInWater", "content", "scripts"));
+            File.WriteAllText(Path.Combine(storage, "EnableJumpInWater", "content", "scripts", "r4Player.ws"), "SCRIPT");
+
+            var claims = new FolderClaim[]
+            {
+                new("modId1", TargetDomain.Mods, "modEnableJumpInWater"),
+            };
+
+            var files = ManifestConflictInputProvider.Build(storage, claims);
+
+            var f = Assert.Single(files);
+            Assert.Equal("modId1", f.ComponentIdentity);
+            Assert.Equal("content/scripts/r4player.ws", f.NormalizedRelativePath);
+            Assert.Equal(TargetDomain.Mods, f.Domain);
+        }
+        finally
+        {
+            if (Directory.Exists(storage)) Directory.Delete(storage, true);
+        }
+    }
+
+    [Fact]
+    public void Build_does_not_double_claim_same_folder_for_mod_and_dlc()
+    {
+        var storage = Path.Combine(Path.GetTempPath(), "w3mm_provider_" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(storage, "DhusRoach", "content"));
+            File.WriteAllText(Path.Combine(storage, "DhusRoach", "content", "a.txt"), "A");
+
+            var claims = new FolderClaim[]
+            {
+                new("modId1", TargetDomain.Mods, "modDhusRoach"),
+                new("modId1", TargetDomain.Dlc, "dlcDhusRoach"),
+            };
+
+            var files = ManifestConflictInputProvider.Build(storage, claims);
+
+            Assert.Single(files); // same physical folder attributed once per component
+            Assert.Equal(TargetDomain.Mods, files[0].Domain);
+        }
+        finally
+        {
+            if (Directory.Exists(storage)) Directory.Delete(storage, true);
+        }
+    }
 }
