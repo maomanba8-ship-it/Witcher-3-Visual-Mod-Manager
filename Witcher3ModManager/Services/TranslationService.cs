@@ -159,6 +159,9 @@ public class TranslationService
 
                 ["mods.conflict_check"] = "冲突检测",
                 ["mods.author"] = "作者",
+                ["mods.shared_by"] = "🔗 共享资源",
+                ["mods.shared_by_who"] = "被 {0} 引用",
+                ["mods.shared_uses"] = "🔗 使用共享资源: {0}",
                 ["mods.version"] = "版本",
                 ["mods.category"] = "分类",
                 ["mods.no_description"] = "暂无描述",
@@ -426,6 +429,9 @@ public class TranslationService
 
                 ["mods.conflict_check"] = "Conflict Check",
                 ["mods.author"] = "Author",
+                ["mods.shared_by"] = "🔗 Shared Resource",
+                ["mods.shared_by_who"] = "Referenced by {0}",
+                ["mods.shared_uses"] = "🔗 Uses shared resource: {0}",
                 ["mods.version"] = "Version",
                 ["mods.category"] = "Category",
                 ["mods.no_description"] = "No description",

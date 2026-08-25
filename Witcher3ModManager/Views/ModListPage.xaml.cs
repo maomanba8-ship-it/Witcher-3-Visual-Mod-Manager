@@ -91,9 +91,10 @@ public partial class ModListPage : UserControl
             : _allMods.Where(m => m.Category == _selectedCategory.Type).ToList();
 
         // Build UI cards in code (NO BAML!)
+        var sharedResources = _conflict?.GetSharedResources() ?? new List<(string Folder, List<string> Mods)>();
         var panel = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var mod in filtered)
-            panel.Children.Add(CreateModCard(mod));
+            panel.Children.Add(CreateModCard(mod, sharedResources));
 
         ModItemsControl.ItemsSource = null;
         ModItemsControl.Items.Clear();
@@ -103,7 +104,7 @@ public partial class ModListPage : UserControl
         ModListScroll.Visibility = filtered.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private Border CreateModCard(ModEntry mod)
+    private Border CreateModCard(ModEntry mod, List<(string Folder, List<string> Mods)> sharedResources)
     {
         var card = new Border
         {
@@ -218,6 +219,47 @@ public partial class ModListPage : UserControl
                 Fill = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#8BA4B5")),
                 Margin = new Thickness(0, 0, 4, 0)
             });
+
+        // Shared resource hint: teal 🔗 on the card + tooltip listing referencers
+        if (sharedResources.Count > 0)
+        {
+            var folders = new List<string>();
+            folders.AddRange(mod.GameModFolders);
+            folders.AddRange(mod.GameDlcFolders);
+            var sharedOfMod = sharedResources
+                .Where(sr => folders.Contains(sr.Folder, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (sharedOfMod.Count > 0)
+            {
+                var isPureShared = folders.Count > 0 && folders.All(f => sharedOfMod.Any(sr => sr.Folder.Equals(f, StringComparison.OrdinalIgnoreCase)));
+                string hint;
+                if (isPureShared)
+                {
+                    var others = sharedOfMod
+                        .SelectMany(sr => sr.Mods)
+                        .Where(n => !n.Equals(mod.Name, StringComparison.OrdinalIgnoreCase))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    var who = others.Count > 0 ? string.Join("、", others) : "?";
+                    hint = TranslationService.Instance.T("mods.shared_by") + "\n"
+                         + string.Format(TranslationService.Instance.T("mods.shared_by_who"), who);
+                }
+                else
+                {
+                    var foldersStr = string.Join("、", sharedOfMod.Select(sr => sr.Folder).Distinct(StringComparer.OrdinalIgnoreCase));
+                    hint = string.Format(TranslationService.Instance.T("mods.shared_uses"), foldersStr);
+                }
+                card.ToolTip = hint;
+                dotsPanel.Children.Add(new TextBlock
+                {
+                    Text = "🔗",
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6BA5B5")),
+                    Margin = new Thickness(0, 0, 3, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+        }
 
         dotsPanel.Children.Add(delBtn);
         Grid.SetColumn(dotsPanel, 1);
@@ -577,8 +619,9 @@ public partial class ModListPage : UserControl
             : source.Where(m => m.DisplayName.ToLower().Contains(query) ||
                                (m.Author?.ToLower().Contains(query) ?? false)).ToList();
         
+        var sharedResources = _conflict?.GetSharedResources() ?? new List<(string Folder, List<string> Mods)>();
         var panel2 = new WrapPanel { Orientation = Orientation.Horizontal };
-        foreach (var mod in filtered) panel2.Children.Add(CreateModCard(mod));
+        foreach (var mod in filtered) panel2.Children.Add(CreateModCard(mod, sharedResources));
         ModItemsControl.ItemsSource = null;
         ModItemsControl.Items.Clear();
         ModItemsControl.Items.Add(new ContentPresenter { Content = panel2 });
