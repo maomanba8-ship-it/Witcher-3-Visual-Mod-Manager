@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using System.Security.Cryptography;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Manifest;
+using Witcher3ModManager.Core.Shared;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -220,6 +222,7 @@ public class ConflictService
 
 #if DEBUG
         LogScanDiag($"scan done: reported conflicts={conflicts.Count} sharedBinOverlaps={_sharedBinOverlaps.Count}");
+        LogManifestConflictComparison(conflicts, enabledMods);
 #endif
         return conflicts;
     }
@@ -397,6 +400,71 @@ public class ConflictService
     }
 #endif
 
+    /// <summary>
+    /// ADAPTER: turn evidence from the manifest-based analyzer into the existing UI
+    /// ConflictInfo shape. Duplicate content stays suppressed; component identities are
+    /// mapped to display names. This is not yet the source of the UI conflict list — it is
+    /// used in DEBUG dual-mode comparison until switchover is accepted.
+    /// </summary>
+    private static List<ConflictInfo> AdaptEvidence(
+        IReadOnlyList<ConflictEvidence> evidence,
+        IReadOnlyDictionary<string, string> idToName)
+    {
+        var result = new List<ConflictInfo>();
+        foreach (var e in evidence)
+        {
+            if (!ConflictEvidenceRules.IsUserFacing(e.Kind)) continue;
+            var names = e.ComponentIdentities
+                .Select(id => idToName.TryGetValue(id, out var name) ? name : id)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            result.Add(new ConflictInfo
+            {
+                FilePath = e.NormalizedRelativePath,
+                ConflictingMods = names,
+                IsScriptConflict = ConflictEvidenceRules.IsScript(e.Kind),
+                Kind = e.Kind
+            });
+        }
+        return result;
+    }
+
+#if DEBUG
+    /// <summary>
+    /// Dual-mode comparison (DEBUG only): run the manifest-based analyzer over enabled
+    /// components' storage manifests and log how it differs from the legacy game-dir scan.
+    /// It does NOT change what the user sees — the UI red list still comes from the legacy
+    /// scan until switchover has been accepted with fixtures.
+    /// </summary>
+    private void LogManifestConflictComparison(List<ConflictInfo> legacy, List<ModEntry> enabledMods)
+    {
+        var storageDir = _storage?.GetModsDirectory();
+        if (string.IsNullOrEmpty(storageDir)) return;
+
+        var claims = new List<FolderClaim>();
+        foreach (var m in enabledMods)
+        {
+            foreach (var f in m.GameModFolders)
+                if (!string.IsNullOrWhiteSpace(f)) claims.Add(new FolderClaim(m.Id, TargetDomain.Mods, f));
+            foreach (var f in m.GameDlcFolders)
+                if (!string.IsNullOrWhiteSpace(f)) claims.Add(new FolderClaim(m.Id, TargetDomain.Dlc, f));
+        }
+
+        var files = ManifestConflictInputProvider.Build(storageDir, claims);
+        var evidence = ConflictAnalyzer.Analyze(files);
+        var idToName = _storage?.GetAllMods()
+                           .ToDictionary(m => m.Id, m => m.Name, StringComparer.OrdinalIgnoreCase)
+                       ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var adapted = AdaptEvidence(evidence, idToName);
+
+        LogScanDiag($"[manifest-compare] storageDir={storageDir} files={files.Count} evidence={evidence.Count}");
+        LogScanDiag($"[manifest-compare] newConflicts={adapted.Count} legacy={legacy.Count}");
+        foreach (var c in adapted)
+            LogScanDiag($"[manifest-compare] {c.Kind}: {c.FilePath} mods=[{string.Join(",", c.ConflictingMods)}]");
+        var dupCount = evidence.Count(e => e.Kind == ConflictKind.DuplicateContent);
+        LogScanDiag($"[manifest-compare] suppressedDuplicate={dupCount}");
+    }
+#endif
     /// <summary>
     /// Append conflicts for one domain map. Mods and Dlc are separate target domains:
     /// a file path shared between a mod folder and a dlc folder is NOT a conflict (S6).
