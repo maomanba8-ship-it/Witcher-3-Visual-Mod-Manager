@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Models;
 #if DEBUG
 using System.Text.Json;
@@ -577,8 +578,18 @@ private static string FindModRoot(string sourceDir)
     private static string BuildImportPreviewMessage(AnalysisResult analysis)
     {
         var decisions = string.Join("\n", analysis.RequiresUserDecision);
-        var components = string.Join("\n", analysis.Components.Select(c =>
-            $"{c.Name} ({c.Kind}) — {string.Join(", ", c.Evidence)}"));
+        var components = string.Join("\n\n", analysis.Components.Select(c =>
+        {
+            var files = ManifestBuilder.ListFiles(c.RootPath);
+            var head = files.Take(6).ToList();
+            var fileList = head.Count > 0
+                ? "\n      " + string.Join("\n      ", head)
+                : "";
+            var more = files.Count > head.Count
+                ? $"\n      ... (+{files.Count - head.Count} more files)"
+                : "";
+            return $"{c.Name} ({c.Kind}) — {string.Join(", ", c.Evidence)}\n      {files.Count} file(s):{fileList}{more}";
+        }));
         var warnings = analysis.Warnings.Count > 0
             ? "\n\n" + string.Join("\n", analysis.Warnings)
             : "";

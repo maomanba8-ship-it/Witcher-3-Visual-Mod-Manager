@@ -81,6 +81,30 @@ public class ManifestBuilderTests
         return root;
     }
 
+    [Fact]
+    public void ListFiles_returns_sorted_relative_paths_preserving_case()
+    {
+        var root = CreateTempComponentRoot(
+            ("scripts/x.ws", "SCRIPT"),
+            ("content/a.txt", "AAA"));
+
+        try
+        {
+            var files = ManifestBuilder.ListFiles(root);
+            Assert.Equal(new[] { "content/a.txt", "scripts/x.ws" }, files);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void ListFiles_returns_empty_for_missing_root()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "w3mm_missing_" + Guid.NewGuid().ToString("N")[..8]);
+        Assert.Empty(ManifestBuilder.ListFiles(missing));
+    }
     private static string Sha256Of(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();
 }

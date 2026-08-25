@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using Witcher3ModManager.Core.Analysis;
 
@@ -13,6 +14,22 @@ namespace Witcher3ModManager.Core.Manifest;
 /// </summary>
 public static class ManifestBuilder
 {
+    /// <summary>
+    /// Fast, read-only file listing for import previews. Returns sorted relative paths in
+    /// forward slashes (original case). It does NOT hash, so it is cheap enough to show a
+    /// component's contents before the user confirms an import.
+    /// </summary>
+    public static IReadOnlyList<string> ListFiles(string rootPath)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
+            return Array.Empty<string>();
+
+        return Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(rootPath, f).Replace('\\', '/'))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+    }
+
     public static ComponentManifest Build(string rootPath, string componentIdentity, TargetDomain domain)
     {
         if (string.IsNullOrWhiteSpace(rootPath))
