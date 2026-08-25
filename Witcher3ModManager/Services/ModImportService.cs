@@ -98,7 +98,17 @@ public class ModImportService
         // Step 1: Scan for mod candidates (read-only, no file system changes)
         var modCandidates = ScanModCandidates(tempExtractDir);
         var binFiles = ScanBinFiles(tempExtractDir);
-
+        // (S5 closure) Always-on read-only structure check. Guards only the truly
+        // unrecognized package: when neither the analyzer nor the legacy scan finds a
+        // single mod/dlc/bin component, abort with unknown_format instead of letting the
+        // legacy FindModRoot guess-install an unverifiable package.
+        var analysis = PackageAnalyzer.Analyze(tempExtractDir);
+        if (analysis.RejectReason != null && modCandidates.Count == 0 && binFiles.Count == 0)
+        {
+            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+            progress?.Report(TranslationService.Instance.T("import.progress.unrecognized"));
+            return (new List<ModEntry>(), "unknown_format");
+        }
         if (modCandidates.Count > 0)
         {
             // Parallel (read-only) analyzer comparison. Does NOT change old install flow.
