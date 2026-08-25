@@ -80,7 +80,11 @@ public class ConflictService
         var idToName = _storage?.GetAllMods()
                            .ToDictionary(m => m.Id, m => m.Name, StringComparer.OrdinalIgnoreCase)
                        ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        return AdaptEvidence(evidence, idToName);
+        // Only genuine (red) conflicts are user-facing. Blue bundle/generated-artifact
+        // items are NOT conflicts; bundle mods get their own blue "bundle" tag/panel.
+        return AdaptEvidence(evidence, idToName)
+            .Where(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind))
+            .ToList();
     }
 
     // ���� Ignore Rule System ��������������������������������������������������������������������������������
