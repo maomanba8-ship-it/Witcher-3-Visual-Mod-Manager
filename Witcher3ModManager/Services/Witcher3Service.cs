@@ -126,9 +126,6 @@ public class Witcher3Service
                 }
             }
 
-            // Update InstalledPath to game dir (primary folder)
-            if (mod.GameModFolders.Count > 0)
-                mod.InstalledPath = System.IO.Path.Combine(gameModsPath, mod.GameModFolders[0]);
 
             // Enable each DLC folder
             if (mod.GameDlcFolders.Count > 0)
@@ -170,6 +167,10 @@ public class Witcher3Service
                 WriteModsSettings(currentMods);
             }
 
+            // Update InstalledPath only after the whole enable succeeded.
+            if (mod.GameModFolders.Count > 0)
+                mod.InstalledPath = System.IO.Path.Combine(gameModsPath, mod.GameModFolders[0]);
+
             return true;
         }
         catch { return false; }
@@ -196,9 +197,6 @@ public class Witcher3Service
                 }
             }
 
-            // Update InstalledPath to disabled path (primary folder)
-            if (mod.GameModFolders.Count > 0)
-                mod.InstalledPath = Path.Combine(gameModsPath, "~" + mod.GameModFolders[0]);
 
             // Disable each DLC folder
             if (mod.GameDlcFolders.Count > 0)
@@ -219,6 +217,10 @@ public class Witcher3Service
                     currentMods.RemoveAll(m => m.ModName == folder);
                 WriteModsSettings(currentMods);
             }
+
+            // Update InstalledPath only after the whole disable succeeded.
+            if (mod.GameModFolders.Count > 0)
+                mod.InstalledPath = Path.Combine(gameModsPath, "~" + mod.GameModFolders[0]);
 
             return true;
         }
@@ -292,21 +294,26 @@ public class Witcher3Service
                     DeleteIfExists(mod.InstalledPath, ref failed);
             }
 
-            // Update mods.settings
-            try
+            // If a game/storage folder could not be deleted, do NOT touch mods.settings or
+            // the storage bin copy; keep the record intact so the user can retry.
+            if (!failed)
             {
-                var currentMods = GetEnabledModsFromSettings();
-                foreach (var folder in mod.GameModFolders)
+                // Update mods.settings
+                try
                 {
-                    if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
-                    currentMods.RemoveAll(m => m.ModName == folder);
+                    var currentMods = GetEnabledModsFromSettings();
+                    foreach (var folder in mod.GameModFolders)
+                    {
+                        if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
+                        currentMods.RemoveAll(m => m.ModName == folder);
+                    }
+                    WriteModsSettings(currentMods);
                 }
-                WriteModsSettings(currentMods);
-            }
-            catch { }
+                catch { }
 
-            // Delete bin files
-            DeleteBinFiles(mod);
+                // Delete bin files
+                DeleteBinFiles(mod);
+            }
 
             // A record with nothing left on disk is still successfully removed; only a
             // real deletion failure (path exists but could not be deleted) means stale.

@@ -190,7 +190,14 @@ public partial class PresetPage : UserControl
                 else if (!shouldEnable && mod.IsEnabled)
                 {
                     if (_w3.GetGamePath() != null)
-                        _w3.DisableMod(mod);
+                    {
+                        var success = _w3.DisableMod(mod);
+                        if (!success)
+                        {
+                            // Disable failure: do NOT flip IsEnabled; keep the record as-is.
+                            continue;
+                        }
+                    }
                     mod.IsEnabled = false;
                     // keep GameModFolderName intact
                     _storage.UpdateMod(mod);
