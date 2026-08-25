@@ -59,6 +59,24 @@ public class ConflictAnalyzerTests
             },
             Array.Empty<string>()
         };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Bin, "modA", "bundles/foo.bundle", "shaA", 1),
+                new(TargetDomain.Bin, "modB", "bundles/foo.bundle", "shaA", 1),
+            },
+            new[] { "DuplicateContent" }
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Bin, "modA", "bundles/foo.bundle", "shaA", 1),
+                new(TargetDomain.Bin, "modB", "bundles/foo.bundle", "shaB", 1),
+            },
+            new[] { "UnsupportedContainer" }
+        };
     }
 
     [Theory]

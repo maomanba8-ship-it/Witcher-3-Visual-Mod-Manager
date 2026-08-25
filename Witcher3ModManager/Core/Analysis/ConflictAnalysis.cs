@@ -59,6 +59,19 @@ public static class ConflictAnalyzer
         return normalized.TrimStart('/').ToLowerInvariant();
     }
 
+    private static bool IsOpaqueContainerPath(string normalizedPath)
+    {
+        if (string.IsNullOrEmpty(normalizedPath)) return false;
+        if (normalizedPath.Contains("bundles/", StringComparison.OrdinalIgnoreCase)) return true;
+        var ext = Path.GetExtension(normalizedPath);
+        return ext.Equals(".bundle", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".bms", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".zip", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".7z", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".rar", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".pak", StringComparison.OrdinalIgnoreCase);
+    }
+
         public static IReadOnlyList<ConflictEvidence> Analyze(IEnumerable<ComponentFile> files)
     {
         var grouped = files
@@ -85,7 +98,13 @@ public static class ConflictAnalyzer
             ConflictKind kind;
             string? action = null;
 
-            if (group.Key.Domain == TargetDomain.Bin)
+            var isOpaqueContainer = IsOpaqueContainerPath(group.Key.NormalizedRelativePath);
+            if (isOpaqueContainer)
+            {
+                kind = allSameHash ? ConflictKind.DuplicateContent : ConflictKind.UnsupportedContainer;
+                action = allSameHash ? null : "无法静态展开的容器内容存在差异，建议人工确认。";
+            }
+            else if (group.Key.Domain == TargetDomain.Bin)
             {
                 kind = allSameHash ? ConflictKind.DuplicateContent : ConflictKind.BinOverrideRisk;
                 action = allSameHash ? null : "bin 覆盖存在风险，建议检查游戏启动是否受影响。";
@@ -119,6 +138,9 @@ public static class ConflictAnalyzer
     public static ConflictKind Classify(TargetDomain domain, IReadOnlyList<string> hashes, string normalizedPath)
     {
         var distinct = hashes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (IsOpaqueContainerPath(normalizedPath))
+            return distinct.Count == 1 ? ConflictKind.DuplicateContent : ConflictKind.UnsupportedContainer;
+
         if (domain == TargetDomain.Bin)
             return distinct.Count == 1 ? ConflictKind.DuplicateContent : ConflictKind.BinOverrideRisk;
 
