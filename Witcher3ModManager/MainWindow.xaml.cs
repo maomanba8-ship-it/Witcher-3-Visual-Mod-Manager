@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using Witcher3ModManager.Models;
 using Witcher3ModManager.Services;
 using Witcher3ModManager.Views;
+using Witcher3ModManager.Core.Analysis;
 
 namespace Witcher3ModManager;
 
@@ -311,7 +312,7 @@ public partial class MainWindow : Window
         var allMods = _storage.GetAllMods();
         StatusEnabled.Text = string.Format(Services.TranslationService.Instance.T("status.enabled"), allMods.Count(m => m.IsEnabled));
         StatusTotal.Text = string.Format(Services.TranslationService.Instance.T("status.total"), allMods.Count);
-        StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), _conflict.DetectConflicts().Count);
+        StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), _conflict.DetectConflicts().Count(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)));
         StatusPotential.Text = string.Format(Services.TranslationService.Instance.T("status.potential"), _conflict.DetectPotentialOverrideCount());
     }
 

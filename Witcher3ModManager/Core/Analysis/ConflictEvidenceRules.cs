@@ -17,4 +17,13 @@ public static class ConflictEvidenceRules
     /// </summary>
     public static bool IsScript(ConflictKind kind) =>
         kind == ConflictKind.ScriptOverride;
+
+    /// <summary>
+    /// True only for kinds that are genuine, actionable conflicts (red). Informational kinds
+    /// (UnsupportedContainer, GeneratedArtifactDiff) must NOT count toward the "conflicts" badge.
+    /// </summary>
+    public static bool IsRealConflictKind(ConflictKind kind) =>
+        kind == ConflictKind.ScriptOverride ||
+        kind == ConflictKind.DefiniteOverride ||
+        kind == ConflictKind.BinOverrideRisk;
 }

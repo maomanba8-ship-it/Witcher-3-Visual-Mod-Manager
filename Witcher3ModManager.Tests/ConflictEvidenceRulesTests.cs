@@ -33,4 +33,17 @@ public class ConflictEvidenceRulesTests
     {
         Assert.Equal(expected, ConflictEvidenceRules.IsScript(kind));
     }
+
+    [Theory]
+    [InlineData(ConflictKind.ScriptOverride, true)]
+    [InlineData(ConflictKind.DefiniteOverride, true)]
+    [InlineData(ConflictKind.BinOverrideRisk, true)]
+    [InlineData(ConflictKind.UnsupportedContainer, false)]
+    [InlineData(ConflictKind.GeneratedArtifactDiff, false)]
+    [InlineData(ConflictKind.CategorySimilarity, false)]
+    [InlineData(ConflictKind.DuplicateContent, false)]
+    public void IsRealConflictKind_matches_expected(ConflictKind kind, bool expected)
+    {
+        Assert.Equal(expected, ConflictEvidenceRules.IsRealConflictKind(kind));
+    }
 }

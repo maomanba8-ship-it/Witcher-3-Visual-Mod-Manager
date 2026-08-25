@@ -9,6 +9,7 @@ using System.Diagnostics;
 using Microsoft.Win32;
 using Witcher3ModManager.Models;
 using Witcher3ModManager.Services;
+using Witcher3ModManager.Core.Analysis;
 
 namespace Witcher3ModManager.Views;
 
@@ -279,7 +280,7 @@ public partial class ModListPage : UserControl
         var enabled = _allMods.Count(m => m.IsEnabled);
         var total = _allMods.Count;
         var conflicts = 0;
-        try { conflicts = _conflict?.DetectConflicts().Count ?? 0; } catch { }
+        try { conflicts = _conflict?.DetectConflicts().Count(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)) ?? 0; } catch { }
         var overrides = _conflict?.DetectPotentialOverrideCount() ?? 0;
         var bundleCount = _conflict?.GetBundleMods().Count ?? 0;
         var sharedCount = _conflict?.GetSharedResources().Count ?? 0;

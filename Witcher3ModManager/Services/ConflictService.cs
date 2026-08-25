@@ -37,7 +37,14 @@ public class ConflictService
         if (_cacheValid && _cachedConflicts != null)
             return _cachedConflicts;
 
-        _cachedConflicts = ScanGameDirectory();
+        var enabledMods = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
+        var conflicts = BuildManifestConflicts(enabledMods);
+#if DEBUG
+        // Legacy game-dir scan is kept only as a DEBUG diagnostic comparison; it is no
+        // longer the source of the user-facing conflict list.
+        ScanGameDirectory();
+#endif
+        _cachedConflicts = conflicts;
         _cacheValid = true;
         return _cachedConflicts;
     }
@@ -46,6 +53,34 @@ public class ConflictService
     {
         InvalidateCache();
         return DetectConflicts();
+    }
+
+    /// <summary>
+    /// Builds the user-facing conflict list from each enabled component storage manifest.
+    /// This is the source of the conflict dialog and badge after the S6 switchover; the
+    /// legacy game-dir scan is retained only under DEBUG for comparison.
+    /// </summary>
+    private List<ConflictInfo> BuildManifestConflicts(IReadOnlyList<ModEntry> enabledMods)
+    {
+        var storageDir = _storage?.GetModsDirectory();
+        if (string.IsNullOrEmpty(storageDir) || enabledMods.Count < 2)
+            return new List<ConflictInfo>();
+
+        var claims = new List<FolderClaim>();
+        foreach (var m in enabledMods)
+        {
+            foreach (var f in m.GameModFolders)
+                if (!string.IsNullOrWhiteSpace(f)) claims.Add(new FolderClaim(m.Id, TargetDomain.Mods, f));
+            foreach (var f in m.GameDlcFolders)
+                if (!string.IsNullOrWhiteSpace(f)) claims.Add(new FolderClaim(m.Id, TargetDomain.Dlc, f));
+        }
+
+        var files = ManifestConflictInputProvider.Build(storageDir, claims);
+        var evidence = ConflictAnalyzer.Analyze(files);
+        var idToName = _storage?.GetAllMods()
+                           .ToDictionary(m => m.Id, m => m.Name, StringComparer.OrdinalIgnoreCase)
+                       ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        return AdaptEvidence(evidence, idToName);
     }
 
     // ���� Ignore Rule System ��������������������������������������������������������������������������������

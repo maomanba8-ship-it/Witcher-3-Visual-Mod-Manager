@@ -110,8 +110,9 @@ public partial class ConflictDialog : Window
         NoConflictsPanel.Visibility = Visibility.Collapsed;
         ConflictStackPanel.Visibility = Visibility.Visible;
 
-        var scriptCount = conflicts.Count(c => c.IsScriptConflict);
-        SummaryText.Text = string.Format(TranslationService.Instance.T("conflict.summary"), conflicts.Count, conflicts.SelectMany(c => c.ConflictingMods).Distinct().Count());
+        var realConflicts = conflicts.Where(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)).ToList();
+        var scriptCount = realConflicts.Count(c => c.IsScriptConflict);
+        SummaryText.Text = string.Format(TranslationService.Instance.T("conflict.summary"), realConflicts.Count, realConflicts.SelectMany(c => c.ConflictingMods).Distinct().Count());
 
         if (scriptCount > 0)
         {
