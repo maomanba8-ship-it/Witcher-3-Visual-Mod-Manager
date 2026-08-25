@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Security.Cryptography;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -106,7 +107,7 @@ public class ConflictService
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
             return conflicts;
 
-        var modFileMap = new Dictionary<string, List<string>>(
+        var modFileMap = new Dictionary<string, List<(string Mod, string FullPath)>>(
             StringComparer.OrdinalIgnoreCase);
 
         // Scan mod folders (TargetDomain.Mods — separate from Dlc domain)
@@ -131,9 +132,9 @@ public class ConflictService
                             var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
                             if (IsIgnorableConflict(relativePath)) continue;
                             if (!modFileMap.ContainsKey(relativePath))
-                                modFileMap[relativePath] = new List<string>();
-                            if (!modFileMap[relativePath].Contains(mod.Name))
-                                modFileMap[relativePath].Add(mod.Name);
+                                modFileMap[relativePath] = new List<(string Mod, string FullPath)>();
+                            if (!modFileMap[relativePath].Any(x => x.Mod == mod.Name))
+                                modFileMap[relativePath].Add((mod.Name, file));
                         }
                     }
                     catch { }
@@ -142,7 +143,7 @@ public class ConflictService
         }
 
         // Scan DLC folders (TargetDomain.Dlc — separate from Mods domain)
-        var dlcFileMap = new Dictionary<string, List<string>>(
+        var dlcFileMap = new Dictionary<string, List<(string Mod, string FullPath)>>(
             StringComparer.OrdinalIgnoreCase);
         var dlcRoot = Path.Combine(gamePath, "dlc");
         if (Directory.Exists(dlcRoot))
@@ -164,9 +165,9 @@ public class ConflictService
                             var dlcRelPath = dlcFile.Substring(dlcDir.Length + 1).Replace((char)92, (char)47);
                             if (IsIgnorableConflict(dlcRelPath)) continue;
                             if (!dlcFileMap.ContainsKey(dlcRelPath))
-                                dlcFileMap[dlcRelPath] = new List<string>();
-                            if (!dlcFileMap[dlcRelPath].Contains(mod.Name))
-                                dlcFileMap[dlcRelPath].Add(mod.Name);
+                                dlcFileMap[dlcRelPath] = new List<(string Mod, string FullPath)>();
+                            if (!dlcFileMap[dlcRelPath].Any(x => x.Mod == mod.Name))
+                                dlcFileMap[dlcRelPath].Add((mod.Name, dlcFile));
                         }
                     }
                     catch { }
@@ -354,25 +355,44 @@ public class ConflictService
             .ToList();
     }
 
+    private static string ComputeSha256(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            return Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant();
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
     /// <summary>
     /// Append conflicts for one domain map. Mods and Dlc are separate target domains:
     /// a file path shared between a mod folder and a dlc folder is NOT a conflict (S6).
+    /// Identical same-domain content is DuplicateContent (not a conflict).
     /// </summary>
     private static void AppendDomainConflicts(
         List<ConflictInfo> conflicts,
-        Dictionary<string, List<string>> fileMap)
+        Dictionary<string, List<(string Mod, string FullPath)>> fileMap)
     {
         foreach (var kvp in fileMap)
         {
             if (kvp.Value.Count >= 2)
             {
+                var hashes = kvp.Value.Select(v => ComputeSha256(v.FullPath)).ToList();
+                var allSame = hashes.All(h => !string.IsNullOrEmpty(h)) &&
+                              hashes.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+                if (allSame) continue;
+
                 var isScript = kvp.Key.Contains("scripts/", StringComparison.OrdinalIgnoreCase) ||
                                kvp.Key.EndsWith(".ws", StringComparison.OrdinalIgnoreCase);
 
                 conflicts.Add(new ConflictInfo
                 {
                     FilePath = kvp.Key,
-                    ConflictingMods = kvp.Value,
+                    ConflictingMods = kvp.Value.Select(v => v.Mod).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                     IsScriptConflict = isScript
                 });
             }
