@@ -13,6 +13,7 @@ public enum ConflictKind
     ScriptOverride,     // DefiniteOverride + .ws / script rule
     BinOverrideRisk,    // same Bin domain, different hash
     UnsupportedContainer, // bundle / binary that cannot be statically expanded
+    GeneratedArtifactDiff, // known auto-generated file differing across mods; informational, not a hard conflict
     CategorySimilarity  // hint only, never a real conflict
 }
 
@@ -72,7 +73,24 @@ public static class ConflictAnalyzer
                ext.Equals(".pak", StringComparison.OrdinalIgnoreCase);
     }
 
-        public static IReadOnlyList<ConflictEvidence> Analyze(IEnumerable<ComponentFile> files)
+    /// <summary>
+    /// Known WolvenKit auto-generated artifacts that share a fixed path but have no
+    /// cross-mod behavioral impact (localization stubs, metadata, caches). A different
+    /// hash here is informational, not a hard override. Opaque containers (bundles,
+    /// archives) are NOT covered here — they remain UnsupportedContainer.
+    /// </summary>
+    private static bool IsKnownGeneratedArtifact(string normalizedPath)
+    {
+        if (string.IsNullOrEmpty(normalizedPath)) return false;
+        if (normalizedPath.EndsWith(".w3strings", StringComparison.OrdinalIgnoreCase)) return true;
+        return normalizedPath.Equals("content/metadata.store", StringComparison.OrdinalIgnoreCase) ||
+               normalizedPath.Equals("content/texture.cache", StringComparison.OrdinalIgnoreCase) ||
+               normalizedPath.Equals("content/collision.cache", StringComparison.OrdinalIgnoreCase) ||
+               normalizedPath.Equals("content/shaderdx12.cache", StringComparison.OrdinalIgnoreCase) ||
+               normalizedPath.Equals("content/info.json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static IReadOnlyList<ConflictEvidence> Analyze(IEnumerable<ComponentFile> files)
     {
         var grouped = files
             .Select(f => f with { NormalizedRelativePath = NormalizePath(f.NormalizedRelativePath) })
@@ -114,6 +132,11 @@ public static class ConflictAnalyzer
                 kind = ConflictKind.DuplicateContent;
                 action = null;
             }
+            else if (IsKnownGeneratedArtifact(group.Key.NormalizedRelativePath))
+            {
+                kind = ConflictKind.GeneratedArtifactDiff;
+                action = "WolvenKit 自动生成物差异，通常不影响游戏行为，建议忽略。";
+            }
             else
             {
                 var isScript = group.Key.NormalizedRelativePath.EndsWith(".ws", StringComparison.OrdinalIgnoreCase) ||
@@ -146,6 +169,9 @@ public static class ConflictAnalyzer
 
         if (distinct.Count == 1)
             return ConflictKind.DuplicateContent;
+
+        if (IsKnownGeneratedArtifact(normalizedPath))
+            return ConflictKind.GeneratedArtifactDiff;
 
         var isScript = normalizedPath.EndsWith(".ws", StringComparison.OrdinalIgnoreCase) ||
                        normalizedPath.EndsWith(".es", StringComparison.OrdinalIgnoreCase);

@@ -12,6 +12,7 @@ public class ConflictEvidenceRulesTests
         yield return new object[] { ConflictKind.ScriptOverride, true };
         yield return new object[] { ConflictKind.BinOverrideRisk, true };
         yield return new object[] { ConflictKind.UnsupportedContainer, true };
+        yield return new object[] { ConflictKind.GeneratedArtifactDiff, true };
         yield return new object[] { ConflictKind.CategorySimilarity, true };
         yield return new object[] { ConflictKind.DuplicateContent, false };
     }

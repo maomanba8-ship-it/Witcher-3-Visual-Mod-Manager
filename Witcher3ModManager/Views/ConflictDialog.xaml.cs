@@ -139,12 +139,14 @@ public partial class ConflictDialog : Window
                 {
                     ConflictKind.ScriptOverride => TranslationService.Instance.T("conflict.kind_script"),
                     ConflictKind.UnsupportedContainer => TranslationService.Instance.T("conflict.kind_unsupported"),
+                    ConflictKind.GeneratedArtifactDiff => TranslationService.Instance.T("conflict.kind_generated"),
                     _ => TranslationService.Instance.T("conflict.kind_override")
                 },
                 KindColor = c.Kind switch
                 {
-                    ConflictKind.ScriptOverride => "#C9A96E",
+                    ConflictKind.ScriptOverride => "#D06A6A",
                     ConflictKind.UnsupportedContainer => "#5B8DB8",
+                    ConflictKind.GeneratedArtifactDiff => "#5B8DB8",
                     _ => "#D06A6A"
                 },
             };

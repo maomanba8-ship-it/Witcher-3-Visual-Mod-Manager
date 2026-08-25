@@ -77,6 +77,55 @@ public class ConflictAnalyzerTests
             },
             new[] { "UnsupportedContainer" }
         };
+
+        // Known auto-generated WolvenKit artifacts: same path, different hash.
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "content/en.w3strings", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/en.w3strings", "shaB", 1),
+            },
+            new[] { "GeneratedArtifactDiff" }
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "content/metadata.store", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/metadata.store", "shaB", 1),
+            },
+            new[] { "GeneratedArtifactDiff" }
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "content/texture.cache", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/texture.cache", "shaB", 1),
+            },
+            new[] { "GeneratedArtifactDiff" }
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "content/en.w3strings", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/en.w3strings", "shaA", 1),
+            },
+            new[] { "DuplicateContent" }
+        };
+
+        // Opaque bundle with different hash stays UnsupportedContainer (not downgraded).
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "content/blob0.bundle", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/blob0.bundle", "shaB", 1),
+            },
+            new[] { "UnsupportedContainer" }
+        };
     }
 
     [Theory]
