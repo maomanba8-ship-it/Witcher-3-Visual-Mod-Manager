@@ -109,6 +109,25 @@ public class ModImportService
             progress?.Report(TranslationService.Instance.T("import.progress.unrecognized"));
             return (new List<ModEntry>(), "unknown_format");
         }
+        // (S5 closed-loop) If the analyzer flagged ambiguous components that need a user decision,
+        // show them and require explicit confirmation BEFORE any filesystem write. Confident
+        // packages (no decisions) keep the existing auto-import path unchanged.
+        if (analysis.RequiresUserDecision.Count > 0)
+        {
+            var previewMsg = BuildImportPreviewMessage(analysis);
+            var confirmed = Application.Current.Dispatcher.Invoke(() =>
+                MessageBox.Show(
+                    previewMsg,
+                    TranslationService.Instance.T("import.preview_title"),
+                    MessageBoxButton.OKCancel,
+                    MessageBoxImage.Warning) == MessageBoxResult.OK);
+            if (!confirmed)
+            {
+                try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+                progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                return (new List<ModEntry>(), "cancelled");
+            }
+        }
         if (modCandidates.Count > 0)
         {
             // Parallel (read-only) analyzer comparison. Does NOT change old install flow.
@@ -550,6 +569,21 @@ private static string FindModRoot(string sourceDir)
         }
 
         return current;
+    }
+
+    /// <summary>
+    /// Builds the S5 import-preview confirmation message from the analyzer result.
+    /// </summary>
+    private static string BuildImportPreviewMessage(AnalysisResult analysis)
+    {
+        var decisions = string.Join("\n", analysis.RequiresUserDecision);
+        var components = string.Join("\n", analysis.Components.Select(c =>
+            $"{c.Name} ({c.Kind}) — {string.Join(", ", c.Evidence)}"));
+        var warnings = analysis.Warnings.Count > 0
+            ? "\n\n" + string.Join("\n", analysis.Warnings)
+            : "";
+        return string.Format(TranslationService.Instance.T("import.preview_body"), decisions, components) + warnings
+             + "\n\n" + TranslationService.Instance.T("import.preview_ask");
     }
 
     /// <summary>
