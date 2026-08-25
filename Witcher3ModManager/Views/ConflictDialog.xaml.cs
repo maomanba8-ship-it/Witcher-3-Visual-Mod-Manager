@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Witcher3ModManager.Models;
+using Witcher3ModManager.Core.Analysis;
 using System.Linq;
 using Witcher3ModManager.Services;
 
@@ -132,7 +133,20 @@ public partial class ConflictDialog : Window
             {
                 ConflictSummary = string.Join(" \u2194 ", modNames),
                 FilePath = c.FilePath,
-                IsScript = c.IsScriptConflict
+                IsScript = c.IsScriptConflict,
+                Kind = c.Kind,
+                KindText = c.Kind switch
+                {
+                    ConflictKind.ScriptOverride => TranslationService.Instance.T("conflict.kind_script"),
+                    ConflictKind.UnsupportedContainer => TranslationService.Instance.T("conflict.kind_unsupported"),
+                    _ => TranslationService.Instance.T("conflict.kind_override")
+                },
+                KindColor = c.Kind switch
+                {
+                    ConflictKind.ScriptOverride => "#C9A96E",
+                    ConflictKind.UnsupportedContainer => "#5B8DB8",
+                    _ => "#D06A6A"
+                },
             };
         }).ToList();
 
@@ -183,6 +197,19 @@ public partial class ConflictDialog : Window
                 TextTrimming = System.Windows.TextTrimming.CharacterEllipsis
             });
 
+            if (!string.IsNullOrEmpty((string?)item.GetType().GetProperty("KindText")?.GetValue(item)))
+            {
+                stack.Children.Add(new System.Windows.Controls.TextBlock
+                {
+                    Text = (string?)item.GetType().GetProperty("KindText")?.GetValue(item),
+                    FontSize = 10,
+                    FontWeight = System.Windows.FontWeights.SemiBold,
+                    Foreground = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
+                            (string?)item.GetType().GetProperty("KindColor")?.GetValue(item) ?? "#D06A6A")),
+                    Margin = new System.Windows.Thickness(20, 2, 0, 0)
+                });
+            }
             card.Child = stack;
             ConflictStackPanel.Children.Add(card);
         }

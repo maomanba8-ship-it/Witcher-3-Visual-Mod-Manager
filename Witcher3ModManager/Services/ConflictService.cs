@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Security.Cryptography;
+using Witcher3ModManager.Core.Analysis;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -201,8 +202,8 @@ public class ConflictService
             }
         }
         _sharedBinOverlaps = sharedBinFiles;
-        AppendDomainConflicts(conflicts, modFileMap);
-        AppendDomainConflicts(conflicts, dlcFileMap);
+        AppendDomainConflicts(conflicts, modFileMap, TargetDomain.Mods);
+        AppendDomainConflicts(conflicts, dlcFileMap, TargetDomain.Dlc);
 
         return conflicts;
     }
@@ -375,7 +376,8 @@ public class ConflictService
     /// </summary>
     private static void AppendDomainConflicts(
         List<ConflictInfo> conflicts,
-        Dictionary<string, List<(string Mod, string FullPath)>> fileMap)
+        Dictionary<string, List<(string Mod, string FullPath)>> fileMap,
+        TargetDomain domain)
     {
         foreach (var kvp in fileMap)
         {
@@ -393,6 +395,7 @@ public class ConflictService
                 {
                     FilePath = kvp.Key,
                     ConflictingMods = kvp.Value.Select(v => v.Mod).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    Kind = ConflictAnalyzer.Classify(domain, hashes, kvp.Key),
                     IsScriptConflict = isScript
                 });
             }
