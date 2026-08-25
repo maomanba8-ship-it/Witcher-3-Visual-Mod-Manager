@@ -89,4 +89,62 @@ public class SharedResourceResolverTests
     {
         Assert.Empty(SharedResourceResolver.Resolve(null!));
     }
+
+    [Fact]
+    public void IsSharedByOther_true_when_another_owner_exists()
+    {
+        var claims = new FolderClaim[]
+        {
+            new("modHerm", TargetDomain.Mods, "mod_EH_RiderUtil"),
+            new("modGry", TargetDomain.Mods, "mod_EH_RiderUtil"),
+        };
+
+        Assert.True(SharedResourceResolver.IsSharedByOther(claims, TargetDomain.Mods, "mod_EH_RiderUtil", "modHerm"));
+    }
+
+    [Fact]
+    public void IsSharedByOther_false_when_only_owner_is_current()
+    {
+        var claims = new FolderClaim[]
+        {
+            new("modHerm", TargetDomain.Mods, "mod_EH_RiderUtil"),
+        };
+
+        Assert.False(SharedResourceResolver.IsSharedByOther(claims, TargetDomain.Mods, "mod_EH_RiderUtil", "modHerm"));
+    }
+
+    [Fact]
+    public void IsSharedByOther_counts_enabled_other_even_if_current_not_present()
+    {
+        var claims = new FolderClaim[]
+        {
+            new("modGry", TargetDomain.Mods, "mod_EH_RiderUtil"),
+        };
+
+        // Current id is disabled and therefore not an owner; the other enabled owner still makes it shared.
+        Assert.True(SharedResourceResolver.IsSharedByOther(claims, TargetDomain.Mods, "mod_EH_RiderUtil", "modHerm"));
+    }
+
+    [Fact]
+    public void IsSharedByOther_ignores_different_domain()
+    {
+        var claims = new FolderClaim[]
+        {
+            new("modHerm", TargetDomain.Mods, "MagicSpellsRevamped"),
+        };
+
+        Assert.False(SharedResourceResolver.IsSharedByOther(claims, TargetDomain.Dlc, "MagicSpellsRevamped", "modHerm"));
+    }
+
+    [Fact]
+    public void IsSharedByOther_is_case_insensitive()
+    {
+        var claims = new FolderClaim[]
+        {
+            new("modHerm", TargetDomain.Mods, "MOD_EH_RiderUtil"),
+            new("modGry", TargetDomain.Mods, "mod_eh_riderutil"),
+        };
+
+        Assert.True(SharedResourceResolver.IsSharedByOther(claims, TargetDomain.Mods, "mod_EH_RiderUtil", "modHerm"));
+    }
 }

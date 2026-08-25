@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Witcher3ModManager.Core.Analysis;
 
 namespace Witcher3ModManager.Core.Shared;
 
@@ -34,6 +35,30 @@ public static class SharedResourceResolver
             .OrderBy(r => r.Domain)
             .ThenBy(r => r.Folder, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>
+    /// True if some owner other than <paramref name="excludeComponentId"/> references the
+    /// given (domain, folder). Excluding by id lets Enable/Disable/Delete decide whether a
+    /// folder is shared by another component without special-casing a mod name.
+    /// </summary>
+    public static bool IsSharedByOther(
+        IEnumerable<FolderClaim> claims,
+        TargetDomain domain,
+        string folder,
+        string? excludeComponentId = null)
+    {
+        var key = NormalizeFolder(folder);
+        if (string.IsNullOrEmpty(key)) return false;
+
+        var entry = Resolve(claims)
+            .FirstOrDefault(r => r.Domain == domain &&
+                                 string.Equals(r.Folder, key, StringComparison.OrdinalIgnoreCase));
+        if (entry == null) return false;
+
+        return entry.Owners.Any(o =>
+            string.IsNullOrEmpty(excludeComponentId) ||
+            !string.Equals(o, excludeComponentId, StringComparison.OrdinalIgnoreCase));
     }
 
     public static string NormalizeFolder(string folder)

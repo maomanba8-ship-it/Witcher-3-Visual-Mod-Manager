@@ -1,6 +1,8 @@
 ﻿using System.IO;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
+using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Shared;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -185,7 +187,7 @@ public class Witcher3Service
             // Disable each mod folder
             foreach (var folder in mod.GameModFolders)
             {
-                if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
+                if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
                 var enabledPath = Path.Combine(gameModsPath, folder);
                 var disabledPath = Path.Combine(gameModsPath, "~" + folder);
 
@@ -204,7 +206,7 @@ public class Witcher3Service
                 var gameDlcPath = GetGameDlcPath();
                 foreach (var dlcFolder in mod.GameDlcFolders)
                 {
-                    if (IsSharedFolder(dlcFolder, mod, m => m.GameDlcFolders)) continue;
+                    if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
                     ToggleFolder(gameDlcPath, dlcFolder, false);
                 }
             }
@@ -249,7 +251,7 @@ public class Witcher3Service
             // Delete all mod folders from game mods dir
             foreach (var folder in mod.GameModFolders)
             {
-                if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
+                if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
                 var enabledPath = Path.Combine(gameModsPath, folder);
                 var disabledPath = Path.Combine(gameModsPath, "~" + folder);
                 DeleteIfExists(enabledPath, ref failed);
@@ -262,7 +264,7 @@ public class Witcher3Service
                 var gameDlcPath = GetGameDlcPath();
                 foreach (var dlcFolder in mod.GameDlcFolders)
                 {
-                    if (IsSharedFolder(dlcFolder, mod, m => m.GameDlcFolders)) continue;
+                    if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
                     var dlcEnabled = Path.Combine(gameDlcPath, dlcFolder);
                     var dlcDisabled = Path.Combine(gameDlcPath, "~" + dlcFolder);
                     DeleteIfExists(dlcEnabled, ref failed);
@@ -273,12 +275,12 @@ public class Witcher3Service
             // Delete storage folders
             foreach (var folder in mod.GameModFolders)
             {
-                if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
+                if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
                 DeleteIfExists(Path.Combine(storageDir, folder), ref failed);
             }
             foreach (var dlcFolder in mod.GameDlcFolders)
             {
-                if (IsSharedFolder(dlcFolder, mod, m => m.GameDlcFolders)) continue;
+                if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
                 DeleteIfExists(Path.Combine(storageDir, dlcFolder), ref failed);
             }
 
@@ -288,8 +290,8 @@ public class Witcher3Service
                 var primaryName = Path.GetFileName(mod.InstalledPath.TrimEnd('\\', '/'));
                 if (primaryName.StartsWith("~", StringComparison.Ordinal))
                     primaryName = primaryName[1..];
-                var sharedPrimary = IsSharedFolder(primaryName, mod, m => m.GameModFolders)
-                                 || IsSharedFolder(primaryName, mod, m => m.GameDlcFolders);
+                var sharedPrimary = IsSharedFolder(primaryName, mod, TargetDomain.Mods)
+                                 || IsSharedFolder(primaryName, mod, TargetDomain.Dlc);
                 if (!sharedPrimary)
                     DeleteIfExists(mod.InstalledPath, ref failed);
             }
@@ -304,7 +306,7 @@ public class Witcher3Service
                     var currentMods = GetEnabledModsFromSettings();
                     foreach (var folder in mod.GameModFolders)
                     {
-                        if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
+                        if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
                         currentMods.RemoveAll(m => m.ModName == folder);
                     }
                     WriteModsSettings(currentMods);
@@ -581,15 +583,20 @@ public class Witcher3Service
         }
     }
 
-    private bool IsSharedFolder(string folder, ModEntry current, Func<ModEntry, List<string>> selector)
+    private bool IsSharedFolder(string folder, ModEntry current, TargetDomain domain)
     {
         if (_storage == null) return false;
-        foreach (var other in _storage.GetAllMods())
+
+        var claims = new List<FolderClaim>();
+        foreach (var m in _storage.GetAllMods())
         {
-            if (other.Id == current.Id || !other.IsEnabled) continue;
-            if (selector(other).Contains(folder, StringComparer.OrdinalIgnoreCase))
-                return true;
+            if (!m.IsEnabled) continue;
+            var folders = domain == TargetDomain.Dlc ? m.GameDlcFolders : m.GameModFolders;
+            foreach (var f in folders)
+                if (!string.IsNullOrWhiteSpace(f))
+                    claims.Add(new FolderClaim(m.Id, domain, f));
         }
-        return false;
+
+        return SharedResourceResolver.IsSharedByOther(claims, domain, folder, current.Id);
     }
 }
