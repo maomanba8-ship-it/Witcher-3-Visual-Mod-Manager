@@ -247,6 +247,7 @@ public class Witcher3Service
             // Delete all mod folders from game mods dir
             foreach (var folder in mod.GameModFolders)
             {
+                if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
                 var enabledPath = Path.Combine(gameModsPath, folder);
                 var disabledPath = Path.Combine(gameModsPath, "~" + folder);
                 DeleteIfExists(enabledPath, ref failed);
@@ -259,6 +260,7 @@ public class Witcher3Service
                 var gameDlcPath = GetGameDlcPath();
                 foreach (var dlcFolder in mod.GameDlcFolders)
                 {
+                    if (IsSharedFolder(dlcFolder, mod, m => m.GameDlcFolders)) continue;
                     var dlcEnabled = Path.Combine(gameDlcPath, dlcFolder);
                     var dlcDisabled = Path.Combine(gameDlcPath, "~" + dlcFolder);
                     DeleteIfExists(dlcEnabled, ref failed);
@@ -268,20 +270,37 @@ public class Witcher3Service
 
             // Delete storage folders
             foreach (var folder in mod.GameModFolders)
+            {
+                if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
                 DeleteIfExists(Path.Combine(storageDir, folder), ref failed);
+            }
             foreach (var dlcFolder in mod.GameDlcFolders)
+            {
+                if (IsSharedFolder(dlcFolder, mod, m => m.GameDlcFolders)) continue;
                 DeleteIfExists(Path.Combine(storageDir, dlcFolder), ref failed);
+            }
 
             // Delete primary installed path
             if (!string.IsNullOrEmpty(mod.InstalledPath))
-                DeleteIfExists(mod.InstalledPath, ref failed);
+            {
+                var primaryName = Path.GetFileName(mod.InstalledPath.TrimEnd('\\', '/'));
+                if (primaryName.StartsWith("~", StringComparison.Ordinal))
+                    primaryName = primaryName[1..];
+                var sharedPrimary = IsSharedFolder(primaryName, mod, m => m.GameModFolders)
+                                 || IsSharedFolder(primaryName, mod, m => m.GameDlcFolders);
+                if (!sharedPrimary)
+                    DeleteIfExists(mod.InstalledPath, ref failed);
+            }
 
             // Update mods.settings
             try
             {
                 var currentMods = GetEnabledModsFromSettings();
                 foreach (var folder in mod.GameModFolders)
+                {
+                    if (IsSharedFolder(folder, mod, m => m.GameModFolders)) continue;
                     currentMods.RemoveAll(m => m.ModName == folder);
+                }
                 WriteModsSettings(currentMods);
             }
             catch { }

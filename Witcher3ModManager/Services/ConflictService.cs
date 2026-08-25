@@ -17,6 +17,9 @@ public class ConflictService
     {
         _storage = storage;
         _w3 = w3;
+#if DEBUG
+        LogScanDiag($"ConflictService created. exeDir={AppContext.BaseDirectory}");
+#endif
     }
 
     public IReadOnlyDictionary<string, List<string>> GetSharedBinOverlaps() => _sharedBinOverlaps;
@@ -102,9 +105,15 @@ public class ConflictService
     {
         var conflicts = new List<ConflictInfo>();
         var enabledMods = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
+#if DEBUG
+        LogScanDiag($"scan start: enabledMods={enabledMods.Count}");
+#endif
         if (enabledMods.Count < 2) {  return conflicts; }
 
         var gamePath = _w3.GetGamePath();
+#if DEBUG
+        LogScanDiag($"gamePath={gamePath ?? "<null>"} exists={(!string.IsNullOrEmpty(gamePath) && Directory.Exists(gamePath))}");
+#endif
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
             return conflicts;
 
@@ -202,9 +211,16 @@ public class ConflictService
             }
         }
         _sharedBinOverlaps = sharedBinFiles;
+#if DEBUG
+        LogScanDiag($"modFileMap: keys={modFileMap.Count} colliding={modFileMap.Count(k => k.Value.Count >= 2)}");
+        LogScanDiag($"dlcFileMap: keys={dlcFileMap.Count} colliding={dlcFileMap.Count(k => k.Value.Count >= 2)}");
+#endif
         AppendDomainConflicts(conflicts, modFileMap, TargetDomain.Mods);
         AppendDomainConflicts(conflicts, dlcFileMap, TargetDomain.Dlc);
 
+#if DEBUG
+        LogScanDiag($"scan done: reported conflicts={conflicts.Count} sharedBinOverlaps={_sharedBinOverlaps.Count}");
+#endif
         return conflicts;
     }
 
@@ -369,6 +385,18 @@ public class ConflictService
         }
     }
 
+#if DEBUG
+    private static void LogScanDiag(string message)
+    {
+        try
+        {
+            var logPath = Path.Combine(AppContext.BaseDirectory, "W3MM_conflict_scan.log");
+            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
+        }
+        catch { }
+    }
+#endif
+
     /// <summary>
     /// Append conflicts for one domain map. Mods and Dlc are separate target domains:
     /// a file path shared between a mod folder and a dlc folder is NOT a conflict (S6).
@@ -379,6 +407,11 @@ public class ConflictService
         Dictionary<string, List<(string Mod, string FullPath)>> fileMap,
         TargetDomain domain)
     {
+#if DEBUG
+        var conflictsBefore = conflicts.Count;
+        LogScanDiag($"[{domain}] candidate overlaps: {fileMap.Count(k => k.Value.Count >= 2)}");
+        var suppressedCount = 0;
+#endif
         foreach (var kvp in fileMap)
         {
             if (kvp.Value.Count >= 2)
@@ -386,11 +419,21 @@ public class ConflictService
                 var hashes = kvp.Value.Select(v => ComputeSha256(v.FullPath)).ToList();
                 var allSame = hashes.All(h => !string.IsNullOrEmpty(h)) &&
                               hashes.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
-                if (allSame) continue;
+                if (allSame)
+                {
+#if DEBUG
+                    suppressedCount++;
+                    LogScanDiag($"[{domain}] SUPPRESSED duplicate: {kvp.Key} mods=[{string.Join(",", kvp.Value.Select(v => v.Mod))}] hashes=[{string.Join(",", hashes)}]");
+#endif
+                    continue;
+                }
 
                 var isScript = kvp.Key.Contains("scripts/", StringComparison.OrdinalIgnoreCase) ||
                                kvp.Key.EndsWith(".ws", StringComparison.OrdinalIgnoreCase);
 
+#if DEBUG
+                LogScanDiag($"[{domain}] CONFLICT: {kvp.Key} mods=[{string.Join(",", kvp.Value.Select(v => v.Mod).Distinct(StringComparer.OrdinalIgnoreCase))}] script={isScript} hashes=[{string.Join(",", hashes)}]");
+#endif
                 conflicts.Add(new ConflictInfo
                 {
                     FilePath = kvp.Key,
@@ -400,5 +443,8 @@ public class ConflictService
                 });
             }
         }
+#if DEBUG
+        LogScanDiag($"[{domain}] reported conflicts: {conflicts.Count - conflictsBefore} (suppressed {suppressedCount} duplicate)");
+#endif
     }
 }
