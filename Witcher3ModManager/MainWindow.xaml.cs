@@ -291,6 +291,22 @@ public partial class MainWindow : Window
         conflictBtn?.Invoke(_modListPage, new object[] { sender, e });
     }
 
+    private void BundleStatus_Click(object sender, RoutedEventArgs e)
+    {
+        if (_conflict == null || _storage == null) return;
+        var conflicts = _conflict.ForceDetectConflicts();
+        var allMods = _storage.GetAllMods();
+        var modDateMap = allMods
+            .GroupBy(m => m.Name)
+            .ToDictionary(g => g.Key, g => g.First().ImportDate);
+        var overrides = _conflict.GetPotentialOverrides();
+        var sharedFolders = _conflict.GetSharedFolderPairs();
+        var bundleMods = _conflict.GetBundleMods();
+        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders);
+        dialog.ShowDialog();
+        RefreshStatusBar();
+    }
+
     private void PotentialStatus_Click(object sender, RoutedEventArgs e)
     {
         if (_conflict == null) return;

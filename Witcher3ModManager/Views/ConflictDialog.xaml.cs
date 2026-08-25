@@ -80,7 +80,7 @@ public partial class ConflictDialog : Window
         ScriptWarning.Text = TranslationService.Instance.T("conflict.script_warning");
 
         // Bundle mod hint
-        if (_bundleMods != null && _bundleMods.Count >= 2)
+        if (_bundleMods != null && _bundleMods.Count >= 1)
         {
             BundleHintPanel.Visibility = Visibility.Visible;
             BundleTitleText.Text = TranslationService.Instance.T("conflict.bundle_detected");
