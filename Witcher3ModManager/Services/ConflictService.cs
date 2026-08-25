@@ -106,11 +106,10 @@ public class ConflictService
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
             return conflicts;
 
-        var fileModMap = new Dictionary<string, List<string>>(
+        var modFileMap = new Dictionary<string, List<string>>(
             StringComparer.OrdinalIgnoreCase);
 
-
-        // Scan mod folders
+        // Scan mod folders (TargetDomain.Mods — separate from Dlc domain)
         var modsRoot = Path.Combine(gamePath, "mods"); var scannedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(modsRoot))
         {
@@ -131,10 +130,10 @@ public class ConflictService
                         {
                             var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
                             if (IsIgnorableConflict(relativePath)) continue;
-                            if (!fileModMap.ContainsKey(relativePath))
-                                fileModMap[relativePath] = new List<string>();
-                            if (!fileModMap[relativePath].Contains(mod.Name))
-                                fileModMap[relativePath].Add(mod.Name);
+                            if (!modFileMap.ContainsKey(relativePath))
+                                modFileMap[relativePath] = new List<string>();
+                            if (!modFileMap[relativePath].Contains(mod.Name))
+                                modFileMap[relativePath].Add(mod.Name);
                         }
                     }
                     catch { }
@@ -142,7 +141,9 @@ public class ConflictService
             }
         }
 
-        // Scan DLC folders
+        // Scan DLC folders (TargetDomain.Dlc — separate from Mods domain)
+        var dlcFileMap = new Dictionary<string, List<string>>(
+            StringComparer.OrdinalIgnoreCase);
         var dlcRoot = Path.Combine(gamePath, "dlc");
         if (Directory.Exists(dlcRoot))
         {
@@ -162,10 +163,10 @@ public class ConflictService
                         {
                             var dlcRelPath = dlcFile.Substring(dlcDir.Length + 1).Replace((char)92, (char)47);
                             if (IsIgnorableConflict(dlcRelPath)) continue;
-                            if (!fileModMap.ContainsKey(dlcRelPath))
-                                fileModMap[dlcRelPath] = new List<string>();
-                            if (!fileModMap[dlcRelPath].Contains(mod.Name))
-                                fileModMap[dlcRelPath].Add(mod.Name);
+                            if (!dlcFileMap.ContainsKey(dlcRelPath))
+                                dlcFileMap[dlcRelPath] = new List<string>();
+                            if (!dlcFileMap[dlcRelPath].Contains(mod.Name))
+                                dlcFileMap[dlcRelPath].Add(mod.Name);
                         }
                     }
                     catch { }
@@ -199,21 +200,8 @@ public class ConflictService
             }
         }
         _sharedBinOverlaps = sharedBinFiles;
-        foreach (var kvp in fileModMap)
-        {
-            if (kvp.Value.Count >= 2)
-            {
-                var isScript = kvp.Key.Contains("scripts/", StringComparison.OrdinalIgnoreCase) ||
-                               kvp.Key.EndsWith(".ws", StringComparison.OrdinalIgnoreCase);
-
-                conflicts.Add(new ConflictInfo
-                {
-                    FilePath = kvp.Key,
-                    ConflictingMods = kvp.Value,
-                    IsScriptConflict = isScript
-                });
-            }
-        }
+        AppendDomainConflicts(conflicts, modFileMap);
+        AppendDomainConflicts(conflicts, dlcFileMap);
 
         return conflicts;
     }
@@ -364,5 +352,30 @@ public class ConflictService
             .Select(c => c.ConflictingMods.FirstOrDefault(m => m != mod.Name) ?? "?")
             .Distinct()
             .ToList();
+    }
+
+    /// <summary>
+    /// Append conflicts for one domain map. Mods and Dlc are separate target domains:
+    /// a file path shared between a mod folder and a dlc folder is NOT a conflict (S6).
+    /// </summary>
+    private static void AppendDomainConflicts(
+        List<ConflictInfo> conflicts,
+        Dictionary<string, List<string>> fileMap)
+    {
+        foreach (var kvp in fileMap)
+        {
+            if (kvp.Value.Count >= 2)
+            {
+                var isScript = kvp.Key.Contains("scripts/", StringComparison.OrdinalIgnoreCase) ||
+                               kvp.Key.EndsWith(".ws", StringComparison.OrdinalIgnoreCase);
+
+                conflicts.Add(new ConflictInfo
+                {
+                    FilePath = kvp.Key,
+                    ConflictingMods = kvp.Value,
+                    IsScriptConflict = isScript
+                });
+            }
+        }
     }
 }
