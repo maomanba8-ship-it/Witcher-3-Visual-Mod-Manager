@@ -332,6 +332,42 @@ public class ConflictService
         return GetSharedResources();
     }
 
+    /// <summary>
+    /// Shared folders whose owners recorded different content when they were imported. A shared
+    /// folder keeps a single copy on disk, so only the import-time record can still say whether
+    /// the owners originally shipped the same bytes. Folders with incomplete history are left
+    /// out entirely: unknown history is not a finding, and this never changes a conflict count.
+    /// </summary>
+    public List<(string Folder, List<string> Mods)> GetSharedContentDiffs()
+    {
+        var enabled = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
+        var differences = new List<(string Folder, List<string> Mods)>();
+
+        foreach (var (folder, owners) in GetSharedResources())
+        {
+            var key = SharedResourceResolver.NormalizeFolder(folder);
+            var recorded = new List<string?>();
+
+            foreach (var owner in owners)
+            {
+                var mod = enabled.FirstOrDefault(m =>
+                    string.Equals(m.Name, owner, StringComparison.OrdinalIgnoreCase));
+                var matches = (mod?.ComponentFingerprints ?? new List<ComponentFingerprintEntry>())
+                    .Where(e => string.Equals(
+                        SharedResourceResolver.NormalizeFolder(e.Folder), key, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                // No record, or one name claimed in two domains, is ambiguity: report nothing.
+                recorded.Add(matches.Count == 1 ? matches[0].Fingerprint : null);
+            }
+
+            if (SharedFingerprintComparison.Compare(recorded) == SharedContentVerdict.Differs)
+                differences.Add((folder, owners));
+        }
+
+        return differences;
+    }
+
     public bool IsBundleMod(ModEntry mod)
     {
         if (!mod.IsEnabled) return false;

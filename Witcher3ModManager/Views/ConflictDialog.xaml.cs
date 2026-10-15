@@ -16,18 +16,22 @@ public partial class ConflictDialog : Window
     private string? _scriptMergerPath;
     private readonly List<ModEntry>? _bundleMods;
     private List<(string Folder, List<string> Mods)> _sharedFolders = new();
+    private readonly HashSet<string> _sharedContentDiffs;
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
         Dictionary<CategoryType, List<string>>? potentialOverrides = null,
         List<ModEntry>? bundleMods = null,
-        List<(string Folder, List<string> Mods)>? sharedFolders = null)
+        List<(string Folder, List<string> Mods)>? sharedFolders = null,
+        IEnumerable<string>? sharedContentDiffs = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
         _conflicts = conflicts;
         _bundleMods = bundleMods;
         _sharedFolders = sharedFolders ?? new();
+        _sharedContentDiffs = new HashSet<string>(
+            sharedContentDiffs ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
         Translate();
@@ -94,7 +98,13 @@ public partial class ConflictDialog : Window
         {
             SharedHintPanel.Visibility = Visibility.Visible;
             var sharedLines = _sharedFolders.Select(sf =>
-                string.Format(TranslationService.Instance.T("conflict.shared_folder_item"), sf.Folder, string.Join(", ", sf.Mods)));
+            {
+                var line = string.Format(
+                    TranslationService.Instance.T("conflict.shared_folder_item"), sf.Folder, string.Join(", ", sf.Mods));
+                if (_sharedContentDiffs.Contains(sf.Folder))
+                    line += "\n" + TranslationService.Instance.T("conflict.shared_folder_differs");
+                return line;
+            });
             SharedModListText.Text = string.Join("\n", sharedLines);
         }
 

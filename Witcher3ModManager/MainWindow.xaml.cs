@@ -302,7 +302,8 @@ public partial class MainWindow : Window
         var overrides = _conflict.GetPotentialOverrides();
         var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
-        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders);
+        var sharedContentDiffs = _conflict.GetSharedContentDiffs().Select(d => d.Folder);
+        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs);
         dialog.ShowDialog();
         RefreshStatusBar();
     }

@@ -636,7 +636,8 @@ public partial class ModListPage : UserControl
         var overrides = _conflict.GetPotentialOverrides();
         var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
-        var dialog = new ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders);
+        var sharedContentDiffs = _conflict.GetSharedContentDiffs().Select(d => d.Folder);
+        var dialog = new ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs);
         dialog.ShowDialog();
         UpdateStatusBar();
     }
