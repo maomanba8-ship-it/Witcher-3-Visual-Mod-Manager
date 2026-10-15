@@ -12,6 +12,7 @@ public partial class OrphanDialog : Window
 {
     private readonly List<OrphanModInfo> _orphans;
     private readonly List<CheckBox> _checkBoxes = new();
+    private IDisposable? _languageSubscription;
     public List<OrphanModInfo> SelectedOrphans { get; private set; } = new();
 
     public OrphanDialog(List<OrphanModInfo> orphans)
@@ -20,7 +21,12 @@ public partial class OrphanDialog : Window
         Owner = Application.Current.MainWindow;
         _orphans = orphans;
         Translate();
-        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => Translate());
+        _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(() => Translate()));
+        Closed += (_, _) =>
+        {
+            _languageSubscription?.Dispose();
+            _languageSubscription = null;
+        };
     }
 
     private void Translate()

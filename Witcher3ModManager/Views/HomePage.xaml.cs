@@ -9,6 +9,7 @@ namespace Witcher3ModManager.Views;
 public partial class HomePage : UserControl
 {
     public event Action<string>? NavigateRequested;
+    private IDisposable? _languageSubscription;
 
     public HomePage()
     {
@@ -16,8 +17,15 @@ public partial class HomePage : UserControl
         VersionBadgeText.Text = Core.AppInfo.DisplayVersion;
         Loaded += (_, _) =>
         {
-            TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(RefreshLanguage);
+            _languageSubscription?.Dispose();
+            _languageSubscription = TranslationService.Instance.Subscribe(
+                () => Dispatcher.Invoke(RefreshLanguage));
             RefreshLanguage();
+        };
+        Unloaded += (_, _) =>
+        {
+            _languageSubscription?.Dispose();
+            _languageSubscription = null;
         };
     }
 

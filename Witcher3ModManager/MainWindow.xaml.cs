@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private PresetPage? _presetPage;
     private PresetService? _presets;
     private OrphanDetectionService? _orphanDetector;
+    private IDisposable? _languageSubscription;
 
     public MainWindow()
     {
@@ -62,13 +63,14 @@ public partial class MainWindow : Window
             NavigateToHome();
 
             // Language switching
-            TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() =>
+            _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(() =>
             {
                 TitleText.Text = TranslationService.Instance.T("app.title");
                 BtnMinimize.ToolTip = TranslationService.Instance.T("window.minimize");
                 BtnMaximize.ToolTip = TranslationService.Instance.T("window.maximize");
                 BtnClose.ToolTip = TranslationService.Instance.T("window.close");
-            });
+            }));
+            Closed += (_, _) => _languageSubscription?.Dispose();
         }
         catch (Exception ex)
         {

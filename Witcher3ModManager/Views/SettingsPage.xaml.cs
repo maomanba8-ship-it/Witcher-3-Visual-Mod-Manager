@@ -12,12 +12,18 @@ public partial class SettingsPage : UserControl
     private SettingsService? _settings;
     public event Action? NavigateBackRequested;
     public event Action<string>? BackgroundImageChanged;
+    private IDisposable? _languageSubscription;
 
     public SettingsPage()
     {
         InitializeComponent();
-            TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(RefreshLanguage);
-            RefreshLanguage();
+        _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(RefreshLanguage));
+        RefreshLanguage();
+        Unloaded += (_, _) =>
+        {
+            _languageSubscription?.Dispose();
+            _languageSubscription = null;
+        };
     }
 
     public void Initialize(SettingsService settings)

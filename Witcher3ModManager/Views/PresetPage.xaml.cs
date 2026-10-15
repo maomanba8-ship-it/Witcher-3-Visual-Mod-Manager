@@ -14,12 +14,18 @@ public partial class PresetPage : UserControl
     private Witcher3Service? _w3;
     public event Action? NavigateBackRequested;
     public event Action? PresetApplied;
+    private IDisposable? _languageSubscription;
 
     public PresetPage()
     {
         InitializeComponent();
-        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(RefreshLanguage);
+        _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(RefreshLanguage));
         RefreshLanguage();
+        Unloaded += (_, _) =>
+        {
+            _languageSubscription?.Dispose();
+            _languageSubscription = null;
+        };
     }
 
     private void RefreshLanguage()

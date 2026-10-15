@@ -19,6 +19,7 @@ public partial class ConflictDialog : Window
     private List<(string Folder, List<string> Mods)> _sharedFolders = new();
     private readonly HashSet<string> _sharedContentDiffs;
     private readonly SettingsService? _settings;
+    private readonly IDisposable? _languageSubscription;
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
@@ -39,7 +40,8 @@ public partial class ConflictDialog : Window
         LoadConflicts(conflicts, modDates, potentialOverrides);
         AutoDetectScriptMerger();
         Translate();
-        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => Translate());
+        _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(() => Translate()));
+        Closed += (_, _) => _languageSubscription?.Dispose();
         var t = TranslationService.Instance;
         Title = t.T("conflict.title");
         CloseBtn.Content = t.T("conflict.close");

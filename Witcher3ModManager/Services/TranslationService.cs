@@ -47,6 +47,18 @@ public class TranslationService
         LanguageChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Subscribes to language changes and returns a token that removes the handler again. Views
+    /// hold the token and dispose it when they unload, so switching pages or closing a dialog
+    /// does not leave handlers stacked on this long-lived singleton.
+    /// </summary>
+    public IDisposable Subscribe(Action handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        LanguageChanged += handler;
+        return new Core.EventSubscription(() => LanguageChanged -= handler);
+    }
+
     public string T(string key)
     {
         return _strings.TryGetValue(key, out var val) ? val : key;

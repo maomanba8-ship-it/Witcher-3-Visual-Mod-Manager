@@ -21,6 +21,7 @@ public partial class ModListPage : UserControl
     private ModImportService? _importer;
     private BackupService? _backup;
     private SettingsService? _settings;
+    private IDisposable? _languageSubscription;
     private Category? _selectedCategory;
     private List<ModEntry> _allMods = new();
     private ModEntry? _selectedMod;
@@ -47,10 +48,22 @@ public partial class ModListPage : UserControl
         LoadCategories();
         RefreshModList();
         RefreshLanguage();
-        TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(() => {
+        // Initialize runs on every navigation here, so drop the previous token first: otherwise
+        // each visit would add another handler and refresh the page several times per switch.
+        _languageSubscription?.Dispose();
+        _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(() =>
+        {
             RefreshLanguage();
             if (_selectedMod != null) ShowModDetail(_selectedMod);
-        });
+        }));
+        Unloaded -= OnModListUnloaded;
+        Unloaded += OnModListUnloaded;
+    }
+
+    private void OnModListUnloaded(object sender, RoutedEventArgs e)
+    {
+        _languageSubscription?.Dispose();
+        _languageSubscription = null;
     }
 
     private void LoadCategories()
