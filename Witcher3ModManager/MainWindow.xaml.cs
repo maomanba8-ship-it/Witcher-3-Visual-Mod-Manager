@@ -358,6 +358,7 @@ public partial class MainWindow : Window
 
 
 
+#if DEBUG
     /// <summary>
     /// Logs the read-only library audit (DEBUG only). It is the evidence behind any later
     /// decision to migrate the library, so it is recorded every run rather than on request.
@@ -373,6 +374,7 @@ public partial class MainWindow : Window
                 $"[audit] {finding.Kind}: entries=[{string.Join(", ", finding.Entries)}] " +
                 $"subjects=[{string.Join(", ", finding.Subjects)}]");
     }
+#endif
 
     /// <summary>
     /// A damaged or unreadable library has to reach the user: the list on screen is not the one
