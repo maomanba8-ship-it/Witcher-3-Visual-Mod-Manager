@@ -298,6 +298,34 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock x:Name="LibraryCheckLabel" Text="检查资料库" FontSize="12"
+                                           Foreground="#9A9EAA"/>
+                                <TextBlock x:Name="LibraryCheckHint" FontSize="11"
+                                           Foreground="#5E626E" TextWrapping="Wrap" Margin="0,2,12,0"/>
+                            </StackPanel>
+                            <Button x:Name="LibraryCheckBtn" Grid.Column="1" Content="Check" Height="30"
+                                    Padding="14,0" Click="LibraryCheck_Click" Cursor="Hand">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="bd" CornerRadius="6" Background="#8BA4B5">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              TextElement.Foreground="#14161E" TextElement.FontSize="12"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                                 <TextBlock x:Name="AutoBackupCheckText" Text="启用前自动备份" FontSize="12"
                                            Foreground="#9A9EAA"/>

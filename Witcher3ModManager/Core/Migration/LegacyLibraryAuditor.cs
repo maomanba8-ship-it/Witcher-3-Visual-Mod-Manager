@@ -31,14 +31,14 @@ public static class LegacyLibraryAuditor
             {
                 findings.Add(new LegacyAuditFinding(
                     LegacyAuditKind.Unattributable, new[] { entry.Name },
-                    $"{entry.Name}: no mod folder, dlc folder or bin file recorded"));
+                    Array.Empty<string>()));
                 continue;
             }
 
             if (modFolders.Count == 0 && dlcFolders.Count == 0)
                 findings.Add(new LegacyAuditFinding(
                     LegacyAuditKind.BinOnly, new[] { entry.Name },
-                    $"{entry.Name}: only {binFiles.Count} bin file(s)"));
+                    binFiles));
 
             AddDuplicateTargetFindings(findings, entry.Name, modFolders, dlcFolders);
 
@@ -71,7 +71,7 @@ public static class LegacyLibraryAuditor
             if (duplicates.Count > 0)
                 findings.Add(new LegacyAuditFinding(
                     LegacyAuditKind.DuplicateTargetFolder, new[] { name },
-                    $"{name}: {domain} folder listed more than once: {string.Join(", ", duplicates)}"));
+                    duplicates));
         }
     }
 
@@ -89,7 +89,7 @@ public static class LegacyLibraryAuditor
         if (missing.Count > 0)
             findings.Add(new LegacyAuditFinding(
                 LegacyAuditKind.StorageFolderMissing, new[] { name },
-                $"{name}: not in storage: {string.Join(", ", missing)}"));
+                missing));
     }
 
     private static void AddEnabledButMissingFindings(
@@ -104,9 +104,12 @@ public static class LegacyLibraryAuditor
                      dlcFolders.Any(f => gameFolderExists(f, true));
 
         if (!served)
+        {
+            var folders = modFolders.Concat(dlcFolders).ToList();
             findings.Add(new LegacyAuditFinding(
                 LegacyAuditKind.EnabledButMissingInGame, new[] { name },
-                $"{name}: enabled but no folder found in the game directory"));
+                folders));
+        }
     }
 
     private static void AddSharedFolderFindings(
@@ -134,8 +137,7 @@ public static class LegacyLibraryAuditor
                 .ToList();
 
             findings.Add(new LegacyAuditFinding(
-                LegacyAuditKind.SharedFolder, owners,
-                $"{group.Key}: shared by {string.Join(", ", owners)}"));
+                LegacyAuditKind.SharedFolder, owners, new[] { group.Key }));
         }
     }
 

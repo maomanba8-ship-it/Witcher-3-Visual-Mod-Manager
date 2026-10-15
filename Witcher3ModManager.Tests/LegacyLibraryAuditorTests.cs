@@ -55,7 +55,7 @@ public class LegacyLibraryAuditorTests
 
         var finding = Assert.Single(audit.OfKind(LegacyAuditKind.StorageFolderMissing));
         Assert.Equal(new[] { "modGone" }, finding.Entries);
-        Assert.Contains("modGone", finding.Detail);
+        Assert.Equal(new[] { "modGone" }, finding.Subjects);
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class LegacyLibraryAuditorTests
 
         var finding = Assert.Single(audit.OfKind(LegacyAuditKind.SharedFolder));
         Assert.Equal(new[] { "modA", "modB" }, finding.Entries);
-        Assert.Contains("modShared", finding.Detail);
+        Assert.Equal(new[] { "modShared" }, finding.Subjects);
         Assert.True(audit.IsClean);   // shared folders alone are not a problem
     }
 

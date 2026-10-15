@@ -231,7 +231,7 @@ public partial class MainWindow : Window
         _settingsPage.NavigateBackRequested += OnSettingsBack;
         _settingsPage.BackgroundImageChanged -= OnBackgroundChanged;
         _settingsPage.BackgroundImageChanged += OnBackgroundChanged;
-        _settingsPage.Initialize(_settings);
+        _settingsPage.Initialize(_settings, () => _storage!.GetLibraryAudit(_w3?.GetGamePath()));
         PageHost.Content = _settingsPage;
         SetBackgroundBlur(true);
         MainStatusBar.Visibility = Visibility.Collapsed;
@@ -369,7 +369,9 @@ public partial class MainWindow : Window
         var audit = _storage.GetLibraryAudit(_w3?.GetGamePath());
         DiagnosticLog.Write($"[audit] entries={audit.EntryCount} findings={audit.Findings.Count} clean={audit.IsClean}");
         foreach (var finding in audit.Findings)
-            DiagnosticLog.Write($"[audit] {finding.Kind}: {finding.Detail}");
+            DiagnosticLog.Write(
+                $"[audit] {finding.Kind}: entries=[{string.Join(", ", finding.Entries)}] " +
+                $"subjects=[{string.Join(", ", finding.Subjects)}]");
     }
 
     /// <summary>

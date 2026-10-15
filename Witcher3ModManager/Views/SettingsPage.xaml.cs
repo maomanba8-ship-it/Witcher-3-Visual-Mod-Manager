@@ -13,6 +13,7 @@ public partial class SettingsPage : UserControl
     public event Action? NavigateBackRequested;
     public event Action<string>? BackgroundImageChanged;
     private IDisposable? _languageSubscription;
+    private Func<Core.Migration.LegacyLibraryAudit>? _auditProvider;
 
     public SettingsPage()
     {
@@ -34,10 +35,23 @@ public partial class SettingsPage : UserControl
         };
     }
 
-    public void Initialize(SettingsService settings)
+    public void Initialize(SettingsService settings, Func<Core.Migration.LegacyLibraryAudit>? auditProvider = null)
     {
         _settings = settings;
+        _auditProvider = auditProvider;
         LoadSettings();
+    }
+
+    /// <summary>
+    /// Opens the read-only library report. Nothing here changes a file: the audit can only look,
+    /// and acting on what it finds is a separate, later decision by the user.
+    /// </summary>
+    private void LibraryCheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (_auditProvider == null) return;
+
+        var dialog = new LibraryAuditDialog(_auditProvider());
+        dialog.ShowDialog();
     }
 
     private void LoadSettings()
@@ -217,6 +231,9 @@ public partial class SettingsPage : UserControl
         LaunchArgsLabel.Text = ts.T("settings.launch_args");
         LaunchArgsHint.Text = ts.T("settings.launch_args_hint");
         ToolsHeader.Text = ts.T("settings.tools");
+        LibraryCheckLabel.Text = ts.T("settings.library_check");
+        LibraryCheckHint.Text = ts.T("settings.library_check_hint");
+        LibraryCheckBtn.Content = ts.T("settings.library_check");
         AutoBackupCheckText.Text = ts.T("settings.auto_backup");
         AutoBackupDescText.Text = ts.T("settings.auto_backup_desc");
         MoreFeaturesHeader.Text = ts.T("settings.more");

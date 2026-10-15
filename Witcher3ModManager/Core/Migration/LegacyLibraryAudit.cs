@@ -38,12 +38,14 @@ public enum LegacyAuditKind
 }
 
 /// <summary>
-/// One finding, naming the records involved so a report can point at them.
+/// One finding as structured data: which records are involved, and which folders or files the
+/// finding is about. Deliberately not a sentence, so the analysis layer stays language-neutral
+/// and the UI can word it in the user's language.
 /// </summary>
 public sealed record LegacyAuditFinding(
     LegacyAuditKind Kind,
     IReadOnlyList<string> Entries,
-    string Detail);
+    IReadOnlyList<string> Subjects);
 
 /// <summary>
 /// The read-only result. It describes what is there; it never changes anything, which is the
