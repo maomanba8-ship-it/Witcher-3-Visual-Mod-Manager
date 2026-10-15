@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using System.Security.Cryptography;
 using Witcher3ModManager.Core.Analysis;
 using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Core.Shared;
@@ -12,7 +11,6 @@ public class ConflictService
     private readonly ModStorageService _storage;
     private readonly Witcher3Service _w3;
     private List<ConflictInfo>? _cachedConflicts;
-    private Dictionary<string, List<string>> _sharedBinOverlaps = new(StringComparer.OrdinalIgnoreCase);
     private bool _cacheValid;
 
     public ConflictService(ModStorageService storage, Witcher3Service w3)
@@ -23,8 +21,6 @@ public class ConflictService
         LogScanDiag($"ConflictService created. exeDir={AppContext.BaseDirectory}");
 #endif
     }
-
-    public IReadOnlyDictionary<string, List<string>> GetSharedBinOverlaps() => _sharedBinOverlaps;
 
     public void InvalidateCache()
     {
@@ -39,11 +35,6 @@ public class ConflictService
 
         var enabledMods = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
         var conflicts = BuildManifestConflicts(enabledMods);
-#if DEBUG
-        // Legacy game-dir scan is kept only as a DEBUG diagnostic comparison; it is no
-        // longer the source of the user-facing conflict list.
-        ScanGameDirectory();
-#endif
         _cachedConflicts = conflicts;
         _cacheValid = true;
         return _cachedConflicts;
@@ -93,6 +84,14 @@ public class ConflictService
             files = files.Concat(ManifestConflictInputProvider.BuildFromRoots(binClaims)).ToList();
 
         var evidence = ConflictAnalyzer.Analyze(files);
+#if DEBUG
+        // Diagnostics only: record the full evidence, including the informational kinds the
+        // user-facing list intentionally leaves out, so a report of "no conflicts" can still be
+        // told apart from "the analysis found nothing at all".
+        LogScanDiag($"[manifest] storageDir={storageDir} files={files.Count} evidence={evidence.Count}");
+        foreach (var e in evidence)
+            LogScanDiag($"[manifest] {e.Kind}: {e.NormalizedRelativePath} components=[{string.Join(",", e.ComponentIdentities)}]");
+#endif
         var idToName = _storage?.GetAllMods()
                            .ToDictionary(m => m.Id, m => m.Name, StringComparer.OrdinalIgnoreCase)
                        ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -101,185 +100,6 @@ public class ConflictService
         return AdaptEvidence(evidence, idToName)
             .Where(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind))
             .ToList();
-    }
-
-    // ���� Ignore Rule System ��������������������������������������������������������������������������������
-    //
-    // Admission criteria (ALL three must be met):
-    //   1. Present in nearly every WolvenKit-packed mod
-    //   2. Overwriting it does NOT change game behavior
-    //   3. It provides ZERO diagnostic value for real conflicts
-    //
-    // ? If a file only meets 1-2 criteria �� do NOT add it here.
-
-    public static IReadOnlyList<IgnoredConflictRule> IgnoredConflictRules { get; } = new List<IgnoredConflictRule>
-    {
-        new(@"content\blob0.bundle",          "Standard WolvenKit content bundle"),
-        new(@"content\buffers0.bundle",       "WolvenKit buffer bundle"),
-        new(@"content\collision.cache",       "Auto-generated collision cache"),
-        new(@"content\texture.cache",         "Auto-generated texture cache"),
-        new(@"content\metadata.store",        "WolvenKit metadata store"),
-        new(@"content\info.json",             "WolvenKit auto-generated mod metadata"),
-        new(@"content\shaderDx12.cache",      "Auto-generated shader cache (DX12)"),
-        new(@"content\*.w3strings",           "WolvenKit auto-generated localization stubs (per-folder, no cross-mod impact)")
-    };
-
-    /// <summary>
-    /// Fast-path check: is this relative path ignorable?
-    /// Uses a switch expression to avoid allocation.
-    /// </summary>
-    public static bool IsIgnorableConflict(string relativePath)
-    {
-        var normalized = relativePath.Replace('/', '\\').ToLowerInvariant();
-
-        return normalized switch
-        {
-            @"content\blob0.bundle"      => true,
-            @"content\buffers0.bundle"   => true,
-            @"content\collision.cache"   => true,
-            @"content\texture.cache"     => true,
-            @"content\metadata.store"    => true,
-            @"content\info.json"         => true,
-            @"content\shaderdx12.cache"  => true,
-            _ => normalized.EndsWith(".w3strings")
-        };
-    }
-
-    /// <summary>
-    /// Return the reason a path was ignored, or null if not ignored.
-    /// </summary>
-    public static string? GetIgnoreReason(string relativePath)
-    {
-        var normalized = relativePath.Replace('/', '\\');
-        return IgnoredConflictRules
-            .FirstOrDefault(r => string.Equals(r.Pattern, normalized, StringComparison.OrdinalIgnoreCase))
-            ?.Reason;
-    }
-
-    // ���� Scanning ����������������������������������������������������������������������������������������������������
-
-    private List<ConflictInfo> ScanGameDirectory()
-    {
-        var conflicts = new List<ConflictInfo>();
-        var enabledMods = _storage.GetAllMods().Where(m => m.IsEnabled).ToList();
-#if DEBUG
-        LogScanDiag($"scan start: enabledMods={enabledMods.Count}");
-#endif
-        if (enabledMods.Count < 2) {  return conflicts; }
-
-        var gamePath = _w3.GetGamePath();
-#if DEBUG
-        LogScanDiag($"gamePath={gamePath ?? "<null>"} exists={(!string.IsNullOrEmpty(gamePath) && Directory.Exists(gamePath))}");
-#endif
-        if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
-            return conflicts;
-
-        var modFileMap = new Dictionary<string, List<(string Mod, string FullPath)>>(
-            StringComparer.OrdinalIgnoreCase);
-
-        // Scan mod folders (TargetDomain.Mods — separate from Dlc domain)
-        var modsRoot = Path.Combine(gamePath, "mods"); var scannedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (Directory.Exists(modsRoot))
-        {
-            foreach (var mod in enabledMods)
-            {
-                foreach (var folderName in mod.GameModFolders)
-                {
-                    if (string.IsNullOrEmpty(folderName)) continue;
-                    var modDir = Path.Combine(modsRoot, folderName);
-                    if (!Directory.Exists(modDir)) continue;
-                    if (!scannedDirs.Add(modDir)) continue;
-
-                    try
-                    {
-                        var files = Directory.GetFiles(modDir, "*.*", SearchOption.AllDirectories);
-                        
-                        foreach (var file in files)
-                        {
-                            var relativePath = file[(modDir.Length + 1)..].Replace('\\', '/');
-                            if (IsIgnorableConflict(relativePath)) continue;
-                            if (!modFileMap.ContainsKey(relativePath))
-                                modFileMap[relativePath] = new List<(string Mod, string FullPath)>();
-                            if (!modFileMap[relativePath].Any(x => x.Mod == mod.Name))
-                                modFileMap[relativePath].Add((mod.Name, file));
-                        }
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        // Scan DLC folders (TargetDomain.Dlc — separate from Mods domain)
-        var dlcFileMap = new Dictionary<string, List<(string Mod, string FullPath)>>(
-            StringComparer.OrdinalIgnoreCase);
-        var dlcRoot = Path.Combine(gamePath, "dlc");
-        if (Directory.Exists(dlcRoot))
-        {
-            foreach (var mod in enabledMods)
-            {
-                foreach (var dlcFolderName in mod.GameDlcFolders)
-                {
-                    if (string.IsNullOrEmpty(dlcFolderName)) continue;
-                    var dlcDir = Path.Combine(dlcRoot, dlcFolderName);
-                    if (!Directory.Exists(dlcDir)) continue;
-                    if (!scannedDirs.Add(dlcDir)) continue;
-
-                    try
-                    {
-                        var dlcFiles = Directory.GetFiles(dlcDir, "*.*", SearchOption.AllDirectories);
-                        foreach (var dlcFile in dlcFiles)
-                        {
-                            var dlcRelPath = dlcFile.Substring(dlcDir.Length + 1).Replace((char)92, (char)47);
-                            if (IsIgnorableConflict(dlcRelPath)) continue;
-                            if (!dlcFileMap.ContainsKey(dlcRelPath))
-                                dlcFileMap[dlcRelPath] = new List<(string Mod, string FullPath)>();
-                            if (!dlcFileMap[dlcRelPath].Any(x => x.Mod == mod.Name))
-                                dlcFileMap[dlcRelPath].Add((mod.Name, dlcFile));
-                        }
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        // Scan bin files — collect shared overlaps (informational, not conflicts)
-        var sharedBinFiles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        if (Directory.Exists(Path.Combine(gamePath, "bin")))
-        {
-            var binModMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var mod in enabledMods)
-            {
-                if (mod.GameBinFiles.Count == 0) continue;
-                foreach (var bf in mod.GameBinFiles)
-                {
-                    if (binModMap.ContainsKey(bf))
-                    {
-                        var otherMod = binModMap[bf];
-                        if (!sharedBinFiles.ContainsKey(bf))
-                            sharedBinFiles[bf] = new List<string> { otherMod };
-                        if (!sharedBinFiles[bf].Contains(mod.Name))
-                            sharedBinFiles[bf].Add(mod.Name);
-                    }
-                    else
-                    {
-                        binModMap[bf] = mod.Name;
-                    }
-                }
-            }
-        }
-        _sharedBinOverlaps = sharedBinFiles;
-#if DEBUG
-        LogScanDiag($"modFileMap: keys={modFileMap.Count} colliding={modFileMap.Count(k => k.Value.Count >= 2)}");
-        LogScanDiag($"dlcFileMap: keys={dlcFileMap.Count} colliding={dlcFileMap.Count(k => k.Value.Count >= 2)}");
-#endif
-        AppendDomainConflicts(conflicts, modFileMap, TargetDomain.Mods);
-        AppendDomainConflicts(conflicts, dlcFileMap, TargetDomain.Dlc);
-
-#if DEBUG
-        LogScanDiag($"scan done: reported conflicts={conflicts.Count} sharedBinOverlaps={_sharedBinOverlaps.Count}");
-        LogManifestConflictComparison(conflicts, enabledMods);
-#endif
-        return conflicts;
     }
 
     // ���� Potential Override ��������������������������������������������������������������������������������
@@ -466,19 +286,6 @@ public class ConflictService
             .ToList();
     }
 
-    private static string ComputeSha256(string path)
-    {
-        try
-        {
-            using var fs = File.OpenRead(path);
-            return Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant();
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
 #if DEBUG
     private static void LogScanDiag(string message)
     {
@@ -494,8 +301,7 @@ public class ConflictService
     /// <summary>
     /// ADAPTER: turn evidence from the manifest-based analyzer into the existing UI
     /// ConflictInfo shape. Duplicate content stays suppressed; component identities are
-    /// mapped to display names. This is not yet the source of the UI conflict list — it is
-    /// used in DEBUG dual-mode comparison until switchover is accepted.
+    /// mapped to display names. This is the single source of the UI conflict list.
     /// </summary>
     private static List<ConflictInfo> AdaptEvidence(
         IReadOnlyList<ConflictEvidence> evidence,
@@ -520,90 +326,4 @@ public class ConflictService
         return result;
     }
 
-#if DEBUG
-    /// <summary>
-    /// Dual-mode comparison (DEBUG only): run the manifest-based analyzer over enabled
-    /// components' storage manifests and log how it differs from the legacy game-dir scan.
-    /// It does NOT change what the user sees — the UI red list still comes from the legacy
-    /// scan until switchover has been accepted with fixtures.
-    /// </summary>
-    private void LogManifestConflictComparison(List<ConflictInfo> legacy, List<ModEntry> enabledMods)
-    {
-        var storageDir = _storage?.GetModsDirectory();
-        if (string.IsNullOrEmpty(storageDir)) return;
-
-        var claims = new List<FolderClaim>();
-        foreach (var m in enabledMods)
-        {
-            foreach (var f in m.GameModFolders)
-                if (!string.IsNullOrWhiteSpace(f)) claims.Add(new FolderClaim(m.Id, TargetDomain.Mods, f));
-            foreach (var f in m.GameDlcFolders)
-                if (!string.IsNullOrWhiteSpace(f)) claims.Add(new FolderClaim(m.Id, TargetDomain.Dlc, f));
-        }
-
-        var files = ManifestConflictInputProvider.Build(storageDir, claims);
-        var evidence = ConflictAnalyzer.Analyze(files);
-        var idToName = _storage?.GetAllMods()
-                           .ToDictionary(m => m.Id, m => m.Name, StringComparer.OrdinalIgnoreCase)
-                       ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var adapted = AdaptEvidence(evidence, idToName);
-
-        LogScanDiag($"[manifest-compare] storageDir={storageDir} files={files.Count} evidence={evidence.Count}");
-        LogScanDiag($"[manifest-compare] newConflicts={adapted.Count} legacy={legacy.Count}");
-        foreach (var c in adapted)
-            LogScanDiag($"[manifest-compare] {c.Kind}: {c.FilePath} mods=[{string.Join(",", c.ConflictingMods)}]");
-        var dupCount = evidence.Count(e => e.Kind == ConflictKind.DuplicateContent);
-        LogScanDiag($"[manifest-compare] suppressedDuplicate={dupCount}");
-    }
-#endif
-    /// <summary>
-    /// Append conflicts for one domain map. Mods and Dlc are separate target domains:
-    /// a file path shared between a mod folder and a dlc folder is NOT a conflict (S6).
-    /// Identical same-domain content is DuplicateContent (not a conflict).
-    /// </summary>
-    private static void AppendDomainConflicts(
-        List<ConflictInfo> conflicts,
-        Dictionary<string, List<(string Mod, string FullPath)>> fileMap,
-        TargetDomain domain)
-    {
-#if DEBUG
-        var conflictsBefore = conflicts.Count;
-        LogScanDiag($"[{domain}] candidate overlaps: {fileMap.Count(k => k.Value.Count >= 2)}");
-        var suppressedCount = 0;
-#endif
-        foreach (var kvp in fileMap)
-        {
-            if (kvp.Value.Count >= 2)
-            {
-                var hashes = kvp.Value.Select(v => ComputeSha256(v.FullPath)).ToList();
-                var allSame = hashes.All(h => !string.IsNullOrEmpty(h)) &&
-                              hashes.Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
-                if (allSame)
-                {
-#if DEBUG
-                    suppressedCount++;
-                    LogScanDiag($"[{domain}] SUPPRESSED duplicate: {kvp.Key} mods=[{string.Join(",", kvp.Value.Select(v => v.Mod))}] hashes=[{string.Join(",", hashes)}]");
-#endif
-                    continue;
-                }
-
-                var isScript = kvp.Key.Contains("scripts/", StringComparison.OrdinalIgnoreCase) ||
-                               kvp.Key.EndsWith(".ws", StringComparison.OrdinalIgnoreCase);
-
-#if DEBUG
-                LogScanDiag($"[{domain}] CONFLICT: {kvp.Key} mods=[{string.Join(",", kvp.Value.Select(v => v.Mod).Distinct(StringComparer.OrdinalIgnoreCase))}] script={isScript} hashes=[{string.Join(",", hashes)}]");
-#endif
-                conflicts.Add(new ConflictInfo
-                {
-                    FilePath = kvp.Key,
-                    ConflictingMods = kvp.Value.Select(v => v.Mod).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-                    Kind = ConflictAnalyzer.Classify(domain, hashes, kvp.Key),
-                    IsScriptConflict = isScript
-                });
-            }
-        }
-#if DEBUG
-        LogScanDiag($"[{domain}] reported conflicts: {conflicts.Count - conflictsBefore} (suppressed {suppressedCount} duplicate)");
-#endif
-    }
 }

@@ -156,24 +156,4 @@ public static class ConflictAnalyzer
 
         return results;
     }
-
-    public static ConflictKind Classify(TargetDomain domain, IReadOnlyList<string> hashes, string normalizedPath)
-    {
-        var distinct = hashes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (IsOpaqueContainerPath(normalizedPath))
-            return distinct.Count == 1 ? ConflictKind.DuplicateContent : ConflictKind.UnsupportedContainer;
-
-        if (domain == TargetDomain.Bin)
-            return distinct.Count == 1 ? ConflictKind.DuplicateContent : ConflictKind.BinOverrideRisk;
-
-        if (distinct.Count == 1)
-            return ConflictKind.DuplicateContent;
-
-        if (IsKnownGeneratedArtifact(normalizedPath))
-            return ConflictKind.GeneratedArtifactDiff;
-
-        var isScript = normalizedPath.EndsWith(".ws", StringComparison.OrdinalIgnoreCase) ||
-                       normalizedPath.EndsWith(".es", StringComparison.OrdinalIgnoreCase);
-        return isScript ? ConflictKind.ScriptOverride : ConflictKind.DefiniteOverride;
-    }
 }
