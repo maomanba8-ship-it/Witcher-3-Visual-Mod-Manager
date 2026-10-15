@@ -17,8 +17,16 @@ public partial class SettingsPage : UserControl
     public SettingsPage()
     {
         InitializeComponent();
-        _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(RefreshLanguage));
         RefreshLanguage();
+        // Subscribe on every show, not in the constructor: this page instance is cached and
+        // reused, so a constructor-only subscription would be dropped by the Unloaded handler
+        // below and the page would stop following language changes after the first navigation.
+        Loaded += (_, _) =>
+        {
+            _languageSubscription?.Dispose();
+            _languageSubscription = TranslationService.Instance.Subscribe(() => Dispatcher.Invoke(RefreshLanguage));
+            RefreshLanguage();
+        };
         Unloaded += (_, _) =>
         {
             _languageSubscription?.Dispose();
