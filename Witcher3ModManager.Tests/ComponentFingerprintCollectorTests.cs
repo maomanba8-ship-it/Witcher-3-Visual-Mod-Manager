@@ -103,6 +103,30 @@ public class ComponentFingerprintCollectorTests
         }
     }
 
+    [Fact]
+    public void Fingerprint_entry_survives_a_json_round_trip()
+    {
+        var root = CreateTempComponentRoot(("content/a.txt", "AAA"));
+
+        try
+        {
+            var entry = ComponentFingerprintCollector.FromRoot(TargetDomain.Mods, "modFoo", root);
+            Assert.NotNull(entry);
+
+            var json = System.Text.Json.JsonSerializer.Serialize(
+                new List<ComponentFingerprintEntry> { entry! });
+            var restored = System.Text.Json.JsonSerializer.Deserialize<List<ComponentFingerprintEntry>>(json);
+
+            Assert.NotNull(restored);
+            Assert.Single(restored!);
+            Assert.Equal(entry, restored![0]);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
     private static string CreateTempComponentRoot(params (string Rel, string Content)[] files)
     {
         var root = Path.Combine(Path.GetTempPath(), "w3mm_fp_" + Guid.NewGuid().ToString("N")[..8]);
