@@ -1,0 +1,3 @@
+Expected components:
+- Mod: modX
+Note: same component name as the single-mod fixture but a different file set, so the two together pin what "same name, different content" means for update and conflict decisions.

@@ -1,0 +1,5 @@
+Expected components:
+- Bin: bin
+- Bin: bin
+- Mod: modX
+Note: two bin roots are discovered separately (one top level, one nested under the mod). The bin domain is a single game target, so the deployment layer has to merge both roots into game\bin instead of using only the first one it finds.
