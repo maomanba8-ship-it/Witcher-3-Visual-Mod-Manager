@@ -194,17 +194,33 @@ public partial class ConflictDialog : Window
 
             var stack = new System.Windows.Controls.StackPanel();
             
-            var headerRow = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-            headerRow.Children.Add(new System.Windows.Controls.TextBlock
+            // A Grid, not a horizontal StackPanel: a horizontal StackPanel measures its children
+            // with unlimited width, which makes TextWrapping a no-op and lets long summaries run
+            // off the card where the vertical-only scroll view then clips them.
+            var headerRow = new System.Windows.Controls.Grid();
+            headerRow.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            {
+                Width = System.Windows.GridLength.Auto
+            });
+            headerRow.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+            {
+                Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star)
+            });
+
+            var headerIcon = new System.Windows.Controls.TextBlock
             {
                 Text = "\uEA39",
                 FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
                 FontSize = 12,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#C9A96E")),
-                Margin = new System.Windows.Thickness(0, 0, 6, 0)
-            });
-            headerRow.Children.Add(new System.Windows.Controls.TextBlock
+                Margin = new System.Windows.Thickness(0, 0, 6, 0),
+                VerticalAlignment = System.Windows.VerticalAlignment.Top
+            };
+            System.Windows.Controls.Grid.SetColumn(headerIcon, 0);
+            headerRow.Children.Add(headerIcon);
+
+            var headerText = new System.Windows.Controls.TextBlock
             {
                 Text = (string?)item.GetType().GetProperty("ConflictSummary")?.GetValue(item) ?? "",
                 FontSize = 12,
@@ -212,17 +228,23 @@ public partial class ConflictDialog : Window
                 FontWeight = System.Windows.FontWeights.SemiBold,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E2E4E9"))
-            });
+            };
+            System.Windows.Controls.Grid.SetColumn(headerText, 1);
+            headerRow.Children.Add(headerText);
             stack.Children.Add(headerRow);
 
+            var filePathText = (string?)item.GetType().GetProperty("FilePath")?.GetValue(item) ?? "";
             stack.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = (string?)item.GetType().GetProperty("FilePath")?.GetValue(item) ?? "",
+                Text = filePathText,
                 FontSize = 11,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#5E626E")),
                 Margin = new System.Windows.Thickness(20, 3, 0, 0),
-                TextTrimming = System.Windows.TextTrimming.CharacterEllipsis
+                // Wrap rather than ellipsize: a truncated path is exactly the information the
+                // user came here to read, and the tooltip alone is easy to miss.
+                TextWrapping = System.Windows.TextWrapping.Wrap,
+                ToolTip = filePathText
             });
 
             if (!string.IsNullOrEmpty((string?)item.GetType().GetProperty("KindText")?.GetValue(item)))
