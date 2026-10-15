@@ -41,6 +41,33 @@ public static class ManifestConflictInputProvider
     }
 
     /// <summary>
+    /// Builds the conflict input for components that carry their own absolute storage root
+    /// instead of a folder name under the mods root (see <see cref="ComponentRootClaim"/>).
+    /// Same rules as <see cref="Build"/>: read-only, structural, never a per-mod special case.
+    /// A root that does not exist is skipped, so a stale record cannot abort the analysis.
+    /// </summary>
+    public static IReadOnlyList<ComponentFile> BuildFromRoots(IEnumerable<ComponentRootClaim> claims)
+    {
+        if (claims is null)
+            return Array.Empty<ComponentFile>();
+
+        var files = new List<ComponentFile>();
+        var claimedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var claim in claims)
+        {
+            if (string.IsNullOrWhiteSpace(claim.RootPath)) continue;
+            if (!Directory.Exists(claim.RootPath)) continue;
+
+            var dedupeKey = claim.ComponentId + "\u0001" + claim.RootPath;
+            if (!claimedRoots.Add(dedupeKey)) continue;
+
+            var manifest = ManifestBuilder.Build(claim.RootPath, claim.ComponentId, claim.Domain);
+            files.AddRange(manifest.Files);
+        }
+        return files;
+    }
+
+    /// <summary>
     /// Resolve a claimed component folder to a folder that actually exists under the
     /// storage root. The record stores the canonical deploy name (e.g. modFoo), but legacy
     /// storage may keep the raw package folder name (e.g. Foo). We try the exact name, then

@@ -76,6 +76,22 @@ public class ConflictService
         }
 
         var files = ManifestConflictInputProvider.Build(storageDir, claims);
+
+        // Bin components are not folders under the mods root: each record keeps its own storage
+        // root with files laid out relative to the game's bin folder. Two mods writing the same
+        // bin path overwrite each other in place and disabling never undoes it, so a collision
+        // here is a real override rather than an informational overlap.
+        var binClaims = new List<ComponentRootClaim>();
+        foreach (var m in enabledMods)
+        {
+            if (m.GameBinFiles.Count == 0) continue;
+            if (string.IsNullOrWhiteSpace(m.BinStoragePath)) continue;
+            binClaims.Add(new ComponentRootClaim(m.Id, TargetDomain.Bin, m.BinStoragePath));
+        }
+
+        if (binClaims.Count > 0)
+            files = files.Concat(ManifestConflictInputProvider.BuildFromRoots(binClaims)).ToList();
+
         var evidence = ConflictAnalyzer.Analyze(files);
         var idToName = _storage?.GetAllMods()
                            .ToDictionary(m => m.Id, m => m.Name, StringComparer.OrdinalIgnoreCase)

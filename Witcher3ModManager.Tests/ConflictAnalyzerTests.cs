@@ -126,6 +126,38 @@ public class ConflictAnalyzerTests
             },
             new[] { "UnsupportedContainer" }
         };
+
+        // Bin config files (mod menu XMLs) are not opaque containers: enabling copies over the
+        // game file in place and disabling never undoes it, so the same path with different
+        // content is a real override risk rather than an informational overlap.
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Bin, "modA", "config/r4game/user_config_matrix/pc/shared.xml", "shaA", 1),
+                new(TargetDomain.Bin, "modB", "config/r4game/user_config_matrix/pc/shared.xml", "shaB", 1),
+            },
+            new[] { "BinOverrideRisk" }
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Bin, "modA", "config/r4game/user_config_matrix/pc/shared.xml", "shaA", 1),
+                new(TargetDomain.Bin, "modB", "config/r4game/user_config_matrix/pc/shared.xml", "shaA", 1),
+            },
+            new[] { "DuplicateContent" }
+        };
+        // A bin path that is itself an opaque container keeps the container verdict.
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Bin, "modA", "x64/patch.bundle", "shaA", 1),
+                new(TargetDomain.Bin, "modB", "x64/patch.bundle", "shaB", 1),
+            },
+            new[] { "UnsupportedContainer" }
+        };
     }
 
     [Theory]
