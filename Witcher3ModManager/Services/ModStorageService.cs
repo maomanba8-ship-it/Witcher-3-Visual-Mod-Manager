@@ -93,11 +93,15 @@ public class ModStorageService
         new(ComponentRecord.MakeId(packageId, domain, folder), domain, folder,
             Array.Empty<TargetRecord>());
 
-    /// <summary>Remembers a package in the index (wholesale replace, targets cleared).</summary>
+    /// <summary>
+    /// Remembers a package's declared components in the index. Any target a component already
+    /// owns is kept: importing replaces the storage copy, it does not undeploy.
+    /// </summary>
     public void IndexPackage(ModEntry entry)
     {
         if (entry is null) return;
-        UpdateIndex(index => LibraryIndexUpdater.WithPackage(index, entry.Id, entry.Name, ComponentsOf(entry)));
+        UpdateIndex(index =>
+            LibraryIndexUpdater.WithDeclaredComponents(index, entry.Id, entry.Name, ComponentsOf(entry)));
     }
 
     /// <summary>Forgets a package and its target claims.</summary>

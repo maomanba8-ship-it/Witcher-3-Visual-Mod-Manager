@@ -37,6 +37,34 @@ public static class LibraryIndexUpdater
     }
 
     /// <summary>
+    /// Replaces a package's declared components while keeping the targets that surviving
+    /// components already had. An import replaces the storage copy; it does not undeploy, so
+    /// clearing the targets would forget files that are still sitting in the game directory.
+    /// A component recorded with its own targets (a deployment) always wins over the old ones.
+    /// </summary>
+    public static LibraryIndex WithDeclaredComponents(
+        LibraryIndex? index,
+        string packageId,
+        string displayName,
+        IReadOnlyList<ComponentRecord>? declared)
+    {
+        var previous = (index ?? LibraryIndex.Empty).FindPackage(packageId);
+        var merged = (declared ?? Array.Empty<ComponentRecord>())
+            .Select(component =>
+            {
+                if ((component.Targets?.Count ?? 0) > 0) return component;
+
+                var old = previous?.Components?.FirstOrDefault(c =>
+                    string.Equals(c.ComponentId, component.ComponentId, StringComparison.OrdinalIgnoreCase));
+
+                return component with { Targets = old?.Targets ?? Array.Empty<TargetRecord>() };
+            })
+            .ToList();
+
+        return WithPackage(index, packageId, displayName, merged);
+    }
+
+    /// <summary>
     /// Drops a package entirely. Used when its record is deleted: keeping its target claims would
     /// leave the index asserting ownership of files that no longer belong to anything.
     /// </summary>

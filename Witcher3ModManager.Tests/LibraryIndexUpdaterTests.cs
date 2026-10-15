@@ -73,6 +73,58 @@ public class LibraryIndexUpdaterTests
     }
 
     [Fact]
+    public void Declaring_components_again_keeps_the_targets_already_deployed()
+    {
+        // Deployed first, so the component owns a target in the game directory.
+        var deployed = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One", new[]
+        {
+            Component("c1", Target(@"mods\modOne"))
+        });
+
+        // Then re-imported: the import declares the same component but has deployed nothing, and
+        // an import does not undeploy. Forgetting the target here would lose track of files that
+        // are still sitting in the game directory.
+        var afterImport = LibraryIndexUpdater.WithDeclaredComponents(deployed, "pkg1", "Mod One", new[]
+        {
+            Component("c1")
+        });
+
+        var component = Assert.Single(Assert.Single(afterImport.Packages).Components);
+        Assert.Equal(@"mods\modOne", Assert.Single(component.Targets).RelativePath);
+    }
+
+    [Fact]
+    public void A_fresh_deployment_replaces_the_recorded_targets()
+    {
+        var stale = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One", new[]
+        {
+            Component("c1", Target(@"mods\oldFolder"))
+        });
+
+        var redeployed = LibraryIndexUpdater.WithDeclaredComponents(stale, "pkg1", "Mod One", new[]
+        {
+            Component("c1", Target(@"mods\newFolder"))
+        });
+
+        var component = Assert.Single(Assert.Single(redeployed.Packages).Components);
+        Assert.Equal(@"mods\newFolder", Assert.Single(component.Targets).RelativePath);
+    }
+
+    [Fact]
+    public void A_component_that_is_no_longer_declared_loses_its_claims()
+    {
+        var before = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One", new[]
+        {
+            Component("c1", Target(@"mods\modOne"))
+        });
+
+        var after = LibraryIndexUpdater.WithDeclaredComponents(before, "pkg1", "Mod One", Array.Empty<ComponentRecord>());
+
+        Assert.Empty(Assert.Single(after.Packages).Components);
+        Assert.Null(after.OwnerOf("mods/modone"));
+    }
+
+    [Fact]
     public void Ownership_can_be_asked_through_the_index_after_recording()
     {
         var index = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One", new[]
