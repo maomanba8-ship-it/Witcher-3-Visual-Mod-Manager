@@ -287,15 +287,7 @@ public class ConflictService
     }
 
 #if DEBUG
-    private static void LogScanDiag(string message)
-    {
-        try
-        {
-            var logPath = Path.Combine(AppContext.BaseDirectory, "W3MM_conflict_scan.log");
-            File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}{Environment.NewLine}");
-        }
-        catch { }
-    }
+    private static void LogScanDiag(string message) => DiagnosticLog.Write("[conflict] " + message);
 #endif
 
     /// <summary>

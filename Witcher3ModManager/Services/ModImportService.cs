@@ -307,8 +307,8 @@ public class ModImportService
 
         foreach (var entry in results)
         {
-            #if DEBUG
-            File.AppendAllText(@"Z:\griffin_import.log", $"json={JsonSerializer.Serialize(entry)}\r\n");
+#if DEBUG
+            DiagnosticLog.Write($"json={JsonSerializer.Serialize(entry)}");
 #endif
             if (_storage.AddMod(entry)) continue;
 
@@ -447,14 +447,14 @@ public class ModImportService
         }
 
 #if DEBUG
-        File.AppendAllText(@"Z:\griffin_import.log", $"ScanModCandidates: {result.Count} root(s)\r\n");
+        DiagnosticLog.Write($"ScanModCandidates: {result.Count} root(s)");
         foreach (var mc in result)
         {
-            File.AppendAllText(@"Z:\griffin_import.log", $"  Root: {mc.Root.FullName}\r\n");
+            DiagnosticLog.Write($"  Root: {mc.Root.FullName}");
             foreach (var ad in mc.AttachedDlcs)
-                File.AppendAllText(@"Z:\griffin_import.log", $"    AttachedDlc: {ad.FullName}\r\n");
+                DiagnosticLog.Write($"    AttachedDlc: {ad.FullName}");
             foreach (var am in mc.AttachedMods)
-                File.AppendAllText(@"Z:\griffin_import.log", $"    AttachedMod: {am.FullName}\r\n");
+                DiagnosticLog.Write($"    AttachedMod: {am.FullName}");
         }
 #endif
 
@@ -1100,9 +1100,9 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         try
         {
             var result = PackageAnalyzer.Analyze(extractDir);
-            File.AppendAllText(@"Z:\griffin_import.log", $"[Analyzer] components={result.Components.Count} warnings={result.Warnings.Count}\r\n");
+            DiagnosticLog.Write($"[Analyzer] components={result.Components.Count} warnings={result.Warnings.Count}");
             foreach (var comp in result.Components)
-                File.AppendAllText(@"Z:\griffin_import.log", $"  {comp.Kind}: {comp.Name} ({comp.RootPath}) evidence={string.Join(",", comp.Evidence)}\r\n");
+                DiagnosticLog.Write($"  {comp.Kind}: {comp.Name} ({comp.RootPath}) evidence={string.Join(",", comp.Evidence)}");
         }
         catch { }
     }
