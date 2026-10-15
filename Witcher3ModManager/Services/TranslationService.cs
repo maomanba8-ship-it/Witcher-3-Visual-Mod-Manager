@@ -25,7 +25,7 @@ public class TranslationService
         // Read-only bundled defaults next to exe (community can add languages).
         _defaultDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Languages");
 
-        EnsureDefaultTranslations();
+        EnsureLanguageCache();
 
         // Load saved language preference from user-writable location.
         var prefFile = Path.Combine(_dir, "lang_pref.json");
@@ -93,29 +93,45 @@ public class TranslationService
         }
     }
 
-    private void SaveStrings()
-    {
-        var path = Path.Combine(_dir, $"{_currentLang}.json");
-        var json = JsonSerializer.Serialize(_strings, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(path, json);
-    }
-
-    private void EnsureDefaultTranslations()
+    /// <summary>
+    /// Keeps the user-writable language cache in step with the built-in tables. The cache exists
+    /// so the strings can live somewhere writable and so a user may edit them, but it must not
+    /// freeze shipped wording: once the built-ins change, the cache is regenerated and the
+    /// previous file is kept next to it as .bak, so nothing is lost without a copy.
+    /// </summary>
+    private void EnsureLanguageCache()
     {
         foreach (var lang in new[] { "zh-CN", "en" })
         {
-            var path = Path.Combine(_dir, $"{lang}.json");
-            if (!File.Exists(path))
+            var builtIn = GetDefaultStrings(lang);
+            var revision = Core.Localization.TranslationRevision.Compute(builtIn);
+            var cachePath = Path.Combine(_dir, $"{lang}.json");
+            var revisionPath = cachePath + ".rev";
+
+            // Cache already matches the shipped table: leave it, including any user edits.
+            if (revision.Length > 0 && File.Exists(cachePath) && ReadRevision(revisionPath) == revision)
+                continue;
+
+            try
             {
-                try
-                {
-                    _strings = GetDefaultStrings(lang);
-                    var json = JsonSerializer.Serialize(_strings, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(path, json);
-                }
-                catch { /* user dir not writable; fall back to in-memory defaults */ }
+                if (File.Exists(cachePath))
+                    File.Copy(cachePath, cachePath + ".bak", overwrite: true);
+
+                File.WriteAllText(cachePath,
+                    JsonSerializer.Serialize(builtIn, new JsonSerializerOptions { WriteIndented = true }));
+                File.WriteAllText(revisionPath, revision);
+#if DEBUG
+                DiagnosticLog.Write($"[i18n] regenerated the {lang} language cache (built-in strings changed)");
+#endif
             }
+            catch { /* user dir not writable; the in-memory tables still apply */ }
         }
+    }
+
+    private static string ReadRevision(string path)
+    {
+        try { return File.Exists(path) ? File.ReadAllText(path).Trim() : ""; }
+        catch { return ""; }
     }
 
     private static Dictionary<string, string> GetDefaultStrings(string lang)
