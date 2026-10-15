@@ -2,6 +2,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Core.Shared;
 using Witcher3ModManager.Models;
 
@@ -26,14 +27,10 @@ public class Witcher3Service
         if (!string.IsNullOrEmpty(configured) && Directory.Exists(configured))
         {
             var normalized = configured.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (normalized.EndsWith(Path.Combine("bin", "x64_dx12"), StringComparison.OrdinalIgnoreCase) ||
-                normalized.EndsWith(Path.Combine("bin", "x64"), StringComparison.OrdinalIgnoreCase))
-            {
-                normalized = Path.GetDirectoryName(Path.GetDirectoryName(normalized)) ?? normalized;
-            }
+            // The user may have picked the bin subfolder instead of the game root.
+            normalized = GameLayout.GameRootFromBinPath(normalized) ?? normalized;
             if (Directory.Exists(Path.Combine(normalized, "content")) ||
-                File.Exists(Path.Combine(normalized, "bin", "x64", "witcher3.exe")) ||
-                File.Exists(Path.Combine(normalized, "bin", "x64_dx12", "witcher3.exe")))
+                GameLayout.IsGameRoot(normalized))
             {
                 _gamePath = normalized;
                 if (normalized != configured)
@@ -56,7 +53,7 @@ public class Witcher3Service
         };
         foreach (var p in commonPaths)
         {
-            if (Directory.Exists(p) && File.Exists(Path.Combine(p, "bin", "x64", "witcher3.exe")))
+            if (Directory.Exists(p) && GameLayout.IsGameRoot(p))
             { _gamePath = p; _settings.SetGamePath(p); return _gamePath; }
         }
         return null;
@@ -437,16 +434,15 @@ public class Witcher3Service
             catch
             {
                 var gamePath = GetGamePath();
-                if (gamePath != null)
+                var exePath = GameLayout.ResolveGameExecutable(gamePath);
+                if (exePath != null)
                 {
-                    var exePath = Path.Combine(gamePath, "bin", "x64", "witcher3.exe");
-                    if (File.Exists(exePath))
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = exePath,
-                            WorkingDirectory = Path.GetDirectoryName(exePath) ?? gamePath,
-                            UseShellExecute = true
-                        });
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = exePath,
+                        WorkingDirectory = Path.GetDirectoryName(exePath) ?? gamePath!,
+                        UseShellExecute = true
+                    });
                 }
             }
         }
