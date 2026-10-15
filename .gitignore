@@ -9,3 +9,7 @@ publish_*/
 # Local release packages: built per release, never part of the source tree.
 Witcher3ModManager_v*.7z
 Witcher3ModManager_v*.zip
+
+# Structure fixtures deliberately contain folders named bin/ as samples. Without this the
+# bin/ rule above would silently drop them and a fresh clone would fail the analyzer tests.
+!Witcher3ModManager/Core/Analysis/Fixtures/**/bin/
