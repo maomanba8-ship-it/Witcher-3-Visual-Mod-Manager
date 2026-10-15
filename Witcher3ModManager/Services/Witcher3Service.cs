@@ -374,6 +374,11 @@ public class Witcher3Service
         try
         {
             var path = ComputeModsSettingsPath();
+            // Without a resolved Documents folder this would be a relative path and the file
+            // would land next to the executable instead of where the game reads it.
+            if (string.IsNullOrEmpty(path) || !Path.IsPathFullyQualified(path))
+                throw new InvalidOperationException("The Documents folder could not be resolved, so mods.settings has no safe location.");
+
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
@@ -403,15 +408,23 @@ public class Witcher3Service
             var managedLines = sorted.Select(m => $@"""{m.ModName}"" = {m.Priority}");
             var allLines = preserved.Concat(managedLines).ToList();
 
-            // Atomic write: temp file on same volume, then replace.
-            var tmp = path + ".tmp";
-            File.WriteAllLines(tmp, allLines);
-            if (File.Exists(path))
-                File.Replace(tmp, path!, null, true);
-            else
-                File.Move(tmp, path!);
+            // Same-volume temporary file, atomic replace, and the previous file kept as .bak:
+            // this is the file the game reads for load order, so a half-written file or a lost
+            // previous version is not acceptable.
+            Core.Storage.AtomicFile.WriteAllLines(path, allLines);
         }
-        catch { }
+        catch (Exception ex)
+        {
+#if DEBUG
+            DiagnosticLog.Write($"[settings] failed to write mods.settings: {ex.Message}");
+#endif
+            // Reporting matters here: failing silently would leave the game with a different
+            // load order than the one the list is showing.
+            System.Windows.MessageBox.Show(
+                string.Format(TranslationService.Instance.T("settings.save_failed"), ex.Message),
+                TranslationService.Instance.T("dialog.error"),
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+        }
     }
 
     public void UpdateAllPriorities(List<(string? GameModFolderName, int Priority)> mods)
