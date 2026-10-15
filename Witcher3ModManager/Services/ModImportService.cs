@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Import;
 using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Models;
 #if DEBUG
@@ -111,9 +112,11 @@ public class ModImportService
             return (new List<ModEntry>(), "unknown_format");
         }
         // (S5 closed-loop) If the analyzer flagged ambiguous components that need a user decision,
-        // show them and require explicit confirmation BEFORE any filesystem write. Confident
-        // packages (no decisions) keep the existing auto-import path unchanged.
-        if (analysis.RequiresUserDecision.Count > 0)
+        // show them and require explicit confirmation BEFORE any filesystem write. In the
+        // container-typed path these are folded into the import plan preview below, together with
+        // the targets that would be replaced, so the user answers one question instead of two.
+        // The fallback path cannot describe itself as a plan, so it keeps this prompt.
+        if (analysis.RequiresUserDecision.Count > 0 && modCandidates.Count == 0)
         {
             var previewMsg = BuildImportPreviewMessage(analysis);
             var confirmed = Application.Current.Dispatcher.Invoke(() =>
@@ -164,7 +167,31 @@ public class ModImportService
                 // Cancel cleans temp and reports cancelled; confirm allows overwrite of listed targets only.
                 var plannedNames = CollectPlannedStorageNames(modRoots, dlcRoots, allAttachedDlcs, allAttachedMods);
                 var duplicateNames = FindExistingPlannedNames(plannedNames);
-                if (!ResolveDuplicateTargetsBeforeWrite(duplicateNames, tempExtractDir, confirmedOverwriteNames, out var cancelErr))
+
+                // One read-only preview of the whole import: what will be created, what will be
+                // replaced, and anything the analyzer was unsure about. Nothing has been written
+                // at this point, so cancelling leaves storage, the game directory and the records
+                // untouched.
+                var plan = ImportPlanner.Build(analysis, duplicateNames, component => component.Name);
+                if (plan.RequiresConfirmation)
+                {
+                    var previewMsg = BuildImportPlanPreview(plan);
+                    var confirmed = Application.Current.Dispatcher.Invoke(() =>
+                        MessageBox.Show(
+                            previewMsg,
+                            TranslationService.Instance.T("import.preview_title"),
+                            MessageBoxButton.OKCancel,
+                            MessageBoxImage.Warning) == MessageBoxResult.OK);
+
+                    if (!confirmed)
+                    {
+                        try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+                        progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                        return (new List<ModEntry>(), "cancelled");
+                    }
+                }
+
+                if (!ResolveDuplicateTargetsBeforeWrite(duplicateNames, tempExtractDir, confirmedOverwriteNames, plan.RequiresConfirmation, out var cancelErr))
                 {
                     errorCode = cancelErr;
                     progress?.Report(TranslationService.Instance.T("import.cancelled"));
@@ -275,7 +302,9 @@ public class ModImportService
                         // apply the same final-storage-name conflict gate before writing.
                         var targetName = EnsureModPrefix(Path.GetFileName(root), modType.Value);
                         var fbDuplicates = FindExistingPlannedNames(new List<string> { targetName });
-                        if (!ResolveDuplicateTargetsBeforeWrite(fbDuplicates, tempExtractDir, confirmedOverwriteNames, out var fbCancel))
+                        // The fallback path answers its own prompt: it has no plan preview to
+                        // fold the overwrite question into.
+                        if (!ResolveDuplicateTargetsBeforeWrite(fbDuplicates, tempExtractDir, confirmedOverwriteNames, alreadyConfirmed: false, out var fbCancel))
                         {
                             errorCode = fbCancel;
                             progress?.Report(TranslationService.Instance.T("import.cancelled"));
@@ -638,6 +667,55 @@ private static string FindModRoot(string sourceDir)
             : "";
         return string.Format(TranslationService.Instance.T("import.preview_body"), decisions, components) + warnings
              + "\n\n" + TranslationService.Instance.T("import.preview_ask");
+    }
+
+    /// <summary>
+    /// Renders the read-only import plan for the confirmation dialog: what will be created, what
+    /// will be replaced, anything that cannot be placed automatically, and an explicit reminder
+    /// that nothing has been written yet. The deployment rules themselves are unchanged; this
+    /// only describes what the existing flow is about to do.
+    /// </summary>
+    private static string BuildImportPlanPreview(ImportPlan plan)
+    {
+        var sections = new List<string>();
+
+        AddPlanSection(sections, "import.plan_create",
+            plan.Components.Where(c => c.Action == ImportAction.Create));
+        AddPlanSection(sections, "import.plan_overwrite", plan.Overwrites);
+        AddPlanSection(sections, "import.plan_unsupported",
+            plan.Components.Where(c => c.Action == ImportAction.Unsupported));
+
+        if (plan.Decisions.Count > 0)
+            sections.Add(string.Join("\n", plan.Decisions));
+
+        if (plan.Warnings.Count > 0)
+            sections.Add(TranslationService.Instance.T("import.plan_warnings") + "\n" + string.Join("\n", plan.Warnings));
+
+        sections.Add(TranslationService.Instance.T("import.plan_safe_cancel"));
+
+        return string.Join("\n\n", sections) + "\n\n" + TranslationService.Instance.T("import.preview_ask");
+    }
+
+    private static void AddPlanSection(
+        List<string> sections,
+        string titleKey,
+        IEnumerable<ImportPlanComponent> components)
+    {
+        var list = components.ToList();
+        if (list.Count == 0) return;
+
+        var lines = list.Select(component =>
+        {
+            var files = ManifestBuilder.ListFiles(component.RootPath);
+            var examples = files.Take(3).ToList();
+            var exampleText = examples.Count > 0 ? "\n      " + string.Join("\n      ", examples) : "";
+            var moreText = files.Count > examples.Count
+                ? $"\n      ... (+{files.Count - examples.Count} more)"
+                : "";
+            return $"  • {component.Name} ({component.Kind}) → {component.DeployName} — {files.Count} file(s){exampleText}{moreText}";
+        });
+
+        sections.Add(TranslationService.Instance.T(titleKey) + "\n" + string.Join("\n", lines));
     }
 
     /// <summary>
@@ -1063,23 +1141,29 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         List<string> duplicateNames,
         string tempExtractDir,
         HashSet<string> confirmedOverwriteNames,
+        bool alreadyConfirmed,
         out string? cancelReason)
     {
         cancelReason = null;
         if (duplicateNames.Count == 0) return true;
 
-        var overwrite = Application.Current.Dispatcher.Invoke(() =>
-            MessageBox.Show(
-                string.Format(TranslationService.Instance.T("import.overwrite_msg"), string.Join(", ", duplicateNames)),
-                TranslationService.Instance.T("import.overwrite_title"),
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question) == MessageBoxResult.Yes);
-
-        if (!overwrite)
+        // The import plan preview already put this question to the user, so do not ask twice.
+        // Already-confirmed names still fall through to the bookkeeping below.
+        if (!alreadyConfirmed)
         {
-            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
-            cancelReason = "cancelled";
-            return false;
+            var overwrite = Application.Current.Dispatcher.Invoke(() =>
+                MessageBox.Show(
+                    string.Format(TranslationService.Instance.T("import.overwrite_msg"), string.Join(", ", duplicateNames)),
+                    TranslationService.Instance.T("import.overwrite_title"),
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question) == MessageBoxResult.Yes);
+
+            if (!overwrite)
+            {
+                try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+                cancelReason = "cancelled";
+                return false;
+            }
         }
 
         // Overwrite confirmed once: remove existing physical targets so downstream
