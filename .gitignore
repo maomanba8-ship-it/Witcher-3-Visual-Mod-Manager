@@ -5,3 +5,7 @@ publish_*/
 *.csproj.user
 *.suo
 *.user
+
+# Local release packages: built per release, never part of the source tree.
+Witcher3ModManager_v*.7z
+Witcher3ModManager_v*.zip
