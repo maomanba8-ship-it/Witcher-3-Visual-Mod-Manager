@@ -12,6 +12,15 @@ public class ModStorageService
     private readonly string _dbPath;
     private List<ModEntry> _mods = new();
 
+    /// <summary>
+    /// How the library file was read. The UI reports a damaged or unreadable library instead of
+    /// letting the user discover an empty list with no explanation.
+    /// </summary>
+    public Core.Storage.TextFileOutcome LibraryLoadOutcome { get; private set; } = Core.Storage.TextFileOutcome.Missing;
+
+    /// <summary>Where a damaged library file was copied before anything could overwrite it.</summary>
+    public string? DamagedLibraryCopyPath { get; private set; }
+
     public ModStorageService()
     {
         _dataDir = Path.Combine(
@@ -305,21 +314,48 @@ public class ModStorageService
 
     private void Load()
     {
-        if (File.Exists(_dbPath))
-        {
-            try
-            {
-                var json = File.ReadAllText(_dbPath);
-                _mods = JsonSerializer.Deserialize<List<ModEntry>>(json) ?? new();
-            }
-            catch { _mods = new(); }
-        }
+        // A damaged library used to fall through to an empty list, and the next save then wrote
+        // that empty list over the user's mods. Now the damaged file is copied aside first and
+        // the previous good version (.bak) is used when it is available.
+        var load = Core.Storage.TextFileRecovery.Load(_dbPath, LooksLikeALibrary);
+        LibraryLoadOutcome = load.Outcome;
+        DamagedLibraryCopyPath = load.Detail;
+
+        _mods = load.Text is not null && TryDeserialize(load.Text, out var mods)
+            ? mods
+            : new List<ModEntry>();
     }
 
     private void Save()
     {
         var options = new JsonSerializerOptions { WriteIndented = true };
         var json = JsonSerializer.Serialize(_mods, options);
-        File.WriteAllText(_dbPath, json);
+        Core.Storage.AtomicFile.WriteAllText(_dbPath, json);
+    }
+
+    private static bool LooksLikeALibrary(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<ModEntry>>(json) is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryDeserialize(string json, out List<ModEntry> mods)
+    {
+        try
+        {
+            mods = JsonSerializer.Deserialize<List<ModEntry>>(json) ?? new List<ModEntry>();
+            return true;
+        }
+        catch
+        {
+            mods = new List<ModEntry>();
+            return false;
+        }
     }
 }

@@ -47,7 +47,7 @@ public class PresetService
         var safeName = GetSafeFileName(name);
         var path = Path.Combine(_presetsDir, safeName + ".json");
         var json = JsonSerializer.Serialize(preset, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(path, json);
+        Core.Storage.AtomicFile.WriteAllText(path, json);
     }
 
     public void DeletePreset(string name)

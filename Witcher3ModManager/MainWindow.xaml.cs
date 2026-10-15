@@ -49,6 +49,7 @@ public partial class MainWindow : Window
             {
                 System.Diagnostics.Debug.WriteLine("[W3MM] 数据警告: " + warning);
             }
+            ReportLibraryLoadOutcome();
             _settings = new SettingsService();
             _importer = new ModImportService(_storage, _settings);
             _w3 = new Witcher3Service(_settings, _storage);
@@ -353,6 +354,29 @@ public partial class MainWindow : Window
     }
 
 
+
+    /// <summary>
+    /// A damaged or unreadable library has to reach the user: the list on screen is not the one
+    /// they left behind, and only they can decide what to do about it.
+    /// </summary>
+    private void ReportLibraryLoadOutcome()
+    {
+        if (_storage == null) return;
+
+        var t = Services.TranslationService.Instance;
+        var message = _storage.LibraryLoadOutcome switch
+        {
+            Core.Storage.TextFileOutcome.RestoredFromBackup =>
+                string.Format(t.T("storage.library_restored"), _storage.DamagedLibraryCopyPath ?? "-"),
+            Core.Storage.TextFileOutcome.Damaged =>
+                string.Format(t.T("storage.library_damaged"), _storage.DamagedLibraryCopyPath ?? "-"),
+            Core.Storage.TextFileOutcome.ReadFailed => t.T("storage.library_read_failed"),
+            _ => (string?)null
+        };
+
+        if (message != null)
+            MessageBox.Show(message, t.T("dialog.warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
 
     private void ApplyTestMode()
     {

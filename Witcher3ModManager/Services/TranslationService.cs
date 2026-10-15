@@ -43,7 +43,7 @@ public class TranslationService
         _currentLang = lang;
         LoadStrings();
         // Persist preference
-        try { File.WriteAllText(Path.Combine(_dir, "lang_pref.json"), lang); } catch { }
+        try { Core.Storage.AtomicFile.WriteAllText(Path.Combine(_dir, "lang_pref.json"), lang); } catch { }
         LanguageChanged?.Invoke();
     }
 
@@ -117,9 +117,9 @@ public class TranslationService
                 if (File.Exists(cachePath))
                     File.Copy(cachePath, cachePath + ".bak", overwrite: true);
 
-                File.WriteAllText(cachePath,
+                Core.Storage.AtomicFile.WriteAllText(cachePath,
                     JsonSerializer.Serialize(builtIn, new JsonSerializerOptions { WriteIndented = true }));
-                File.WriteAllText(revisionPath, revision);
+                Core.Storage.AtomicFile.WriteAllText(revisionPath, revision);
 #if DEBUG
                 DiagnosticLog.Write($"[i18n] regenerated the {lang} language cache (built-in strings changed)");
 #endif
@@ -287,6 +287,9 @@ public class TranslationService
                 ["status.potential"] = "潜在覆盖 {0}",
                 ["status.game_path"] = "巫师3: {0}",
                 ["status.game_not_detected"] = "巫师3: 未检测",
+                ["storage.library_restored"] = "模组库文件损坏，已改用上一次成功的备份。\n\n损坏的文件已另存为：\n{0}\n\n请检查该文件后再继续操作。",
+                ["storage.library_damaged"] = "模组库文件损坏，且没有可用备份，本次以空库启动。\n\n损坏的文件已另存为（原文件未被覆盖）：\n{0}\n\n请先退出程序并检查该文件。",
+                ["storage.library_read_failed"] = "无法读取模组库文件（可能被其它程序占用或权限不足）。\n\n为避免覆盖数据，本次没有读取内容；请关闭占用它的程序后重新打开。",
 
                 ["conflict.title"] = "冲突检测结果",
                 ["conflict.no_conflicts"] = "未检测到模组冲突。",
@@ -553,6 +556,9 @@ public class TranslationService
                 ["status.potential"] = "Overrides: {0}",
                 ["status.game_path"] = "Witcher 3: {0}",
                 ["status.game_not_detected"] = "Witcher 3: Not detected",
+                ["storage.library_restored"] = "The mod library file was damaged, so the last good backup was used instead.\n\nThe damaged file was kept at:\n{0}\n\nPlease check it before continuing.",
+                ["storage.library_damaged"] = "The mod library file was damaged and no usable backup exists, so this session started with an empty library.\n\nThe damaged file was kept aside (the original was not overwritten):\n{0}\n\nPlease close the app and check that file.",
+                ["storage.library_read_failed"] = "The mod library file could not be read (it may be in use by another program, or permissions may be missing).\n\nNothing was read, so nothing can overwrite it; close whatever is holding it and reopen the app.",
 
                 ["conflict.title"] = "Conflict Detection Results",
                 ["conflict.no_conflicts"] = "No mod conflicts detected.",
