@@ -204,7 +204,7 @@
                     BorderThickness="1"
                     HorizontalAlignment="Right" VerticalAlignment="Bottom"
                     Margin="0,0,16,16">
-                <TextBlock Text="v0.9.4" FontSize="10"
+                <TextBlock x:Name="VersionBadgeText" Text="" FontSize="10"
                            Foreground="#5E626E"/>
             </Border>
         </Grid>

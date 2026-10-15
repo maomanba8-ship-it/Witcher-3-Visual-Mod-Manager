@@ -13,6 +13,7 @@ public partial class HomePage : UserControl
     public HomePage()
     {
         InitializeComponent();
+        VersionBadgeText.Text = Core.AppInfo.DisplayVersion;
         Loaded += (_, _) =>
         {
             TranslationService.Instance.LanguageChanged += () => Dispatcher.Invoke(RefreshLanguage);

@@ -112,8 +112,8 @@ public class TranslationService
         {
             "zh-CN" => new Dictionary<string, string>
             {
-                ["app.title"] = "巫师3 Mod 管理器 v0.9.4",
-                                ["home.welcome_title"] = "巫师3 Mod 管理器 v0.9.4",
+                ["app.title"] = "巫师3 Mod 管理器 " + Core.AppInfo.DisplayVersion,
+                                ["home.welcome_title"] = "巫师3 Mod 管理器 " + Core.AppInfo.DisplayVersion,
                 ["home.welcome_subtitle"] = "选择一个功能开始",
                 ["mods.context_set_cover"] = "设置预览图片",
                 ["mods.context_clear_cover"] = "清除封面",
@@ -258,7 +258,7 @@ public class TranslationService
                 ["settings.auto_backup_desc"] = "启用模组前自动备份原始游戏文件",
                 ["settings.more"] = "更多功能（即将推出）",
                 ["settings.about"] = "关于",
-                ["settings.about_text"] = "巫师3 Mod 管理器 v0.9.4",
+                ["settings.about_text"] = "巫师3 Mod 管理器 " + Core.AppInfo.DisplayVersion,
                 ["settings.about_tech"] = "基于 .NET 10 + WPF 构建",
                 ["settings.more1"] = ". 模组优先级拖拽排序",
                 ["settings.more2"] = ". 脚本合并工具集成",
@@ -388,8 +388,8 @@ public class TranslationService
             },
             "en" => new Dictionary<string, string>
             {
-                ["app.title"] = "Witcher 3 Mod Manager v0.9.4",
-                                ["home.welcome_title"] = "Witcher 3 Mod Manager v0.9.4",
+                ["app.title"] = "Witcher 3 Mod Manager " + Core.AppInfo.DisplayVersion,
+                                ["home.welcome_title"] = "Witcher 3 Mod Manager " + Core.AppInfo.DisplayVersion,
                 ["home.welcome_subtitle"] = "Select a function to begin",
                 ["mods.context_set_cover"] = "Set Preview Image",
                 ["mods.context_clear_cover"] = "Clear Cover",
@@ -532,7 +532,7 @@ public class TranslationService
                 ["settings.auto_backup_desc"] = "Automatically backup original game files before enabling mods",
                 ["settings.more"] = "More Features (Coming Soon)",
                 ["settings.about"] = "About",
-                ["settings.about_text"] = "Witcher 3 Mod Manager v0.9.4",
+                ["settings.about_text"] = "Witcher 3 Mod Manager " + Core.AppInfo.DisplayVersion,
                 ["settings.about_tech"] = "Built with .NET 10 + WPF",
                 ["settings.more1"] = ". Mod Priority Drag & Drop Sorting",
                 ["settings.more2"] = ". Script Merger Integration",
