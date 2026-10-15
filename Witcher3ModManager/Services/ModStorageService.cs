@@ -312,6 +312,33 @@ public class ModStorageService
     }
     public string GetModsDirectory() => _modsDir;
 
+    /// <summary>
+    /// Read-only audit of the library as it stands: folders that are not on disk, shared folders,
+    /// enabled mods the game directory does not have, and records that name no component at all.
+    /// Nothing is modified, so this is safe to run at startup and to base a migration decision on.
+    /// </summary>
+    public Core.Migration.LegacyLibraryAudit GetLibraryAudit(string? gamePath)
+    {
+        var entries = _mods.Select(m => new Core.Migration.LegacyLibraryEntry(
+            m.Id,
+            string.IsNullOrWhiteSpace(m.Name) ? m.Id : m.Name,
+            m.IsEnabled,
+            m.GameModFolders ?? new List<string>(),
+            m.GameDlcFolders ?? new List<string>(),
+            m.GameBinFiles ?? new List<string>()));
+
+        var hasGame = !string.IsNullOrWhiteSpace(gamePath);
+        var gameMods = hasGame ? Path.Combine(gamePath!, "mods") : null;
+        var gameDlc = hasGame ? Path.Combine(gamePath!, "dlc") : null;
+
+        return Core.Migration.LegacyLibraryAuditor.Audit(
+            entries,
+            folder => Directory.Exists(Path.Combine(_modsDir, folder)),
+            hasGame
+                ? (folder, isDlc) => Directory.Exists(Path.Combine(isDlc ? gameDlc! : gameMods!, folder))
+                : null);
+    }
+
     private void Load()
     {
         // A damaged library used to fall through to an empty list, and the next save then wrote

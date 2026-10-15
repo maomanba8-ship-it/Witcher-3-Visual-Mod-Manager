@@ -50,6 +50,9 @@ public partial class MainWindow : Window
                 System.Diagnostics.Debug.WriteLine("[W3MM] 数据警告: " + warning);
             }
             ReportLibraryLoadOutcome();
+#if DEBUG
+            LogLibraryAudit();
+#endif
             _settings = new SettingsService();
             _importer = new ModImportService(_storage, _settings);
             _w3 = new Witcher3Service(_settings, _storage);
@@ -354,6 +357,20 @@ public partial class MainWindow : Window
     }
 
 
+
+    /// <summary>
+    /// Logs the read-only library audit (DEBUG only). It is the evidence behind any later
+    /// decision to migrate the library, so it is recorded every run rather than on request.
+    /// </summary>
+    private void LogLibraryAudit()
+    {
+        if (_storage == null) return;
+
+        var audit = _storage.GetLibraryAudit(_w3?.GetGamePath());
+        DiagnosticLog.Write($"[audit] entries={audit.EntryCount} findings={audit.Findings.Count} clean={audit.IsClean}");
+        foreach (var finding in audit.Findings)
+            DiagnosticLog.Write($"[audit] {finding.Kind}: {finding.Detail}");
+    }
 
     /// <summary>
     /// A damaged or unreadable library has to reach the user: the list on screen is not the one
