@@ -102,6 +102,22 @@
                                        Text="These folders are shared by multiple mods. Disabling one won't remove the shared resource."/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Retained bin files from disabled mods: state, not a conflict -->
+                    <Border x:Name="BinRetentionHintPanel" Visibility="Collapsed"
+                            Background="#1A6BA5B5" CornerRadius="6"
+                            Padding="14,12" Margin="0,0,0,16"
+                            BorderBrush="#336BA5B5" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="BinRetentionTitleText" Foreground="#6BA5B5" FontSize="13" FontWeight="SemiBold"
+                                       Text="Disabling does not remove bin files"/>
+                            <TextBlock x:Name="BinRetentionListText" Foreground="#C8D0D8"
+                                       FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="BinRetentionSuggestionText" Foreground="#9A9EAA"
+                                       FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
                     <StackPanel x:Name="ConflictStackPanel"/>
 
                     <StackPanel x:Name="NoConflictsPanel" Visibility="Collapsed"

@@ -20,6 +20,7 @@ public partial class ConflictDialog : Window
     private readonly HashSet<string> _sharedContentDiffs;
     private readonly SettingsService? _settings;
     private readonly IDisposable? _languageSubscription;
+    private readonly IReadOnlyList<BinRetention> _retainedBinFiles;
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
@@ -27,7 +28,8 @@ public partial class ConflictDialog : Window
         List<ModEntry>? bundleMods = null,
         List<(string Folder, List<string> Mods)>? sharedFolders = null,
         IEnumerable<string>? sharedContentDiffs = null,
-        SettingsService? settings = null)
+        SettingsService? settings = null,
+        IReadOnlyList<BinRetention>? retainedBinFiles = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
@@ -35,6 +37,7 @@ public partial class ConflictDialog : Window
         _bundleMods = bundleMods;
         _sharedFolders = sharedFolders ?? new();
         _settings = settings;
+        _retainedBinFiles = retainedBinFiles ?? Array.Empty<BinRetention>();
         _sharedContentDiffs = new HashSet<string>(
             sharedContentDiffs ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         LoadConflicts(conflicts, modDates, potentialOverrides);
@@ -93,6 +96,16 @@ public partial class ConflictDialog : Window
                 return line;
             });
             SharedModListText.Text = string.Join("\n", sharedLines);
+        }
+
+        // Disabled mods that still have files in the game's bin directory. Shown as a state
+        // fact: disabling never removes those files, so the mod is not as inactive as it looks.
+        if (_retainedBinFiles.Count > 0)
+        {
+            BinRetentionHintPanel.Visibility = Visibility.Visible;
+            BinRetentionTitleText.Text = TranslationService.Instance.T("conflict.bin_retained_title");
+            BinRetentionListText.Text = "● " + string.Join("\n● ", _retainedBinFiles.Select(r => r.ModName));
+            BinRetentionSuggestionText.Text = TranslationService.Instance.T("conflict.bin_retained_suggest");
         }
 
         if (conflicts.Count == 0)

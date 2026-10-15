@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Core.Shared;
 using Witcher3ModManager.Models;
@@ -202,6 +203,28 @@ public class ConflictService
         }
 
         return differences;
+    }
+
+    /// <summary>
+    /// Disabled mods whose bin files are still present in the game directory. Disabling never
+    /// removes bin files, so a disabled mod can still be affecting the game. Reported as its own
+    /// fact rather than folded into the conflict list, which stays about what is enabled.
+    /// </summary>
+    public List<BinRetention> GetRetainedBinFiles()
+    {
+        var gamePath = _w3.GetGamePath();
+        if (string.IsNullOrEmpty(gamePath)) return new List<BinRetention>();
+
+        var binRoot = Path.Combine(gamePath, "bin");
+        var claims = _storage.GetAllMods()
+            .Where(m => m.GameBinFiles.Count > 0)
+            .Select(m => new BinClaim(m.Name, m.IsEnabled, m.GameBinFiles))
+            .ToList();
+
+        return BinRetentionInspector
+            .FindRetained(claims, relative =>
+                File.Exists(Path.Combine(binRoot, relative.Replace('/', Path.DirectorySeparatorChar))))
+            .ToList();
     }
 
     public bool IsBundleMod(ModEntry mod)

@@ -294,8 +294,10 @@ public partial class MainWindow : Window
         var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
         var sharedContentDiffs = _conflict.GetSharedContentDiffs().Select(d => d.Folder);
+        var retainedBinFiles = _conflict.GetRetainedBinFiles();
 
-        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs, _settings);
+        var dialog = new Views.ConflictDialog(
+            conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs, _settings, retainedBinFiles);
         dialog.ShowDialog();
         RefreshStatusBar();
     }
