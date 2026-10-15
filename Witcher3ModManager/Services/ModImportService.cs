@@ -171,11 +171,18 @@ public class ModImportService
                     return (new List<ModEntry>(), errorCode);
                 }
 
+                // Record each component's own imported content while its bytes are still in
+                // temp: a later import may delete and overwrite a shared storage folder, so
+                // fingerprinting after the move would describe whichever package won.
+                var componentFingerprints = CollectComponentFingerprints(
+                    modRoots, allAttachedMods, dlcRoots, allAttachedDlcs);
+
                 var primary = modRoots.Count > 0 ? modRoots[0] : dlcRoots[0];
                 var primaryType = ClassifyRoot(primary).IsDlc ? ModType.Dlc : ModType.Mod;
                 var entry = await BuildModEntry(primary.FullName, primaryType, groupId, archivePath, archiveName, progress, Path.GetFileName(primary.FullName));
                 if (entry != null)
                 {
+                    entry.ComponentFingerprints = componentFingerprints;
                     entry.GameModFolders.Clear();
                     foreach (var mr in modRoots)
                         entry.GameModFolders.Add(mr.Name);
@@ -275,9 +282,15 @@ public class ModImportService
                             return (new List<ModEntry>(), errorCode);
                         }
 
+                        var fallbackDomain = modType.Value == ModType.Dlc ? TargetDomain.Dlc : TargetDomain.Mods;
+                        var fallbackFingerprint = ComponentFingerprintCollector.FromRoot(fallbackDomain, targetName, root);
                         var entry = await BuildModEntry(root, modType.Value, groupId, archivePath, archiveName, progress);
                         if (entry != null)
+                        {
+                            if (fallbackFingerprint != null)
+                                entry.ComponentFingerprints.Add(fallbackFingerprint);
                             results.Add(entry);
+                        }
                     }
                 }
                 else
@@ -501,6 +514,36 @@ public class ModImportService
             buildEntry.GameModFolderName = gameFolderName;
 
         return buildEntry;
+    }
+
+    /// <summary>
+    /// Records one fingerprint per component root, keyed by its final storage folder name, so
+    /// the owners of a shared folder can later be compared by (domain, folder). Read-only: it
+    /// hashes whatever is on disk now and nothing else. Roots that are unreadable or hold no
+    /// files are simply left unrecorded, and the reader must treat that as unknown history
+    /// rather than as a match.
+    /// </summary>
+    private static List<ComponentFingerprintEntry> CollectComponentFingerprints(
+        IEnumerable<DirectoryInfo> modRoots,
+        IEnumerable<DirectoryInfo> attachedMods,
+        IEnumerable<DirectoryInfo> dlcRoots,
+        IEnumerable<DirectoryInfo> attachedDlcs)
+    {
+        var entries = new List<ComponentFingerprintEntry>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void Collect(TargetDomain domain, DirectoryInfo root)
+        {
+            if (!seen.Add(domain + "\u0001" + root.Name)) return;
+            var entry = ComponentFingerprintCollector.FromRoot(domain, root.Name, root.FullName);
+            if (entry != null) entries.Add(entry);
+        }
+
+        foreach (var root in modRoots) Collect(TargetDomain.Mods, root);
+        foreach (var root in attachedMods) Collect(TargetDomain.Mods, root);
+        foreach (var root in dlcRoots) Collect(TargetDomain.Dlc, root);
+        foreach (var root in attachedDlcs) Collect(TargetDomain.Dlc, root);
+        return entries;
     }
 
     private static ModType? AskModOrDlc(string archiveName)

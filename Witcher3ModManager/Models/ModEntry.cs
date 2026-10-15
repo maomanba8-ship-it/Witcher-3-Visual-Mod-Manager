@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using Witcher3ModManager.Services;
+using Witcher3ModManager.Core.Manifest;
 
 namespace Witcher3ModManager.Models;
 
@@ -29,6 +30,13 @@ public class ModEntry
     public List<string> GameDlcFolders { get; set; } = new();
     public List<string> GameBinFiles { get; set; } = new();
     public string? BinStoragePath { get; set; }
+
+    /// <summary>
+    /// Content fingerprint per component as observed at import time, keyed by final storage
+    /// folder name. Records imported before this existed keep an empty list, which means the
+    /// history is unknown and must never be reported as a match.
+    /// </summary>
+    public List<ComponentFingerprintEntry> ComponentFingerprints { get; set; } = new();
 
     [JsonIgnore]
     public string? GameModFolderName
