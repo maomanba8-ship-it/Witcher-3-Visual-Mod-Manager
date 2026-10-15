@@ -28,13 +28,14 @@ public sealed record ComponentFile(
     long Length);
 
 /// <summary>
-/// One evidence-backed conflict group result.
+/// One evidence-backed conflict group result. Identities are component ids only: the
+/// analysis layer has no storage access, so user-facing display names are resolved by the
+/// caller that owns the records.
 /// </summary>
 public sealed record ConflictEvidence(
     TargetDomain Domain,
     string NormalizedRelativePath,
     IReadOnlyList<string> ComponentIdentities,
-    IReadOnlyList<string> DisplayNames,
     ConflictKind Kind,
     IReadOnlyList<string> Hashes,
     string? SuggestAction = null);
@@ -109,7 +110,6 @@ public static class ConflictAnalyzer
             if (distinct.Count <= 1) continue; // a single component is not a conflict
 
             var identities = distinct.Select(f => f.ComponentIdentity).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var displayNames = distinct.Select(f => f.ComponentIdentity).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var hashes = distinct.Select(f => f.Sha256).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var allSameHash = hashes.Count == 1;
 
@@ -149,7 +149,6 @@ public static class ConflictAnalyzer
                 group.Key.Domain,
                 group.Key.NormalizedRelativePath,
                 identities,
-                displayNames,
                 kind,
                 hashes,
                 action));
