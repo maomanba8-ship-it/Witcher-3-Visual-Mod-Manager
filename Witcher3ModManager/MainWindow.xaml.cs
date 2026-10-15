@@ -269,42 +269,32 @@ public partial class MainWindow : Window
 
     private void ConflictStatus_Click(object sender, RoutedEventArgs e)
     {
-        if (_conflict == null || _storage == null) return;
-        var conflicts = _conflict.ForceDetectConflicts();
-        var allMods = _storage.GetAllMods();
-
-        // Use GroupBy to handle duplicate names safely (e.g. from incomplete Mod+DLC merges)
-        var modDateMap = allMods
-            .GroupBy(m => m.Name)
-            .ToDictionary(g => g.Key, g => g.First().ImportDate);
-
-        var overrides = _conflict.GetPotentialOverrides();
-        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, settings: _settings);
-        dialog.ShowDialog();
-        RefreshStatusBar();
+        OpenConflictDialog();
     }
 
-    private void SharedStatus_Click(object sender, RoutedEventArgs e)
-    {
-        if (_modListPage == null) return;
-        // Open conflict dialog — shared resources are shown inside it
-        var conflictBtn = typeof(ModListPage)
-            .GetMethod("ConflictCheck_Click", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        conflictBtn?.Invoke(_modListPage, new object[] { sender, e });
-    }
+    private void SharedStatus_Click(object sender, RoutedEventArgs e) => OpenConflictDialog();
 
-    private void BundleStatus_Click(object sender, RoutedEventArgs e)
+    private void BundleStatus_Click(object sender, RoutedEventArgs e) => OpenConflictDialog();
+
+    /// <summary>
+    /// Opens the conflict dialog with the complete picture. The three status-bar entries
+    /// (conflicts, shared resources, bundle mods) all open the same dialog, so they share this
+    /// one code path instead of one of them reaching into the mod list page by reflection.
+    /// </summary>
+    private void OpenConflictDialog()
     {
         if (_conflict == null || _storage == null) return;
+
         var conflicts = _conflict.ForceDetectConflicts();
-        var allMods = _storage.GetAllMods();
-        var modDateMap = allMods
+        // GroupBy keeps duplicate names safe (e.g. from incomplete Mod+DLC merges).
+        var modDateMap = _storage.GetAllMods()
             .GroupBy(m => m.Name)
             .ToDictionary(g => g.Key, g => g.First().ImportDate);
         var overrides = _conflict.GetPotentialOverrides();
         var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
         var sharedContentDiffs = _conflict.GetSharedContentDiffs().Select(d => d.Folder);
+
         var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs, _settings);
         dialog.ShowDialog();
         RefreshStatusBar();
@@ -329,10 +319,15 @@ public partial class MainWindow : Window
     {
         if (_storage == null || _conflict == null) return;
         var allMods = _storage.GetAllMods();
-        StatusEnabled.Text = string.Format(Services.TranslationService.Instance.T("status.enabled"), allMods.Count(m => m.IsEnabled));
-        StatusTotal.Text = string.Format(Services.TranslationService.Instance.T("status.total"), allMods.Count);
-        StatusConflicts.Text = string.Format(Services.TranslationService.Instance.T("status.conflicts"), _conflict.DetectConflicts().Count(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)));
-        StatusPotential.Text = string.Format(Services.TranslationService.Instance.T("status.potential"), _conflict.DetectPotentialOverrideCount());
+        // Route through the same handler the mod list uses, so every counter in the bar is
+        // refreshed here too and the two paths cannot drift apart.
+        OnStatusUpdated(
+            allMods.Count(m => m.IsEnabled),
+            allMods.Count,
+            _conflict.DetectConflicts().Count(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)),
+            _conflict.DetectPotentialOverrideCount(),
+            _conflict.GetBundleMods().Count,
+            _conflict.GetSharedResources().Count);
     }
 
 
