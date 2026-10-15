@@ -27,8 +27,10 @@ public class Witcher3Service
         if (!string.IsNullOrEmpty(configured) && Directory.Exists(configured))
         {
             var normalized = configured.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            // The user may have picked the bin subfolder instead of the game root.
-            normalized = GameLayout.GameRootFromBinPath(normalized) ?? normalized;
+            // The user may have picked the exe, the bin folder or a bin subfolder; resolve upward
+            // to the installation root. Falls back to what they gave us so an install whose exe is
+            // missing but still has a content folder is accepted as before.
+            normalized = GameLayout.FindGameRoot(normalized) ?? normalized;
             if (Directory.Exists(Path.Combine(normalized, "content")) ||
                 GameLayout.IsGameRoot(normalized))
             {
