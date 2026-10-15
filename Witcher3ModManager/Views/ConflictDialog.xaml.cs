@@ -21,6 +21,7 @@ public partial class ConflictDialog : Window
     private readonly SettingsService? _settings;
     private readonly IDisposable? _languageSubscription;
     private readonly IReadOnlyList<BinRetention> _retainedBinFiles;
+    private readonly IReadOnlyDictionary<string, int>? _modPriorities;
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
@@ -29,7 +30,8 @@ public partial class ConflictDialog : Window
         List<(string Folder, List<string> Mods)>? sharedFolders = null,
         IEnumerable<string>? sharedContentDiffs = null,
         SettingsService? settings = null,
-        IReadOnlyList<BinRetention>? retainedBinFiles = null)
+        IReadOnlyList<BinRetention>? retainedBinFiles = null,
+        IReadOnlyDictionary<string, int>? modPriorities = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
@@ -38,6 +40,7 @@ public partial class ConflictDialog : Window
         _sharedFolders = sharedFolders ?? new();
         _settings = settings;
         _retainedBinFiles = retainedBinFiles ?? Array.Empty<BinRetention>();
+        _modPriorities = modPriorities;
         _sharedContentDiffs = new HashSet<string>(
             sharedContentDiffs ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         LoadConflicts(conflicts, modDates, potentialOverrides);
@@ -135,8 +138,17 @@ public partial class ConflictDialog : Window
         {
             var modNames = c.ConflictingMods.Select(m =>
             {
-                if (modDates != null && modDates.TryGetValue(m, out var date))
-                    return string.Format(TranslationService.Instance.T("conflict.install_date"), m, date);
+                // The priority is what decides load order, so it is shown next to each name
+                // instead of leaving the user to infer order from the install date.
+                var hasPriority = _modPriorities != null && _modPriorities.TryGetValue(m, out _);
+                var hasDate = modDates != null && modDates.TryGetValue(m, out _);
+
+                if (hasPriority && hasDate)
+                    return string.Format(TranslationService.Instance.T("conflict.mod_label"), m, _modPriorities![m], modDates![m]);
+                if (hasPriority)
+                    return string.Format(TranslationService.Instance.T("conflict.mod_label_no_date"), m, _modPriorities![m]);
+                if (hasDate)
+                    return string.Format(TranslationService.Instance.T("conflict.install_date"), m, modDates![m]);
                 return m;
             }).ToList();
 
@@ -196,6 +208,7 @@ public partial class ConflictDialog : Window
             {
                 Text = (string?)item.GetType().GetProperty("ConflictSummary")?.GetValue(item) ?? "",
                 FontSize = 12,
+                TextWrapping = System.Windows.TextWrapping.Wrap,
                 FontWeight = System.Windows.FontWeights.SemiBold,
                 Foreground = new System.Windows.Media.SolidColorBrush(
                     (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E2E4E9"))
