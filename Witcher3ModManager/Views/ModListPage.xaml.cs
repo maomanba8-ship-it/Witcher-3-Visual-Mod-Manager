@@ -391,7 +391,9 @@ public partial class ModListPage : UserControl
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Import error: " + ex.Message, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(TranslationService.Instance.T("import.error") + ": " + ex.Message,
+                TranslationService.Instance.T("dialog.error"),
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
     #endregion
@@ -415,8 +417,9 @@ public partial class ModListPage : UserControl
             var mod = _allMods.FirstOrDefault(m => m.Id == modId);
             if (mod == null) return;
             var confirmed = ConfirmDialog.Show(TranslationService.Instance.T("mods.confirm_delete"),
-                "Delete [" + mod.Name + "]?\n\nThis cannot be undone.",
-                "\uE74D", "Delete", TranslationService.Instance.T("dialog.cancel"));
+                string.Format(TranslationService.Instance.T("mods.delete_confirm_message"), mod.Name),
+                "\uE74D", TranslationService.Instance.T("dialog.delete"),
+                TranslationService.Instance.T("dialog.cancel"));
             if (!confirmed) return;
             _conflict?.InvalidateCache();
             var deleteOk = true;
