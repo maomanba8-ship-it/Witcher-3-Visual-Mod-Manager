@@ -1,8 +1,10 @@
 ﻿using System.IO;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Witcher3ModManager.Core.Analysis;
 using Witcher3ModManager.Core.Deployment;
+using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Core.Shared;
 using Witcher3ModManager.Models;
 
@@ -172,9 +174,115 @@ public class Witcher3Service
             if (mod.GameModFolders.Count > 0)
                 mod.InstalledPath = System.IO.Path.Combine(gameModsPath, mod.GameModFolders[0]);
 
+            RecordDeployedTargets(mod);
             return true;
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// Records what this enable actually put in the game directory, together with the content that
+    /// was written there, so a later operation can tell "ours" from "someone else's".
+    ///
+    /// Called only after the deployment succeeded, and deliberately unable to fail it: the index
+    /// is derived data, so losing a write degrades the answer to "who owns this?" back to
+    /// unknown, which is the conservative direction. Reporting a successful enable as failed
+    /// because of an index write would be far worse than an incomplete index.
+    ///
+    /// Disabling does not touch the index: the recorded target stays, and the state evaluator
+    /// already reports a disabled package whose folder is not there as simply not deployed.
+    /// </summary>
+    private void RecordDeployedTargets(ModEntry mod)
+    {
+        if (_storage is null) return;
+        var gamePath = GetGamePath();
+        if (string.IsNullOrWhiteSpace(gamePath)) return;
+
+        try
+        {
+            var components = new List<ComponentRecord>();
+
+            foreach (var folder in mod.GameModFolders)
+            {
+                if (string.IsNullOrWhiteSpace(folder)) continue;
+                components.Add(new ComponentRecord(
+                    ComponentRecord.MakeId(mod.Id, TargetDomain.Mods, folder),
+                    TargetDomain.Mods,
+                    folder,
+                    new[] { FolderTarget("mods/" + folder, Path.Combine(gamePath, "mods", folder), mod.Id, TargetDomain.Mods) }));
+            }
+
+            foreach (var folder in mod.GameDlcFolders)
+            {
+                if (string.IsNullOrWhiteSpace(folder)) continue;
+                components.Add(new ComponentRecord(
+                    ComponentRecord.MakeId(mod.Id, TargetDomain.Dlc, folder),
+                    TargetDomain.Dlc,
+                    folder,
+                    new[] { FolderTarget("dlc/" + folder, Path.Combine(gamePath, "dlc", folder), mod.Id, TargetDomain.Dlc) }));
+            }
+
+            if (mod.GameBinFiles.Count > 0)
+            {
+                var binTargets = mod.GameBinFiles
+                    .Where(f => !string.IsNullOrWhiteSpace(f))
+                    .Select(f => FileTarget("bin/" + f,
+                        Path.Combine(gamePath, "bin", f.Replace('/', Path.DirectorySeparatorChar))))
+                    .ToList();
+
+                components.Add(new ComponentRecord(
+                    ComponentRecord.MakeId(mod.Id, TargetDomain.Bin, ""),
+                    TargetDomain.Bin,
+                    mod.BinStoragePath ?? "",
+                    binTargets));
+            }
+
+            _storage.UpdateIndex(index =>
+                LibraryIndexUpdater.WithPackage(index, mod.Id, mod.Name, components));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"[index] could not record deployed targets for {mod.Name}: {ex.Message}");
+        }
+    }
+
+    private static TargetRecord FolderTarget(string relativePath, string fullPath, string packageId, TargetDomain domain) =>
+        new(relativePath, TargetKind.Folder, FolderFingerprint(fullPath, packageId, domain), DateTime.Now);
+
+    private static TargetRecord FileTarget(string relativePath, string fullPath) =>
+        new(relativePath, TargetKind.File, FileSha256(fullPath), DateTime.Now);
+
+    /// <summary>
+    /// Fingerprint of a deployed folder. Computed from the game copy rather than reused from the
+    /// import-time record, because a shared storage folder can legitimately hold another package's
+    /// content by now, and an ownership hash that describes the wrong bytes is worse than none.
+    /// Returns "" when it cannot be read, which callers treat as "unknown", not as a match.
+    /// </summary>
+    private static string FolderFingerprint(string root, string packageId, TargetDomain domain)
+    {
+        try
+        {
+            return Directory.Exists(root)
+                ? ComponentFingerprint.Compute(ManifestBuilder.Build(root, packageId, domain))
+                : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string FileSha256(string fullPath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(fullPath);
+            return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     public bool DisableMod(ModEntry mod, string? storageModsDir = null)

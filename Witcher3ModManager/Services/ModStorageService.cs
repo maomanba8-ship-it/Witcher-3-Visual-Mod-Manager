@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text.Json;
+using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -10,7 +12,9 @@ public class ModStorageService
     private readonly string _modsDir;
     private readonly string _binDir;
     private readonly string _dbPath;
+    private readonly Core.Deployment.LibraryIndexStore _indexStore;
     private List<ModEntry> _mods = new();
+    private Core.Deployment.LibraryIndex _index = Core.Deployment.LibraryIndex.Empty;
 
     /// <summary>
     /// How the library file was read. The UI reports a damaged or unreadable library instead of
@@ -29,11 +33,78 @@ public class ModStorageService
         _modsDir = Path.Combine(_dataDir, "mods");
         _binDir = Path.Combine(_dataDir, "bin");
         _dbPath = Path.Combine(_dataDir, "mods.json");
+        _indexStore = new Core.Deployment.LibraryIndexStore(Path.Combine(_dataDir, "library.json"));
         
         Directory.CreateDirectory(_dataDir);
         Directory.CreateDirectory(_modsDir);
         Directory.CreateDirectory(_binDir);
         Load();
+        _index = _indexStore.Load();
+    }
+
+    /// <summary>
+    /// The ownership index: which package put which game target where. Derived data, so it is
+    /// loaded independently of the library and can be rebuilt by observing reality again.
+    /// </summary>
+    public Core.Deployment.LibraryIndex Index => _index;
+
+    public string? IndexSaveError => _indexStore.LastSaveError;
+
+    /// <summary>
+    /// Applies a change to the index and persists it. A failed save is reported but never
+    /// propagated: the index is derived data, and losing a write only degrades the answer to
+    /// "who owns this?" back to "unknown", which is the conservative direction. It must not be
+    /// able to fail the operation that triggered it.
+    /// </summary>
+    public void UpdateIndex(Func<Core.Deployment.LibraryIndex, Core.Deployment.LibraryIndex> change)
+    {
+        if (change is null) return;
+
+        _index = change(_index) ?? _index;
+        if (_indexStore.Save(_index)) return;
+
+#if DEBUG
+        DiagnosticLog.Write($"[index] failed to save the library index: {_indexStore.LastSaveError}");
+#endif
+    }
+
+    /// <summary>
+    /// Components a record declares, with no targets yet: at import time nothing has been
+    /// deployed, and an empty target list is exactly what makes "enabled but nothing on disk"
+    /// detectable later.
+    /// </summary>
+    private static IReadOnlyList<ComponentRecord> ComponentsOf(ModEntry entry)
+    {
+        var components = new List<ComponentRecord>();
+
+        foreach (var folder in entry.GameModFolders ?? new List<string>())
+            components.Add(Component(entry.Id, TargetDomain.Mods, folder));
+
+        foreach (var folder in entry.GameDlcFolders ?? new List<string>())
+            components.Add(Component(entry.Id, TargetDomain.Dlc, folder));
+
+        if ((entry.GameBinFiles?.Count ?? 0) > 0)
+            components.Add(Component(entry.Id, TargetDomain.Bin, entry.BinStoragePath ?? ""));
+
+        return components;
+    }
+
+    private static ComponentRecord Component(string packageId, TargetDomain domain, string folder) =>
+        new(ComponentRecord.MakeId(packageId, domain, folder), domain, folder,
+            Array.Empty<TargetRecord>());
+
+    /// <summary>Remembers a package in the index (wholesale replace, targets cleared).</summary>
+    public void IndexPackage(ModEntry entry)
+    {
+        if (entry is null) return;
+        UpdateIndex(index => LibraryIndexUpdater.WithPackage(index, entry.Id, entry.Name, ComponentsOf(entry)));
+    }
+
+    /// <summary>Forgets a package and its target claims.</summary>
+    public void IndexForget(string? packageId)
+    {
+        if (string.IsNullOrWhiteSpace(packageId)) return;
+        UpdateIndex(index => LibraryIndexUpdater.WithoutPackage(index, packageId));
     }
 
     public IReadOnlyList<ModEntry> GetAllMods() => _mods.AsReadOnly();
@@ -168,6 +239,7 @@ public class ModStorageService
         mod.Priority = _mods.Count > 0 ? _mods.Max(m => m.Priority) + 1 : 1;
         _mods.Add(mod);
         Save();
+        IndexPackage(mod);
         return true;
     }
 
@@ -186,6 +258,7 @@ public class ModStorageService
         mod.Priority = _mods.Count > 0 ? _mods.Max(m => m.Priority) + 1 : 1;
         _mods.Add(mod);
         Save();
+        IndexPackage(mod);
     }
 
     public void RemoveMod(string id)
@@ -196,6 +269,7 @@ public class ModStorageService
             // InstalledPath cleanup handled by Witcher3Service.DeleteMod
             _mods.Remove(mod);
             Save();
+            IndexForget(id);
         }
     }
 
