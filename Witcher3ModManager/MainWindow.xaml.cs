@@ -50,6 +50,7 @@ public partial class MainWindow : Window
                 System.Diagnostics.Debug.WriteLine("[W3MM] 数据警告: " + warning);
             }
             ReportLibraryLoadOutcome();
+            ReportUnfinishedOperations();
 #if DEBUG
             LogLibraryAudit();
 #endif
@@ -357,6 +358,41 @@ public partial class MainWindow : Window
     }
 
 
+
+    /// <summary>
+    /// Reports operations that never finished. Only a report: recovering from an interrupted
+    /// operation is the user's decision, so nothing here rolls back, retries or deletes anything.
+    /// </summary>
+    private void ReportUnfinishedOperations()
+    {
+        if (_storage == null) return;
+
+        var leftovers = _storage.Journals.Leftovers();
+        if (leftovers.Count == 0) return;
+
+        foreach (var journal in leftovers)
+            DiagnosticLog.Write($"[journal] unfinished {journal.Kind} '{journal.Subject}' started {journal.StartedAt:O} failure={journal.Failure}");
+
+        var t = Services.TranslationService.Instance;
+        var lines = leftovers.Select(j =>
+            "• " + string.Format(t.T("journal.entry"), t.T(OperationKindKey(j.Kind)), j.Subject));
+
+        MessageBox.Show(
+            t.T("journal.intro") + "\n\n" + string.Join("\n", lines) + "\n\n" + t.T("journal.note"),
+            t.T("journal.title"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+    }
+
+    private static string OperationKindKey(Core.Deployment.OperationKind kind) => kind switch
+    {
+        Core.Deployment.OperationKind.Import => "journal.kind.import",
+        Core.Deployment.OperationKind.Enable => "journal.kind.enable",
+        Core.Deployment.OperationKind.Disable => "journal.kind.disable",
+        Core.Deployment.OperationKind.Delete => "journal.kind.delete",
+        Core.Deployment.OperationKind.ApplyPreset => "journal.kind.preset",
+        _ => "journal.kind.other"
+    };
 
 #if DEBUG
     /// <summary>

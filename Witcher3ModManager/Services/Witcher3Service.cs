@@ -105,6 +105,7 @@ public class Witcher3Service
     }
     public bool EnableMod(ModEntry mod, string? storageModsDir = null)
     {
+        var journal = BeginJournal(OperationKind.Enable, mod);
         try
         {
             var gameModsPath = GetGameModsPath();
@@ -175,9 +176,37 @@ public class Witcher3Service
                 mod.InstalledPath = System.IO.Path.Combine(gameModsPath, mod.GameModFolders[0]);
 
             RecordDeployedTargets(mod);
+            _storage?.Journals.Complete(journal?.OperationId);
             return true;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            _storage?.Journals.Fail(journal, ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Starts a journal entry for an operation, listing the paths it intends to touch. Returns null
+    /// when no journal could be written: that is worth logging, but it must not stop the operation
+    /// the user asked for.
+    /// </summary>
+    private OperationJournal? BeginJournal(OperationKind kind, ModEntry mod)
+    {
+        try
+        {
+            var targets = mod.GameModFolders.Select(f => "mods/" + f)
+                .Concat(mod.GameDlcFolders.Select(f => "dlc/" + f))
+                .Concat(mod.GameBinFiles.Select(f => "bin/" + f))
+                .ToList();
+
+            return _storage?.Journals.Begin(kind, mod.Name, targets);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"[journal] could not start a {kind} journal for {mod.Name}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -287,6 +316,7 @@ public class Witcher3Service
 
     public bool DisableMod(ModEntry mod, string? storageModsDir = null)
     {
+        var journal = BeginJournal(OperationKind.Disable, mod);
         try
         {
             var gameModsPath = GetGameModsPath();
@@ -331,12 +361,18 @@ public class Witcher3Service
             if (mod.GameModFolders.Count > 0)
                 mod.InstalledPath = Path.Combine(gameModsPath, "~" + mod.GameModFolders[0]);
 
+            _storage?.Journals.Complete(journal?.OperationId);
             return true;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            _storage?.Journals.Fail(journal, ex.Message);
+            return false;
+        }
     }
     public bool DeleteMod(ModEntry mod)
     {
+        var journal = BeginJournal(OperationKind.Delete, mod);
         try
         {
             var failed = false;
@@ -426,9 +462,16 @@ public class Witcher3Service
 
             // A record with nothing left on disk is still successfully removed; only a
             // real deletion failure (path exists but could not be deleted) means stale.
+            if (!failed) _storage?.Journals.Complete(journal?.OperationId);
+            else _storage?.Journals.Fail(journal, "one or more paths could not be deleted");
+
             return !failed;
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            _storage?.Journals.Fail(journal, ex.Message);
+            return false;
+        }
     }
 
     private static void DeleteIfExists(string path, ref bool failed)

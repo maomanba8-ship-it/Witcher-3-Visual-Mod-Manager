@@ -13,6 +13,7 @@ public class ModStorageService
     private readonly string _binDir;
     private readonly string _dbPath;
     private readonly Core.Deployment.LibraryIndexStore _indexStore;
+    private readonly Core.Deployment.OperationJournalStore _journals;
     private List<ModEntry> _mods = new();
     private Core.Deployment.LibraryIndex _index = Core.Deployment.LibraryIndex.Empty;
 
@@ -34,6 +35,7 @@ public class ModStorageService
         _binDir = Path.Combine(_dataDir, "bin");
         _dbPath = Path.Combine(_dataDir, "mods.json");
         _indexStore = new Core.Deployment.LibraryIndexStore(Path.Combine(_dataDir, "library.json"));
+        _journals = new Core.Deployment.OperationJournalStore(Path.Combine(_dataDir, "journal"));
         
         Directory.CreateDirectory(_dataDir);
         Directory.CreateDirectory(_modsDir);
@@ -49,6 +51,12 @@ public class ModStorageService
     public Core.Deployment.LibraryIndex Index => _index;
 
     public string? IndexSaveError => _indexStore.LastSaveError;
+
+    /// <summary>
+    /// The journal of running operations. A file still present at startup is an operation that did
+    /// not finish, which is reported to the user rather than acted on.
+    /// </summary>
+    public Core.Deployment.OperationJournalStore Journals => _journals;
 
     /// <summary>
     /// Applies a change to the index and persists it. A failed save is reported but never
