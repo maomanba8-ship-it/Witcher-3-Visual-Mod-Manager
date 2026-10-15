@@ -20,6 +20,7 @@ public partial class ModListPage : UserControl
     private ConflictService? _conflict;
     private ModImportService? _importer;
     private BackupService? _backup;
+    private SettingsService? _settings;
     private Category? _selectedCategory;
     private List<ModEntry> _allMods = new();
     private ModEntry? _selectedMod;
@@ -34,13 +35,15 @@ public partial class ModListPage : UserControl
     }
 
     public void Initialize(ModStorageService storage, ModImportService importer, 
-        Witcher3Service w3, ConflictService conflict, BackupService backup)
+        Witcher3Service w3, ConflictService conflict, BackupService backup,
+        SettingsService settings)
     {
         _storage = storage;
         _importer = importer;
         _w3 = w3;
         _conflict = conflict;
         _backup = backup;
+        _settings = settings;
         LoadCategories();
         RefreshModList();
         RefreshLanguage();
@@ -637,7 +640,7 @@ public partial class ModListPage : UserControl
         var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
         var sharedContentDiffs = _conflict.GetSharedContentDiffs().Select(d => d.Folder);
-        var dialog = new ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs);
+        var dialog = new ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs, _settings);
         dialog.ShowDialog();
         UpdateStatusBar();
     }

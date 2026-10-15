@@ -174,13 +174,13 @@ public partial class MainWindow : Window
 
     private void NavigateToModList()
     {
-        if (_storage == null || _importer == null || _w3 == null || _conflict == null || _backup == null) return;
+        if (_storage == null || _importer == null || _w3 == null || _conflict == null || _backup == null || _settings == null) return;
         _modListPage ??= new ModListPage();
         _modListPage.NavigateBackRequested -= OnModListBack;
         _modListPage.NavigateBackRequested += OnModListBack;
         _modListPage.StatusUpdated -= OnStatusUpdated;
         _modListPage.StatusUpdated += OnStatusUpdated;
-        _modListPage.Initialize(_storage, _importer, _w3, _conflict, _backup);
+        _modListPage.Initialize(_storage, _importer, _w3, _conflict, _backup, _settings);
         if (_orphanDetector != null)
         {
             var gamePath = _w3?.GetGamePath();
@@ -277,7 +277,7 @@ public partial class MainWindow : Window
             .ToDictionary(g => g.Key, g => g.First().ImportDate);
 
         var overrides = _conflict.GetPotentialOverrides();
-        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides);
+        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, settings: _settings);
         dialog.ShowDialog();
         RefreshStatusBar();
     }
@@ -303,7 +303,7 @@ public partial class MainWindow : Window
         var sharedFolders = _conflict.GetSharedFolderPairs();
         var bundleMods = _conflict.GetBundleMods();
         var sharedContentDiffs = _conflict.GetSharedContentDiffs().Select(d => d.Folder);
-        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs);
+        var dialog = new Views.ConflictDialog(conflicts, modDateMap, overrides, bundleMods, sharedFolders, sharedContentDiffs, _settings);
         dialog.ShowDialog();
         RefreshStatusBar();
     }

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Witcher3ModManager.Models;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Deployment;
 using System.Linq;
 using Witcher3ModManager.Services;
 
@@ -17,19 +18,22 @@ public partial class ConflictDialog : Window
     private readonly List<ModEntry>? _bundleMods;
     private List<(string Folder, List<string> Mods)> _sharedFolders = new();
     private readonly HashSet<string> _sharedContentDiffs;
+    private readonly SettingsService? _settings;
 
     public ConflictDialog(List<ConflictInfo> conflicts,
         Dictionary<string, DateTime>? modDates = null,
         Dictionary<CategoryType, List<string>>? potentialOverrides = null,
         List<ModEntry>? bundleMods = null,
         List<(string Folder, List<string> Mods)>? sharedFolders = null,
-        IEnumerable<string>? sharedContentDiffs = null)
+        IEnumerable<string>? sharedContentDiffs = null,
+        SettingsService? settings = null)
     {
         InitializeComponent();
         Owner = Application.Current.MainWindow;
         _conflicts = conflicts;
         _bundleMods = bundleMods;
         _sharedFolders = sharedFolders ?? new();
+        _settings = settings;
         _sharedContentDiffs = new HashSet<string>(
             sharedContentDiffs ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
         LoadConflicts(conflicts, modDates, potentialOverrides);
@@ -45,36 +49,17 @@ public partial class ConflictDialog : Window
 
     private void AutoDetectScriptMerger()
     {
-        // Try common paths
-        string[] commonPaths = {
+        // The path the user configured wins; then the usual install locations. The configured
+        // value comes from the injected settings service, never from parsing the settings file
+        // here, so a test build can no longer pick up the release build's settings.
+        _scriptMergerPath = ToolLocator.FirstExisting(new[]
+        {
+            _settings?.Current.ScriptMergerPath,
             @"D:\Tools\WitcherScriptMerger\WitcherScriptMerger.exe",
             @"C:\Program Files\WitcherScriptMerger\WitcherScriptMerger.exe",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 "Downloads", "WitcherScriptMerger", "WitcherScriptMerger.exe")
-        };
-
-        foreach (var p in commonPaths)
-        {
-            if (File.Exists(p)) { _scriptMergerPath = p; return; }
-        }
-
-        // Check settings
-        try
-        {
-            var settingsDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Witcher3ModManager");
-            var settingsPath = Path.Combine(settingsDir, "settings.json");
-            if (File.Exists(settingsPath))
-            {
-                var json = File.ReadAllText(settingsPath);
-                var settings = System.Text.Json.JsonSerializer.Deserialize<dynamic>(json);
-                var mergerPath = settings?.GetProperty("ScriptMergerPath")?.GetString();
-                if (!string.IsNullOrEmpty(mergerPath) && File.Exists(mergerPath))
-                    _scriptMergerPath = mergerPath;
-            }
-        }
-        catch { }
+        });
     }
     private void LoadConflicts(List<ConflictInfo> conflicts, 
         Dictionary<string, DateTime>? modDates,
