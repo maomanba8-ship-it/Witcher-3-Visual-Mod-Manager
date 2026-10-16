@@ -307,31 +307,27 @@ public class Witcher3Service
         {
             var gameModsPath = GetGameModsPath();
 
-            // Disable each mod folder
-            foreach (var folder in mod.GameModFolders)
+            // A shared folder is left untouched: another enabled mod still points at it, so
+            // renaming it would disable that mod as well.
+            var modFolders = mod.GameModFolders
+                .Where(f => !IsSharedFolder(f, mod, TargetDomain.Mods))
+                .ToList();
+            var dlcFolders = mod.GameDlcFolders
+                .Where(f => !IsSharedFolder(f, mod, TargetDomain.Dlc))
+                .ToList();
+
+            var plan = DisablePlanner.Plan(gameModsPath, GetGameDlcPath(), modFolders, dlcFolders);
+            var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
+            var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
+                .Execute(plan, journal?.OperationId);
+
+            foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
+                DiagnosticLog.Write($"[deploy] nothing to disable for {step.Target}");
+
+            if (!result.Ok)
             {
-                if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
-                var enabledPath = Path.Combine(gameModsPath, folder);
-                var disabledPath = Path.Combine(gameModsPath, "~" + folder);
-
-                if (Directory.Exists(enabledPath))
-                {
-                    if (Directory.Exists(disabledPath))
-                        Directory.Delete(disabledPath, true);
-                    Directory.Move(enabledPath, disabledPath);
-                }
-            }
-
-
-            // Disable each DLC folder
-            if (mod.GameDlcFolders.Count > 0)
-            {
-                var gameDlcPath = GetGameDlcPath();
-                foreach (var dlcFolder in mod.GameDlcFolders)
-                {
-                    if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
-                    ToggleFolder(gameDlcPath, dlcFolder, false);
-                }
+                _storage?.Journals.Fail(journal, result.Failure);
+                return false;
             }
 
             // Update mods.settings
@@ -612,30 +608,6 @@ public class Witcher3Service
         if (lower.StartsWith("mod") || lower.StartsWith("dlc"))
             return clean;
         return prefix + clean;
-    }
-
-    /// <summary>
-    /// Enable or disable a single folder by renaming (add/remove ~ prefix).
-    /// </summary>
-    private static bool ToggleFolder(string gameDir, string folderName, bool enable)
-    {
-        var cleanName = folderName.StartsWith("~") ? folderName.Substring(1) : folderName;
-        var enabledPath = System.IO.Path.Combine(gameDir, cleanName);
-        var disabledPath = System.IO.Path.Combine(gameDir, "~" + cleanName);
-
-        if (enable && Directory.Exists(disabledPath))
-        {
-            if (Directory.Exists(enabledPath)) Directory.Delete(enabledPath, true);
-            Directory.Move(disabledPath, enabledPath);
-            return true;
-        }
-        if (!enable && Directory.Exists(enabledPath))
-        {
-            if (Directory.Exists(disabledPath)) Directory.Delete(disabledPath, true);
-            Directory.Move(enabledPath, disabledPath);
-            return true;
-        }
-        return false;
     }
 
     public static string SanitizeModName(string name)
