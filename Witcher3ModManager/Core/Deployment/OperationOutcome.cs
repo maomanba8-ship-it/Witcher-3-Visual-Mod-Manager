@@ -18,7 +18,19 @@ public enum OperationNoteKind
     PathNotRemoved,
 
     /// <summary>An enable found nothing to deploy from: absent from storage and from the game directory.</summary>
-    NoSource
+    NoSource,
+
+    /// <summary>A bin file was left alone because what is on disk is not what we wrote.</summary>
+    BinModifiedElsewhere,
+
+    /// <summary>A bin file was left alone because there is no record of ever writing it.</summary>
+    BinNoRecord,
+
+    /// <summary>A bin file was left alone because it is not on disk at all.</summary>
+    BinAlreadyGone,
+
+    /// <summary>A bin file could not be put back because the content kept for it is gone.</summary>
+    BinBackupMissing
 }
 
 /// <summary>

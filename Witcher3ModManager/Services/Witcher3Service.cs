@@ -336,8 +336,20 @@ public class Witcher3Service
 
             var plan = DisablePlanner.Plan(gameModsPath, GetGameDlcPath(), modFolders, dlcFolders);
             var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
+
+            // Bin files are part of the same operation as the folders: a disable that stops the
+            // folders but leaves the files running has not disabled anything.
+            var binRestore = BinRestorePlanner.Plan(
+                _storage?.BinClaims,
+                _storage?.BinBackups,
+                mod.Id,
+                Path.Combine(gameRoot, "bin"),
+                mod.GameBinFiles,
+                relative => BinBackupStore.HashOf(Path.Combine(
+                    gameRoot, "bin", relative.Replace('/', Path.DirectorySeparatorChar))));
+
             var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
-                .Execute(plan, journal?.OperationId);
+                .Execute(DeploymentPlan.Combined(plan, binRestore.Steps), journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
                 DiagnosticLog.Write($"[deploy] nothing to disable for {step.Domain}/{step.Subject}");
@@ -345,8 +357,12 @@ public class Witcher3Service
             if (!result.Ok)
             {
                 _storage?.Journals.Fail(journal, result.Failure);
-                return OperationOutcome.From(OperationKind.Disable, result);
+                return OperationOutcome.From(OperationKind.Disable, result, binRestore.Notes);
             }
+
+            // The package no longer claims any bin file: whatever is on disk now is either what was
+            // there before it, or content someone else owns.
+            ForgetBinClaims(mod);
 
             // Update mods.settings
             if (mod.ModType == ModType.Mod)
@@ -362,7 +378,7 @@ public class Witcher3Service
                 mod.InstalledPath = Path.Combine(gameModsPath, "~" + mod.GameModFolders[0]);
 
             _storage?.Journals.Complete(journal?.OperationId);
-            return OperationOutcome.Succeeded(OperationKind.Disable, null, result.Steps);
+            return OperationOutcome.Succeeded(OperationKind.Disable, binRestore.Notes, result.Steps);
         }
         catch (Exception ex)
         {
@@ -738,13 +754,21 @@ public class Witcher3Service
     }
 
     /// <summary>
-    /// Bin files are NEVER automatically deleted from the game directory.
-    /// Multiple mods may share the same bin file (e.g. config XMLs).
-    /// Removing one mod's bin could break another mod silently.
+    /// Drops this package's claims on its bin files. Called only after the disable succeeded, so a
+    /// failure leaves the record that makes a retry possible.
     /// </summary>
-    private void DisableBinFiles(ModEntry mod)
+    private void ForgetBinClaims(ModEntry mod)
     {
-        // Intentionally empty — bin files persist in game directory
+        var storage = _storage;
+        if (storage is null || mod.GameBinFiles.Count == 0) return;
+
+        storage.UpdateBinClaims(claims =>
+        {
+            var updated = claims;
+            foreach (var relative in mod.GameBinFiles)
+                updated = updated.WithoutWriter(relative, mod.Id);
+            return updated;
+        });
     }
 
     private void DeleteBinFiles(ModEntry mod)

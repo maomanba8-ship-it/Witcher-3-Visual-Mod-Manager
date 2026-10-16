@@ -45,6 +45,14 @@ public static class OperationReport
         AddGroup(lines, t.T("op.no_source"),
             outcome.WithoutSource.Select(Folder));
 
+        AddGroup(lines, t.T("op.bin_kept"),
+            outcome.Notes
+                .Where(n => n.Kind is OperationNoteKind.BinModifiedElsewhere
+                    or OperationNoteKind.BinNoRecord
+                    or OperationNoteKind.BinAlreadyGone
+                    or OperationNoteKind.BinBackupMissing)
+                .Select(n => Line(Folder(n), t.T(BinReasonKey(n.Kind)))));
+
         if (outcome.RolledBack) lines.Add(t.T("op.rolled_back"));
 
         return string.Join("\n", lines);
@@ -68,6 +76,14 @@ public static class OperationReport
 
     private static string Line(string left, string right) =>
         string.Format(TranslationService.Instance.T("op.line"), left, right);
+
+    private static string BinReasonKey(OperationNoteKind kind) => kind switch
+    {
+        OperationNoteKind.BinNoRecord => "op.bin.reason.no_record",
+        OperationNoteKind.BinAlreadyGone => "op.bin.reason.gone",
+        OperationNoteKind.BinBackupMissing => "op.bin.reason.no_backup",
+        _ => "op.bin.reason.modified"
+    };
 
     /// <summary>
     /// The component as the user would look for it on disk: "mods\modA", "dlc\dlcA" or

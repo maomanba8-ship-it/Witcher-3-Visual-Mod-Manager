@@ -216,6 +216,8 @@ public partial class PresetPage : UserControl
                             troubled.Add(OperationReport.OneLine(mod.Name, outcome));
                             continue;
                         }
+                        // Disabled, but something could not be put back: name it at the end too.
+                        if (outcome.HasNotes) troubled.Add(OperationReport.OneLine(mod.Name, outcome));
                     }
                     mod.IsEnabled = false;
                     // keep GameModFolderName intact

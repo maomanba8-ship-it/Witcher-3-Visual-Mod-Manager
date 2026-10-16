@@ -588,6 +588,11 @@ public partial class ModListPage : UserControl
                     chk.IsChecked = true;
                     return;
                 }
+                // Disabled, but a bin file could not be put back: say so rather than let the user
+                // believe the mod's files are gone from the game.
+                if (outcome.HasNotes)
+                    MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.disable_incomplete"), mod.Name, outcome),
+                        TranslationService.Instance.T("dialog.warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             mod.IsEnabled = false;
             _conflict?.InvalidateCache();
