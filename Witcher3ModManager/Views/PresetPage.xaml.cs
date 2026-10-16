@@ -12,6 +12,7 @@ public partial class PresetPage : UserControl
     private PresetService? _presetService;
     private ModStorageService? _storage;
     private Witcher3Service? _w3;
+    private bool _damageReported;
     public event Action? NavigateBackRequested;
     public event Action? PresetApplied;
     private IDisposable? _languageSubscription;
@@ -53,10 +54,27 @@ public partial class PresetPage : UserControl
         RefreshPresets();
     }
 
+    /// <summary>
+    /// Tells the user about presets that could not be read, once per visit to the page. Without
+    /// this a damaged file would simply be a preset that is no longer there.
+    /// </summary>
+    private void ReportDamagedPresets()
+    {
+        var damaged = _presetService?.DamagedFiles ?? (IReadOnlyList<string>)Array.Empty<string>();
+        if (damaged.Count == 0 || _damageReported) return;
+
+        _damageReported = true;
+        var t = TranslationService.Instance;
+        MessageBox.Show(
+            string.Format(t.T("preset.damaged"), damaged.Count, string.Join("\n", damaged)),
+            t.T("preset.damaged_title"), MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
     public void RefreshPresets()
     {
         if (_presetService == null) return;
         var presets = _presetService.GetAllPresets();
+        ReportDamagedPresets();
         PresetStackPanel.Children.Clear();
         foreach (var preset in presets)
         {

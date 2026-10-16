@@ -8,6 +8,14 @@ public class PresetService
 {
     private readonly string _presetsDir;
 
+    /// <summary>
+    /// Preset files that could not be read, and where a copy of each was kept. A preset that
+    /// silently disappears from the list is worse than one that fails loudly: the user would have
+    /// no way to tell it was ever there.
+    /// </summary>
+    public IReadOnlyList<string> DamagedFiles => _damagedFiles;
+    private readonly List<string> _damagedFiles = new();
+
     public PresetService()
     {
         var dataDir = Path.Combine(
@@ -20,19 +28,39 @@ public class PresetService
     public List<PresetInfo> GetAllPresets()
     {
         var presets = new List<PresetInfo>();
+        _damagedFiles.Clear();
         if (!Directory.Exists(_presetsDir)) return presets;
 
         foreach (var file in Directory.GetFiles(_presetsDir, "*.json"))
         {
-            try
+            // Reads through the recovery helper: a damaged file is copied aside first and the
+            // previous good version (.bak) is used when there is one.
+            var load = Core.Storage.TextFileRecovery.Load(file, LooksLikeAPreset);
+            if (load.Text is null)
             {
-                var json = File.ReadAllText(file);
-                var preset = JsonSerializer.Deserialize<PresetInfo>(json);
-                if (preset != null) presets.Add(preset);
+                if (load.Outcome != Core.Storage.TextFileOutcome.Missing)
+                    _damagedFiles.Add(load.Detail ?? file);
+                continue;
             }
-            catch { }
+
+            var preset = Deserialize(load.Text);
+            if (preset is not null) presets.Add(preset);
         }
         return presets.OrderByDescending(p => p.CreatedAt).ToList();
+    }
+
+    private static bool LooksLikeAPreset(string json) => Deserialize(json) is not null;
+
+    private static PresetInfo? Deserialize(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<PresetInfo>(json);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public void SavePreset(string name, List<ModEntry> mods)

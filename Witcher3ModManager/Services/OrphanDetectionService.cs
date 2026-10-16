@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using Witcher3ModManager.Models;
 
 namespace Witcher3ModManager.Services;
@@ -64,13 +64,7 @@ public class OrphanDetectionService
     }
 
     private static bool IsModFolder(string path)
-    {
-        try
-        {
-            return Directory.Exists(Path.Combine(path, "content"));
-        }
-        catch { return false; }
-    }
+        => Core.Deployment.GameFolderShape.IsModFolder(path);
 
     private static OrphanModInfo BuildOrphanInfo(string fullPath, string folderName, bool isInDlc)
     {
