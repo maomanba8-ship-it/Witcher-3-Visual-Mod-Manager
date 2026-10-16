@@ -373,28 +373,28 @@ public class Witcher3Service
                     mod.GameModFolders.Add(mod.GameModFolderName);
             }
 
-            // Delete all mod folders from game mods dir
-            foreach (var folder in mod.GameModFolders)
-            {
-                if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
-                var enabledPath = Path.Combine(gameModsPath, folder);
-                var disabledPath = Path.Combine(gameModsPath, "~" + folder);
-                DeleteIfExists(enabledPath, ref failed);
-                DeleteIfExists(disabledPath, ref failed);
-            }
+            // Game folders go through the engine: each one is moved aside rather than deleted, so
+            // a failure part-way through puts the package back instead of leaving half of it gone.
+            // A shared folder is left untouched: another enabled mod still points at it.
+            var modFolders = mod.GameModFolders
+                .Where(f => !IsSharedFolder(f, mod, TargetDomain.Mods))
+                .ToList();
+            var dlcFolders = mod.GameDlcFolders
+                .Where(f => !IsSharedFolder(f, mod, TargetDomain.Dlc))
+                .ToList();
 
-            // Delete all DLC folders from game dlc dir
-            if (mod.GameDlcFolders.Count > 0)
+            var plan = DeletePlanner.Plan(gameModsPath, GetGameDlcPath(), modFolders, dlcFolders);
+            var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
+            var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
+                .Execute(plan, journal?.OperationId);
+
+            foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
+                DiagnosticLog.Write($"[deploy] nothing to delete for {step.Target}");
+
+            if (!result.Ok)
             {
-                var gameDlcPath = GetGameDlcPath();
-                foreach (var dlcFolder in mod.GameDlcFolders)
-                {
-                    if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
-                    var dlcEnabled = Path.Combine(gameDlcPath, dlcFolder);
-                    var dlcDisabled = Path.Combine(gameDlcPath, "~" + dlcFolder);
-                    DeleteIfExists(dlcEnabled, ref failed);
-                    DeleteIfExists(dlcDisabled, ref failed);
-                }
+                _storage?.Journals.Fail(journal, result.Failure);
+                return false;
             }
 
             // Delete storage folders
