@@ -16,8 +16,9 @@ public enum DeploymentStepOutcome
 /// folder the user has no reason to know about.
 ///
 /// Target is the location the step worked on (its destination, or the source when there is no
-/// destination to name). BackupPath is set when something previously at the destination was moved
-/// aside, which is what makes the step reversible.
+/// destination to name); SourcePath says where the content came from. BackupPath is set when
+/// something previously at the destination was moved aside, which is what makes the step
+/// reversible.
 /// </summary>
 public sealed record DeploymentStepResult(
     TargetDomain Domain,
@@ -26,7 +27,8 @@ public sealed record DeploymentStepResult(
     DeploymentAction Action,
     DeploymentStepOutcome Outcome,
     string? BackupPath = null,
-    string? Detail = null);
+    string? Detail = null,
+    string? SourcePath = null);
 
 /// <summary>
 /// The result of one deployment. When it failed, RollbackProblems names anything that could not be
@@ -77,7 +79,7 @@ public sealed class DeploymentEngine
             if (step.Action == DeploymentAction.NothingToDo)
             {
                 steps.Add(new DeploymentStepResult(step.Domain, step.Subject, step.DestinationPath,
-                    step.Action, DeploymentStepOutcome.Skipped));
+                    step.Action, DeploymentStepOutcome.Skipped, SourcePath: step.SourcePath));
                 continue;
             }
 
@@ -91,7 +93,7 @@ public sealed class DeploymentEngine
                 // naming in the report.
                 var where = string.IsNullOrEmpty(step.DestinationPath) ? step.SourcePath : step.DestinationPath;
                 steps.Add(new DeploymentStepResult(step.Domain, step.Subject, where, step.Action,
-                    DeploymentStepOutcome.Failed, Detail: ex.Message));
+                    DeploymentStepOutcome.Failed, Detail: ex.Message, SourcePath: step.SourcePath));
                 failure = $"{step.Action} failed for {where}: {ex.Message}";
                 break;
             }
@@ -137,7 +139,7 @@ public sealed class DeploymentEngine
             : (() => MoveOrCopy(destination, step.SourcePath), $"move {destination} back"));
 
         return new DeploymentStepResult(step.Domain, step.Subject, destination, step.Action,
-            DeploymentStepOutcome.Done, backup);
+            DeploymentStepOutcome.Done, backup, SourcePath: step.SourcePath);
     }
 
     private static IReadOnlyList<string> RollBack(List<(Action Undo, string Description)> undos)

@@ -758,23 +758,22 @@ public class Witcher3Service
         IReadOnlyDictionary<string, string?> capturedOriginals)
     {
         var storage = _storage;
-        if (storage is null || capturedOriginals.Count == 0) return;
+        if (storage is null) return;
 
-        var written = result.Steps
-            .Where(s => s.Domain == TargetDomain.Bin && s.Outcome == DeploymentStepOutcome.Done)
-            .Select(s => (s.Subject, Hash: BinBackupStore.HashOf(s.Target)))
-            .Where(s => s.Hash is not null)
-            .ToList();
-        if (written.Count == 0) return;
+        var writes = BinWriteRecorder.From(result, capturedOriginals);
+        if (writes.Count == 0)
+        {
+            if (capturedOriginals.Count > 0)
+                DiagnosticLog.Write($"[bin] {mod.Name}: nothing recorded for " +
+                    string.Join(", ", capturedOriginals.Keys));
+            return;
+        }
 
         storage.UpdateBinClaims(claims =>
         {
             var updated = claims;
-            foreach (var (subject, hash) in written)
-            {
-                if (!capturedOriginals.TryGetValue(subject, out var previous)) continue;
-                updated = updated.WithWrite(subject, mod.Id, hash!, previous, DateTime.Now);
-            }
+            foreach (var write in writes)
+                updated = updated.WithWrite(write.Path, mod.Id, write.Sha256, write.ShaBefore, DateTime.Now);
             return updated;
         });
     }
