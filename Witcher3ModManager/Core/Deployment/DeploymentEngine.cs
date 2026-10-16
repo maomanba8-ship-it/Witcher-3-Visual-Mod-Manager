@@ -36,7 +36,8 @@ public sealed record DeploymentResult(
     bool Ok,
     IReadOnlyList<DeploymentStepResult> Steps,
     string? Failure,
-    IReadOnlyList<string> RollbackProblems)
+    IReadOnlyList<string> RollbackProblems,
+    string? StagingLeftBehind = null)
 {
     public IReadOnlyList<DeploymentStepResult> Backups =>
         Steps.Where(s => !string.IsNullOrEmpty(s.BackupPath)).ToList();
@@ -99,8 +100,8 @@ public sealed class DeploymentEngine
         if (failure is null)
         {
             // The operation finished, so the copies kept for undoing it are no longer needed.
-            TryRemoveStaging(staging);
-            return new DeploymentResult(true, steps, null, Array.Empty<string>());
+            var leftBehind = TryRemoveStaging(staging);
+            return new DeploymentResult(true, steps, null, Array.Empty<string>(), leftBehind);
         }
 
         // The staging folder is deliberately left in place: it holds whatever was moved aside,
@@ -165,7 +166,12 @@ public sealed class DeploymentEngine
         else if (File.Exists(path)) File.Delete(path);
     }
 
-    private static void TryRemoveStaging(string staging)
+    /// <summary>
+    /// Clears the staging area of an operation that finished. Returns the path when it could not be
+    /// cleared: content still sitting in there is worth naming, because the operation is reported
+    /// as done while something it moved aside is still on disk.
+    /// </summary>
+    private static string? TryRemoveStaging(string staging)
     {
         try
         {
@@ -176,6 +182,8 @@ public sealed class DeploymentEngine
             // Leaving an empty staging folder behind is harmless; failing the operation over it
             // would not be.
         }
+
+        return Directory.Exists(staging) ? staging : null;
     }
 
     /// <summary>

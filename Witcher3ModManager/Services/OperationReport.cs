@@ -53,6 +53,10 @@ public static class OperationReport
                     or OperationNoteKind.BinBackupMissing)
                 .Select(n => Line(Folder(n), t.T(BinReasonKey(n.Kind)))));
 
+        AddGroup(lines, t.T("op.staging_left"),
+            outcome.Notes.Where(n => n.Kind == OperationNoteKind.StagingLeftBehind)
+                .Select(n => n.Detail ?? ""));
+
         if (outcome.RolledBack) lines.Add(t.T("op.rolled_back"));
 
         return string.Join("\n", lines);

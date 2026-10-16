@@ -30,7 +30,10 @@ public enum OperationNoteKind
     BinAlreadyGone,
 
     /// <summary>A bin file could not be put back because the content kept for it is gone.</summary>
-    BinBackupMissing
+    BinBackupMissing,
+
+    /// <summary>A finished operation could not clear its staging area, so content is still on disk.</summary>
+    StagingLeftBehind
 }
 
 /// <summary>
@@ -125,6 +128,10 @@ public sealed record OperationOutcome
 
         foreach (var problem in result.RollbackProblems)
             notes.Add(new OperationNote(OperationNoteKind.RollbackProblem, Detail: problem));
+
+        if (!string.IsNullOrWhiteSpace(result.StagingLeftBehind))
+            notes.Add(new OperationNote(OperationNoteKind.StagingLeftBehind,
+                Detail: result.StagingLeftBehind));
 
         if (extraNotes is not null) notes.AddRange(extraNotes);
 

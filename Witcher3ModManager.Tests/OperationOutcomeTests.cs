@@ -95,6 +95,23 @@ public class OperationOutcomeTests
         Assert.Equal(@"C:\storage\modA", note.Detail);
     }
 
+    [Fact]
+    public void A_staging_folder_that_was_left_behind_becomes_a_note()
+    {
+        var result = new DeploymentResult(true,
+            new[] { Done(TargetDomain.Mods, "modA", @"C:\game\mods\modA") },
+            null,
+            Array.Empty<string>(),
+            StagingLeftBehind: @"C:\game\_w3mm_staging\abc123");
+
+        var outcome = OperationOutcome.From(OperationKind.Enable, result);
+
+        Assert.True(outcome.Ok);
+        var note = Assert.Single(outcome.Problems);
+        Assert.Equal(OperationNoteKind.StagingLeftBehind, note.Kind);
+        Assert.Equal(@"C:\game\_w3mm_staging\abc123", note.Detail);
+    }
+
     private static DeploymentStepResult Done(TargetDomain domain, string subject, string target) =>
         new(domain, subject, target, DeploymentAction.Move, DeploymentStepOutcome.Done);
 

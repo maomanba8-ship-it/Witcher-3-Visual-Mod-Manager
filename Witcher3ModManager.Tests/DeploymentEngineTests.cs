@@ -199,6 +199,37 @@ public class DeploymentEngineTests
         Assert.False(File.Exists(Path.Combine(world.GameBin, "config", "new.xml")));
     }
 
+    [Fact]
+    public void Staging_this_operation_could_not_clear_is_reported_rather_than_swallowed()
+    {
+        using var world = new TestWorld();
+        world.WriteStorageFile("modA", "content/a.txt", "AAA");
+
+        // Something is holding a file inside this operation's staging area, so clearing it fails.
+        var occupied = Path.Combine(world.Staging, "op7", "occupied", "Mods", "modB");
+        Directory.CreateDirectory(occupied);
+        var locked = Path.Combine(occupied, "locked.txt");
+        File.WriteAllText(locked, "LOCKED");
+        using var handle = File.Open(locked, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = world.DeployPlanned("modA", "op7");
+
+        Assert.True(result.Ok);
+        Assert.Equal(Path.Combine(world.Staging, "op7"), result.StagingLeftBehind);
+    }
+
+    [Fact]
+    public void A_cleared_staging_area_is_not_reported()
+    {
+        using var world = new TestWorld();
+        world.WriteStorageFile("modA", "content/a.txt", "AAA");
+
+        var result = world.DeployPlanned("modA", "op8");
+
+        Assert.True(result.Ok);
+        Assert.Null(result.StagingLeftBehind);
+    }
+
     /// <summary>A throwaway game/storage/staging layout so the engine can be exercised for real.</summary>
     private sealed class TestWorld : IDisposable
     {
