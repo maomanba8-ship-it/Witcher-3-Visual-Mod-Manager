@@ -13,6 +13,9 @@ namespace Witcher3ModManager.Core.Deployment;
 /// </summary>
 public sealed class OperationJournalStore
 {
+    /// <summary>Where journals go once a person has looked at them.</summary>
+    public const string HandledFolderName = "handled";
+
     private readonly string _directory;
 
     public OperationJournalStore(string directory)
@@ -22,6 +25,44 @@ public sealed class OperationJournalStore
     }
 
     public string Directory => _directory;
+
+    /// <summary>Journals that have been looked at live here, out of the way of the startup check.</summary>
+    public string HandledDirectory => Path.Combine(_directory, HandledFolderName);
+
+    /// <summary>
+    /// Moves leftover journals aside, at the user's request, so the startup report stops asking
+    /// about them. The records are kept rather than deleted: the point is to stop the prompting,
+    /// not to throw away the only evidence of what happened. Nothing calls this on its own.
+    /// </summary>
+    public int Handle(IEnumerable<string>? operationIds)
+    {
+        var handled = HandledDirectory;
+        var count = 0;
+
+        foreach (var id in (operationIds ?? Array.Empty<string>()).Where(i => !string.IsNullOrWhiteSpace(i)).Distinct())
+        {
+            var path = PathFor(id);
+            if (path is null || !File.Exists(path)) continue;
+
+            try
+            {
+                System.IO.Directory.CreateDirectory(handled);
+                File.Move(path, Path.Combine(handled, Path.GetFileName(path)), overwrite: true);
+
+                var backup = path + AtomicFile.BackupSuffix;
+                if (File.Exists(backup))
+                    File.Move(backup, Path.Combine(handled, Path.GetFileName(backup)), overwrite: true);
+
+                count++;
+            }
+            catch
+            {
+                // A journal that cannot be moved is simply reported again next time.
+            }
+        }
+
+        return count;
+    }
 
     /// <summary>
     /// Writes the journal and returns it. Returns null when it could not be written: an unwritable

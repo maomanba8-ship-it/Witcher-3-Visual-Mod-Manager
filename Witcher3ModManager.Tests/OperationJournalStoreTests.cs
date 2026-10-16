@@ -150,6 +150,71 @@ public class OperationJournalStoreTests
         }
     }
 
+    [Fact]
+    public void Handling_a_leftover_stops_it_being_reported()
+    {
+        var dir = NewDir();
+        try
+        {
+            var store = new OperationJournalStore(dir);
+            var kept = store.Begin(OperationKind.Disable, "modA", Array.Empty<string>());
+            var alsoKept = store.Begin(OperationKind.Enable, "modB", Array.Empty<string>());
+            store.Fail(kept, "locked");
+            store.Fail(alsoKept, "locked");
+
+            var handled = store.Handle(new[] { kept!.OperationId, alsoKept!.OperationId });
+
+            Assert.Equal(2, handled);
+            Assert.Empty(store.Leftovers());
+        }
+        finally
+        {
+            Cleanup(dir);
+        }
+    }
+
+    [Fact]
+    public void Handling_keeps_the_record_where_it_can_still_be_read()
+    {
+        var dir = NewDir();
+        try
+        {
+            var store = new OperationJournalStore(dir);
+            var journal = store.Begin(OperationKind.Delete, "modA", Array.Empty<string>());
+            store.Fail(journal, "could not delete");
+
+            store.Handle(new[] { journal!.OperationId });
+
+            // The record is not thrown away: it is moved out of the way of the startup check.
+            var archived = Path.Combine(store.HandledDirectory, journal.OperationId + ".json");
+            Assert.True(File.Exists(archived));
+            Assert.Contains("could not delete", File.ReadAllText(archived));
+            Assert.False(File.Exists(Path.Combine(dir, journal.OperationId + ".json")));
+        }
+        finally
+        {
+            Cleanup(dir);
+        }
+    }
+
+    [Fact]
+    public void Handling_only_what_is_there_is_harmless()
+    {
+        var dir = NewDir();
+        try
+        {
+            var store = new OperationJournalStore(dir);
+
+            store.Handle(null);
+            store.Handle(new[] { "", "   " });
+            Assert.Equal(0, store.Handle(new[] { "never-started" }));
+        }
+        finally
+        {
+            Cleanup(dir);
+        }
+    }
+
     private static string NewDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "w3mm_journal_" + Guid.NewGuid().ToString("N")[..8]);

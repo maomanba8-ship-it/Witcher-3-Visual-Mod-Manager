@@ -377,11 +377,20 @@ public partial class MainWindow : Window
         var lines = leftovers.Select(j =>
             "• " + string.Format(t.T("journal.entry"), t.T(OperationKindKey(j.Kind)), j.Subject));
 
-        MessageBox.Show(
-            t.T("journal.intro") + "\n\n" + string.Join("\n", lines) + "\n\n" + t.T("journal.note"),
+        var handled = ConfirmDialog.Show(
             t.T("journal.title"),
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+            t.T("journal.intro") + "\n\n" + string.Join("\n", lines) + "\n\n" + t.T("journal.note"),
+            "\uE7BA",
+            t.T("journal.handled"),
+            t.T("journal.later"),
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#8BA4B5"));
+
+        // Nothing is rolled back or retried on its own; the only thing this button does is stop
+        // the report from asking about the same operations again.
+        if (!handled) return;
+
+        var archived = _storage.Journals.Handle(leftovers.Select(l => l.OperationId));
+        DiagnosticLog.Write($"[journal] {archived} unfinished journal(s) were marked as handled");
     }
 
     private static string OperationKindKey(Core.Deployment.OperationKind kind) => kind switch
