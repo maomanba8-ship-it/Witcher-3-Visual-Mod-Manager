@@ -373,17 +373,41 @@ public class ModStorageService
     }
 
 
-        public ModEntry ImportOrphanMod(OrphanModInfo orphan)
+    /// <summary>The outcome of taking one orphan into the library.</summary>
+    public sealed record AdoptionOutcome(
+        ModEntry? Entry,
+        IReadOnlyList<Core.Deployment.AdoptionWarning> Warnings)
+    {
+        public bool Adopted => Entry is not null;
+    }
+
+    /// <summary>
+    /// Takes a folder that is already in the game directory into the library.
+    ///
+    /// Nothing is copied and nothing is deleted: the record is created and the index remembers what
+    /// is there, so later operations can tell this package's content from someone else's. Copying
+    /// the folder into storage would double the disk usage of every mod the user installed by hand,
+    /// which is why the old import was the wrong shape for this. The storage copy stays absent, in
+    /// the same state the audit already describes as "not an anomaly" for earlier mods.
+    /// </summary>
+    public AdoptionOutcome AdoptOrphan(OrphanModInfo orphan)
     {
         var cleanName = GetBaseName(orphan);
-        var storageDir = Path.Combine(_modsDir, cleanName);
 
-        // Copy from game dir to storage (mod component)
-        if (!Directory.Exists(storageDir))
-            CopyDirectoryRecursive(orphan.FullPath, storageDir);
+        // Already known: either the folder is in a record, or a record of the same name exists.
+        if (_mods.Any(m => OwnsAFolderOf(m, orphan)) || _mods.Any(m => SameName(m, cleanName)))
+            return new AdoptionOutcome(null, Array.Empty<Core.Deployment.AdoptionWarning>());
+
+        var packageId = Guid.NewGuid().ToString("N")[..12];
+        var plan = Core.Deployment.AdoptionPlanner.Build(
+            packageId, cleanName, Describe(orphan), _index);
+
+        if (plan.Components.Count == 0)
+            return new AdoptionOutcome(null, plan.Warnings);
 
         var entry = new ModEntry
         {
+            Id = packageId,
             Name = cleanName,
             InstalledPath = orphan.FullPath,
             IsEnabled = orphan.IsEnabled,
@@ -391,34 +415,124 @@ public class ModStorageService
             Priority = _mods.Count > 0 ? _mods.Max(m => m.Priority) + 1 : 1
         };
 
-        if (orphan.IsInDlcFolder)
-            entry.GameDlcFolders.Add(orphan.FolderName.StartsWith("~") ? orphan.FolderName[1..] : orphan.FolderName);
-        else
-            entry.GameModFolders.Add(orphan.FolderName.StartsWith("~") ? orphan.FolderName[1..] : orphan.FolderName);
+        foreach (var folder in FoldersOf(orphan, TargetDomain.Dlc)) entry.GameDlcFolders.Add(folder);
+        foreach (var folder in FoldersOf(orphan, TargetDomain.Mods)) entry.GameModFolders.Add(folder);
 
-        // Handle paired orphan (Mod + DLC)
-        if (orphan.PairedOrphan != null)
+        var binComponent = plan.Components
+            .FirstOrDefault(c => c.Domain == Core.Analysis.TargetDomain.Bin);
+        foreach (var target in binComponent?.Targets ?? Array.Empty<Core.Deployment.TargetRecord>())
         {
-            var pair = orphan.PairedOrphan;
-            var pairCleanName = pair.FolderName.StartsWith("~") ? pair.FolderName[1..] : pair.FolderName;
-
-            if (pair.IsInDlcFolder)
-                entry.GameDlcFolders.Add(pairCleanName);
-            else
-                entry.GameModFolders.Add(pairCleanName);
-        }
-
-        // Deduplicate check (check all folders)
-        if (!string.IsNullOrEmpty(cleanName))
-        {
-            var exists = _mods.Any(m =>
-                m.GameModFolders.Contains(cleanName) || m.GameDlcFolders.Contains(cleanName));
-            if (exists) return entry;
+            var relative = target.RelativePath;
+            entry.GameBinFiles.Add(relative.StartsWith("bin/", StringComparison.OrdinalIgnoreCase)
+                ? relative[4..]
+                : relative);
         }
 
         _mods.Add(entry);
         Save();
-        return entry;
+
+        // The index is what makes the folder recognisable later; adoption without it would leave the
+        // same "no idea whose content this is" state the user is trying to get out of.
+        UpdateIndex(index => Core.Deployment.LibraryIndexUpdater.WithPackage(
+            index, entry.Id, entry.Name, plan.Components));
+
+        return new AdoptionOutcome(entry, plan.Warnings);
+    }
+
+    /// <summary>What is on disk for this orphan, described the way the adoption planner wants it.</summary>
+    private static IReadOnlyList<Core.Deployment.AdoptionComponent> Describe(OrphanModInfo orphan)
+    {
+        var components = new List<Core.Deployment.AdoptionComponent>();
+
+        foreach (var (path, folderName, domain) in ComponentFolders(orphan))
+        {
+            components.Add(new Core.Deployment.AdoptionComponent(
+                domain,
+                folderName,
+                Core.Deployment.DeployedContent.FolderFingerprint(path, "", domain) ?? "",
+                BinFilesInside(path)));
+        }
+
+        return components;
+    }
+
+    /// <summary>
+    /// The folder payloads of one orphan. A paired orphan is one package: the mod folder and the dlc
+    /// folder it came with are recorded as two components of the same record.
+    /// </summary>
+    private static IEnumerable<(string Path, string Folder, Core.Analysis.TargetDomain Domain)> ComponentFolders(
+        OrphanModInfo orphan)
+    {
+        foreach (var (folder, path, isDlc) in new[]
+                 {
+                     (orphan.FolderName, orphan.FullPath, orphan.IsInDlcFolder),
+                     (orphan.PairedOrphan?.FolderName, orphan.PairedOrphan?.FullPath, orphan.PairedOrphan?.IsInDlcFolder ?? false)
+                 })
+        {
+            if (string.IsNullOrWhiteSpace(folder) || string.IsNullOrWhiteSpace(path)) continue;
+
+            yield return (path!, folder!.StartsWith("~") ? folder[1..] : folder,
+                isDlc ? Core.Analysis.TargetDomain.Dlc : Core.Analysis.TargetDomain.Mods);
+        }
+    }
+
+    /// <summary>
+    /// Bin files that came inside the adopted folder. Their content is recorded so ownership is
+    /// known; nothing is remembered about what they replaced, so a later stop reports "no record"
+    /// rather than guessing.
+    /// </summary>
+    private static IReadOnlyList<Core.Deployment.AdoptedFile> BinFilesInside(string folderPath)
+    {
+        var binRoot = Path.Combine(folderPath, "bin");
+        if (!Directory.Exists(binRoot)) return Array.Empty<Core.Deployment.AdoptedFile>();
+
+        var files = new List<Core.Deployment.AdoptedFile>();
+        try
+        {
+            foreach (var file in Directory.GetFiles(binRoot, "*", SearchOption.AllDirectories))
+            {
+                var relative = Path.GetRelativePath(binRoot, file).Replace('\\', '/');
+                var hash = Core.Deployment.DeployedContent.FileHash(file);
+                if (hash is null) continue;
+
+                files.Add(new Core.Deployment.AdoptedFile(relative, hash));
+            }
+        }
+        catch
+        {
+            // A folder that cannot be listed is adopted without its bin files rather than not at all.
+        }
+
+        return files;
+    }
+
+    /// <summary>True when a record already claims the folder this orphan is about.</summary>
+    private static bool OwnsAFolderOf(ModEntry record, OrphanModInfo orphan)
+    {
+        var name = orphan.FolderName.StartsWith("~") ? orphan.FolderName[1..] : orphan.FolderName;
+        var folders = orphan.IsInDlcFolder ? record.GameDlcFolders : record.GameModFolders;
+        return folders.Any(f => string.Equals(f, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool SameName(ModEntry record, string name) =>
+        string.Equals(record.Name, name, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The folder names of one orphan that belong to a domain, paired folder included.</summary>
+    private static IEnumerable<string> FoldersOf(OrphanModInfo orphan, Core.Analysis.TargetDomain domain)
+    {
+        foreach (var (folder, isDlc) in new[]
+                 {
+                     (orphan.FolderName, orphan.IsInDlcFolder),
+                     (orphan.PairedOrphan?.FolderName, orphan.PairedOrphan?.IsInDlcFolder ?? false)
+                 })
+        {
+            if (string.IsNullOrWhiteSpace(folder)) continue;
+
+            var wanted = domain == Core.Analysis.TargetDomain.Dlc;
+            if (isDlc != wanted) continue;
+
+            yield return folder!.StartsWith("~") ? folder[1..] : folder;
+        }
     }
 
     private static string GetBaseName(OrphanModInfo orphan)

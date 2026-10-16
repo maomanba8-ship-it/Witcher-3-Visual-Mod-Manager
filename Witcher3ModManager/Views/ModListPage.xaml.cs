@@ -768,18 +768,7 @@ public partial class ModListPage : UserControl
         if (_storage == null || _orphans.Count == 0) return;
         var dialog = new OrphanDialog(_orphans);
         if (dialog.ShowDialog() == true && dialog.SelectedOrphans.Count > 0)
-        {
-            var imported = 0;
-            foreach (var orphan in dialog.SelectedOrphans)
-            {
-                try { _storage.ImportOrphanMod(orphan); imported++; }
-                catch (Exception ex) { Debug.WriteLine(string.Format("Orphan import failed: {0} - {1}", orphan.FolderName, ex.Message)); }
-            }
-            _orphans.Clear();
-            OrphanBanner.Visibility = Visibility.Collapsed;
-            RefreshModList();
-            MessageBox.Show(string.Format(TranslationService.Instance.T("orphan.import_ok"), imported), TranslationService.Instance.T("orphan.import_title"), MessageBoxButton.OK, MessageBoxImage.Information);
-        }
+            AdoptOrphans(dialog.SelectedOrphans);
     }
 
     private void OrphanViewDetails_Click(object sender, RoutedEventArgs e)
@@ -787,18 +776,48 @@ public partial class ModListPage : UserControl
         if (_storage == null || _orphans.Count == 0) return;
         var dialog = new OrphanDialog(_orphans);
         if (dialog.ShowDialog() == true && dialog.SelectedOrphans.Count > 0)
+            AdoptOrphans(dialog.SelectedOrphans);
+    }
+
+    /// <summary>
+    /// Takes the selected folders into the library. Nothing is copied and nothing is deleted: the
+    /// game directory stays exactly as it is, which is the whole point of adopting rather than
+    /// importing a second copy of every mod the user installed by hand.
+    /// </summary>
+    private void AdoptOrphans(IReadOnlyList<OrphanModInfo> selected)
+    {
+        if (_storage == null) return;
+
+        var adopted = 0;
+        var refused = new List<string>();
+
+        foreach (var orphan in selected)
         {
-            var imported = 0;
-            foreach (var orphan in dialog.SelectedOrphans)
+            try
             {
-                try { _storage.ImportOrphanMod(orphan); imported++; }
-                catch (Exception ex) { Debug.WriteLine(string.Format("Orphan import failed: {0} - {1}", orphan.FolderName, ex.Message)); }
+                var outcome = _storage.AdoptOrphan(orphan);
+                if (outcome.Adopted) { adopted++; continue; }
+
+                refused.Add(OrphanWarnings.Line(orphan, outcome));
             }
-            _orphans.Clear();
-            OrphanBanner.Visibility = Visibility.Collapsed;
-            RefreshModList();
-            MessageBox.Show(string.Format(TranslationService.Instance.T("orphan.import_ok"), imported), TranslationService.Instance.T("orphan.import_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Orphan adoption failed: {orphan.FolderName} - {ex.Message}");
+                refused.Add(orphan.FolderName + " - " + ex.Message);
+            }
         }
+
+        _orphans.Clear();
+        OrphanBanner.Visibility = Visibility.Collapsed;
+        RefreshModList();
+
+        var message = string.Format(TranslationService.Instance.T("orphan.adopted"), adopted);
+        if (refused.Count > 0)
+            message += "\n\n" + string.Format(TranslationService.Instance.T("orphan.adopt_refused"),
+                string.Join("\n", refused));
+
+        MessageBox.Show(message, TranslationService.Instance.T("orphan.import_title"),
+            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void OrphanIgnore_Click(object sender, RoutedEventArgs e)

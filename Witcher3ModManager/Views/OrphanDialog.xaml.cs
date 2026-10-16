@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -35,6 +35,7 @@ public partial class OrphanDialog : Window
         TitleText.Text = string.Format(t.T("orphan.dialog.title"), _orphans.Count);
         SelectAllCheckBox.Content = t.T("orphan.dialog.select_all");
         ImportBtn.Content = t.T("orphan.dialog.import_selected");
+        ImportBtn.ToolTip = t.T("orphan.dialog.adopt_hint");
         CancelBtn.Content = t.T("dialog.cancel");
         BuildOrphanList();
         UpdateSelectionCount();
