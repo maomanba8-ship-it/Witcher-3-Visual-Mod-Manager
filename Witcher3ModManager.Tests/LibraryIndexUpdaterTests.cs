@@ -137,8 +137,53 @@ public class LibraryIndexUpdaterTests
         Assert.Null(index.OwnerOf("mods/someoneElse"));
     }
 
+    [Fact]
+    public void Clearing_bin_targets_leaves_the_other_components_alone()
+    {
+        var index = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One", new[]
+        {
+            Component("c1", Target(@"mods\modOne")),
+            BinComponent("c2", Target(@"bin\config\a.xml", TargetKind.File))
+        });
+
+        var updated = LibraryIndexUpdater.WithoutBinTargets(index, "pkg1");
+
+        var components = Assert.Single(updated.Packages).Components;
+        Assert.Single(components.Single(c => c.Domain == TargetDomain.Mods).Targets);
+        // The component stays: the record still declares bin files, it just deploys none of them.
+        Assert.Empty(components.Single(c => c.Domain == TargetDomain.Bin).Targets);
+        Assert.Null(updated.OwnerOf("bin/config/a.xml"));
+    }
+
+    [Fact]
+    public void Clearing_bin_targets_keeps_the_other_packages()
+    {
+        var index = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One",
+            new[] { BinComponent("c1", Target(@"bin\config\a.xml", TargetKind.File)) });
+        index = LibraryIndexUpdater.WithPackage(index, "pkg2", "Mod Two",
+            new[] { BinComponent("c2", Target(@"bin\config\b.xml", TargetKind.File)) });
+
+        var updated = LibraryIndexUpdater.WithoutBinTargets(index, "pkg1");
+
+        Assert.Null(updated.OwnerOf("bin/config/a.xml"));
+        Assert.Equal("c2", updated.OwnerOf("bin/config/b.xml")!.ComponentId);
+    }
+
+    [Fact]
+    public void Clearing_bin_targets_for_an_unknown_package_changes_nothing()
+    {
+        var index = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One",
+            new[] { BinComponent("c1", Target(@"bin\config\a.xml", TargetKind.File)) });
+
+        Assert.Equal(index, LibraryIndexUpdater.WithoutBinTargets(index, "not-here"));
+        Assert.Equal(index, LibraryIndexUpdater.WithoutBinTargets(index, ""));
+    }
+
     private static ComponentRecord Component(string id, params TargetRecord[] targets) =>
         new(id, TargetDomain.Mods, "modOne", targets);
+
+    private static ComponentRecord BinComponent(string id, params TargetRecord[] targets) =>
+        new(id, TargetDomain.Bin, @"C:\data\bin\pkg1", targets);
 
     private static TargetRecord Target(string path, TargetKind kind = TargetKind.Folder) =>
         new(path, kind, "hash", DateTime.UnixEpoch);

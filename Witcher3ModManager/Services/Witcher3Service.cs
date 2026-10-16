@@ -363,7 +363,7 @@ public class Witcher3Service
 
             // The package no longer claims any bin file: whatever is on disk now is either what was
             // there before it, or content someone else owns.
-            ForgetBinClaims(mod);
+            ForgetBinOwnership(mod);
 
             // Update mods.settings
             if (mod.ModType == ModType.Mod)
@@ -504,7 +504,7 @@ public class Witcher3Service
 
             // Delete bin files
             DeleteBinFiles(mod);
-            ForgetBinClaims(mod);
+            ForgetBinOwnership(mod);
 
             // A record with nothing left on disk is still successfully removed; only a real
             // deletion failure (path exists but could not be deleted) means stale.
@@ -779,10 +779,15 @@ public class Witcher3Service
     }
 
     /// <summary>
-    /// Drops this package's claims on its bin files. Called only after the disable succeeded, so a
-    /// failure leaves the record that makes a retry possible.
+    /// Forgets this package's bin files, in both places that remember them: the ledger claim says
+    /// what can be put back, and the index says what is deployed. They have to go together — a
+    /// stale index entry is exactly what makes a later delete report "no record to restore" for a
+    /// package that has nothing left in the game.
+    ///
+    /// Called only after the operation succeeded, so a failure leaves the record that makes a retry
+    /// possible.
     /// </summary>
-    private void ForgetBinClaims(ModEntry mod)
+    private void ForgetBinOwnership(ModEntry mod)
     {
         var storage = _storage;
         if (storage is null || mod.GameBinFiles.Count == 0) return;
@@ -794,6 +799,8 @@ public class Witcher3Service
                 updated = updated.WithoutWriter(relative, mod.Id);
             return updated;
         });
+
+        storage.UpdateIndex(index => LibraryIndexUpdater.WithoutBinTargets(index, mod.Id));
     }
 
     /// <summary>

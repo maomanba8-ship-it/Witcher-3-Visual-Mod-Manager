@@ -14,9 +14,7 @@ public class BinCollisionFinderTests
     [Fact]
     public void A_planned_file_an_installed_package_deploys_is_a_collision()
     {
-        var collisions = BinCollisionFinder.Find(
-            new[] { InputXml },
-            new[] { ("BetterCombat", (IEnumerable<string>)new[] { InputXml }) });
+        var collisions = BinCollisionFinder.Find(new[] { InputXml }, new[] { Claim("BetterCombat", InputXml) });
 
         var collision = Assert.Single(collisions);
         Assert.Equal(InputXml, collision.Path);
@@ -26,9 +24,7 @@ public class BinCollisionFinderTests
     [Fact]
     public void Different_files_do_not_collide()
     {
-        var collisions = BinCollisionFinder.Find(
-            new[] { InputXml },
-            new[] { ("ReflectionsMod", (IEnumerable<string>)new[] { ReflectionsIni }) });
+        var collisions = BinCollisionFinder.Find(new[] { InputXml }, new[] { Claim("ReflectionsMod", ReflectionsIni) });
 
         Assert.Empty(collisions);
     }
@@ -38,7 +34,7 @@ public class BinCollisionFinderTests
     {
         var collisions = BinCollisionFinder.Find(
             new[] { @"config\r4game\user_config_matrix\pc\input.xml" },
-            new[] { ("BetterCombat", (IEnumerable<string>)new[] { "CONFIG/r4game/User_Config_Matrix/pc/Input.XML" }) });
+            new[] { Claim("BetterCombat", "CONFIG/r4game/User_Config_Matrix/pc/Input.XML") });
 
         Assert.Single(collisions);
     }
@@ -48,11 +44,7 @@ public class BinCollisionFinderTests
     {
         var collisions = BinCollisionFinder.Find(
             new[] { InputXml },
-            new[]
-            {
-                ("BetterCombat", (IEnumerable<string>)new[] { InputXml }),
-                ("CombatTweaks", (IEnumerable<string>)new[] { InputXml })
-            });
+            new[] { Claim("BetterCombat", InputXml), Claim("CombatTweaks", InputXml) });
 
         Assert.Equal(new[] { "BetterCombat", "CombatTweaks" }, Assert.Single(collisions).Owners);
     }
@@ -62,7 +54,7 @@ public class BinCollisionFinderTests
     {
         var collisions = BinCollisionFinder.Find(
             new[] { InputXml, InputXml, "", "   " },
-            new[] { ("BetterCombat", (IEnumerable<string>)new[] { InputXml }) });
+            new[] { Claim("BetterCombat", InputXml) });
 
         Assert.Single(collisions);
     }
@@ -70,9 +62,9 @@ public class BinCollisionFinderTests
     [Fact]
     public void Nothing_planned_or_nothing_installed_means_no_collisions()
     {
-        Assert.Empty(BinCollisionFinder.Find(null, new[] { ("A", (IEnumerable<string>)new[] { InputXml }) }));
+        Assert.Empty(BinCollisionFinder.Find(null, new[] { Claim("A", InputXml) }));
         Assert.Empty(BinCollisionFinder.Find(new[] { InputXml }, null));
-        Assert.Empty(BinCollisionFinder.Find(new[] { InputXml }, new[] { ("A", (IEnumerable<string>?)null) }));
+        Assert.Empty(BinCollisionFinder.Find(new[] { InputXml }, Array.Empty<(string, IEnumerable<string>?)>()));
     }
 
     [Fact]
@@ -80,12 +72,14 @@ public class BinCollisionFinderTests
     {
         var collisions = BinCollisionFinder.Find(
             new[] { ReflectionsIni, InputXml },
-            new[]
-            {
-                ("Other", (IEnumerable<string>)new[] { InputXml, ReflectionsIni })
-            });
+            new[] { Claim("Other", InputXml, ReflectionsIni) });
 
-        Assert.Equal(collisions.Select(c => c.Path).OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
+        Assert.Equal(
+            collisions.Select(c => c.Path).OrderBy(p => p, StringComparer.OrdinalIgnoreCase),
             collisions.Select(c => c.Path));
     }
+
+    /// <summary>One record's claim on paths inside the game's bin directory.</summary>
+    private static (string Owner, IEnumerable<string>? Paths) Claim(string owner, params string[] paths) =>
+        (owner, paths);
 }

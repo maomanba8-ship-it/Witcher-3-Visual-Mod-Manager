@@ -1,4 +1,6 @@
-﻿namespace Witcher3ModManager.Core.Deployment;
+﻿using Witcher3ModManager.Core.Analysis;
+
+namespace Witcher3ModManager.Core.Deployment;
 
 /// <summary>
 /// Builds a new index from an old one. Pure: it returns the result rather than mutating, so a
@@ -62,6 +64,29 @@ public static class LibraryIndexUpdater
             .ToList();
 
         return WithPackage(index, packageId, displayName, merged);
+    }
+
+    /// <summary>
+    /// Clears what a package recorded for the game's bin directory, keeping the component itself.
+    ///
+    /// The index describes what is deployed now, so a bin claim has to go when the file is put
+    /// back: leaving it behind makes a later delete report a file it "cannot restore" when in fact
+    /// there is nothing of that package left in the game to restore. The component stays (with no
+    /// targets) so the record still declares that it has bin files at all.
+    /// </summary>
+    public static LibraryIndex WithoutBinTargets(LibraryIndex? index, string packageId)
+    {
+        var current = index ?? LibraryIndex.Empty;
+        var package = current.FindPackage(packageId);
+        if (package is null) return current;
+
+        var components = (package.Components ?? Array.Empty<ComponentRecord>())
+            .Select(component => component.Domain == TargetDomain.Bin && (component.Targets?.Count ?? 0) > 0
+                ? component with { Targets = Array.Empty<TargetRecord>() }
+                : component)
+            .ToList();
+
+        return WithPackage(current, package.PackageId, package.DisplayName, components, package.LastOperationId);
     }
 
     /// <summary>
