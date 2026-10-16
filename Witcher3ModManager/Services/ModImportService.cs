@@ -132,6 +132,18 @@ public class ModImportService
                 return (new List<ModEntry>(), "cancelled");
             }
         }
+        // A bin file another package already deploys is a conflict the user has to agree to before
+        // anything is written. Storage cannot show it: each package keeps its own copy, and the two
+        // only meet in the game's bin directory. This runs before the folder pre-flight below so it
+        // covers bin-only packages too — those have no folders at all, and used to skip every check.
+        var binCollisions = FindBinCollisions(binFiles);
+        if (binCollisions.Count > 0 && !ConfirmBinCollisions(binCollisions))
+        {
+            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+            progress?.Report(TranslationService.Instance.T("import.cancelled"));
+            return (new List<ModEntry>(), "cancelled");
+        }
+
         if (modCandidates.Count > 0)
         {
             // Parallel (read-only) analyzer comparison. Does NOT change old install flow.
@@ -1007,6 +1019,45 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             catch { }
         }
         return "";
+    }
+
+    /// <summary>
+    /// Bin files this import would write that an existing record already deploys. The comparison is
+    /// on the paths inside the game's bin directory, because that is where two packages can meet.
+    /// </summary>
+    private IReadOnlyList<Core.Import.BinCollision> FindBinCollisions(IReadOnlyList<string> plannedBinFiles)
+    {
+        if (plannedBinFiles.Count == 0) return Array.Empty<Core.Import.BinCollision>();
+
+        var deployed = _storage.GetAllMods()
+            .Where(m => (m.GameBinFiles?.Count ?? 0) > 0)
+            .Select(m => (Owner: m.DisplayName, Paths: (IEnumerable<string>?)m.GameBinFiles))
+            .ToList();
+
+        return Core.Import.BinCollisionFinder.Find(plannedBinFiles, deployed);
+    }
+
+    /// <summary>
+    /// Asks before importing a package that overlaps an installed one's bin files. Nothing has been
+    /// written at this point, so cancelling leaves storage, the game directory and the records
+    /// exactly as they were.
+    /// </summary>
+    private static bool ConfirmBinCollisions(IReadOnlyList<Core.Import.BinCollision> collisions)
+    {
+        var lines = collisions.Select(c => string.Format(
+            TranslationService.Instance.T("import.bin_collision_line"),
+            "bin/" + c.Path,
+            string.Join(", ", c.Owners)));
+
+        var message = string.Format(
+            TranslationService.Instance.T("import.bin_collision_body"),
+            string.Join("\n", lines));
+
+        return Application.Current.Dispatcher.Invoke(() => MessageBox.Show(
+            message,
+            TranslationService.Instance.T("import.bin_collision_title"),
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning) == MessageBoxResult.OK);
     }
 
     /// <summary>
