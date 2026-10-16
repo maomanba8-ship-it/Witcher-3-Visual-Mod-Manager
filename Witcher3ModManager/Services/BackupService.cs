@@ -92,7 +92,13 @@ public class BackupService
                     BackupModFiles(mod);
 
                 // Disable in game (rename to ~ prefix in mods folder)
-                _w3.DisableMod(mod);
+                var outcome = _w3.DisableMod(mod);
+                if (!outcome.Ok)
+                {
+                    // The mod is still in the game, so the record must not claim otherwise.
+                    result.Errors.Add(OperationReport.OneLine(mod.Name, outcome));
+                    continue;
+                }
 
                 mod.IsEnabled = false;
                 // keep GameModFolderName intact

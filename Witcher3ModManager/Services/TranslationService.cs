@@ -324,6 +324,15 @@ public class TranslationService
                 ["journal.kind.preset"] = "应用预设",
                 ["journal.kind.other"] = "操作",
 
+                ["op.line"] = "{0}：{1}",
+                ["op.rolled_back"] = "已回滚到操作前的状态。",
+                ["op.rollback_problems"] = "⚠ 以下步骤无法回滚：",
+                ["op.not_removed"] = "以下路径无法删除：",
+                ["op.no_source"] = "没有可部署的来源（存储目录和游戏目录里都没有）：",
+                ["mods.enable_incomplete"] = "启用不完整",
+                ["mods.uninstall_issues"] = "以下模组没有卸载完成：\n{0}",
+                ["preset.load_issues"] = "以下模组没有完全应用：\n{0}",
+
                 ["conflict.title"] = "冲突检测结果",
                 ["conflict.no_conflicts"] = "未检测到模组冲突。",
                 ["conflict.script_warning"] = "检测到脚本冲突，建议使用 Witcher Script Merger 工具处理",
@@ -625,6 +634,15 @@ public class TranslationService
                 ["journal.kind.delete"] = "Delete",
                 ["journal.kind.preset"] = "Apply preset",
                 ["journal.kind.other"] = "Operation",
+
+                ["op.line"] = "{0}: {1}",
+                ["op.rolled_back"] = "Rolled back to the state before the operation.",
+                ["op.rollback_problems"] = "⚠ These steps could not be undone:",
+                ["op.not_removed"] = "These paths could not be removed:",
+                ["op.no_source"] = "Nothing to deploy from (absent from storage and from the game directory):",
+                ["mods.enable_incomplete"] = "Enable incomplete",
+                ["mods.uninstall_issues"] = "These mods were not uninstalled:\n{0}",
+                ["preset.load_issues"] = "These mods were not applied completely:\n{0}",
 
                 ["conflict.title"] = "Conflict Detection Results",
                 ["conflict.no_conflicts"] = "No mod conflicts detected.",

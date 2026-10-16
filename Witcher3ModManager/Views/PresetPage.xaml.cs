@@ -187,6 +187,7 @@ public partial class PresetPage : UserControl
             if (!confirmed) return;
 
             var allMods = _storage.GetAllMods().ToList();
+            var troubled = new List<string>();
             foreach (var mod in allMods)
             {
                 bool shouldEnable = false; foreach (var f in mod.GameModFolders) { if (preset.ModStates.TryGetValue(f, out var en) && en) { shouldEnable = true; break; } }
@@ -195,8 +196,11 @@ public partial class PresetPage : UserControl
                 {
                     if (_w3.GetGamePath() != null)
                     {
-                        var success = _w3.EnableMod(mod);
-                        if (success) { mod.IsEnabled = true; }
+                        var outcome = _w3.EnableMod(mod);
+                        if (outcome.Ok) { mod.IsEnabled = true; }
+                        // Either it failed, or it enabled with folders that had nothing to deploy
+                        // from. Both are worth naming once, at the end.
+                        if (outcome.HasNotes) troubled.Add(OperationReport.OneLine(mod.Name, outcome));
                     }
                     else { mod.IsEnabled = true; }
                     _storage.UpdateMod(mod);
@@ -205,10 +209,11 @@ public partial class PresetPage : UserControl
                 {
                     if (_w3.GetGamePath() != null)
                     {
-                        var success = _w3.DisableMod(mod);
-                        if (!success)
+                        var outcome = _w3.DisableMod(mod);
+                        if (!outcome.Ok)
                         {
                             // Disable failure: do NOT flip IsEnabled; keep the record as-is.
+                            troubled.Add(OperationReport.OneLine(mod.Name, outcome));
                             continue;
                         }
                     }
@@ -220,6 +225,9 @@ public partial class PresetPage : UserControl
 
             PresetApplied?.Invoke();
 var msg = string.Format(TranslationService.Instance.T("preset.load_ok"), presetName, allMods.Count(m => m.IsEnabled));
+            if (troubled.Count > 0)
+                msg += "\n\n" + string.Format(TranslationService.Instance.T("preset.load_issues"),
+                    string.Join("\n", troubled));
             MessageBox.Show(msg, TranslationService.Instance.T("preset.load_done"), MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }

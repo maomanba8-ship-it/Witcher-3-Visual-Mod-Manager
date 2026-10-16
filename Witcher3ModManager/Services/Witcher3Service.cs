@@ -109,7 +109,7 @@ public class Witcher3Service
         if (gamePath == null) throw new InvalidOperationException("Game path not found");
         return Path.Combine(gamePath, "dlc");
     }
-    public bool EnableMod(ModEntry mod, string? storageModsDir = null)
+    public OperationOutcome EnableMod(ModEntry mod, string? storageModsDir = null)
     {
         var journal = BeginJournal(OperationKind.Enable, mod);
         try
@@ -132,12 +132,16 @@ public class Witcher3Service
                 .Execute(plan.ToDeploymentPlan(), journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
-                DiagnosticLog.Write($"[deploy] nothing to do for {step.Target} ({step.Action})");
+                DiagnosticLog.Write($"[deploy] nothing to do for {step.Domain}/{step.Subject} ({step.Action})");
+
+            // Folders with nothing to deploy from are worth reporting: the record would otherwise
+            // end up enabled while nothing of it is in the game directory.
+            var notes = OperationOutcome.NoSourceNotes(plan);
 
             if (!result.Ok)
             {
                 _storage?.Journals.Fail(journal, result.Failure);
-                return false;
+                return OperationOutcome.From(OperationKind.Enable, result, notes);
             }
 
             // Enable bin files
@@ -163,12 +167,12 @@ public class Witcher3Service
 
             RecordDeployedTargets(mod);
             _storage?.Journals.Complete(journal?.OperationId);
-            return true;
+            return OperationOutcome.Succeeded(OperationKind.Enable, notes, result.Steps);
         }
         catch (Exception ex)
         {
             _storage?.Journals.Fail(journal, ex.Message);
-            return false;
+            return OperationOutcome.Failed(OperationKind.Enable, ex.Message);
         }
     }
 
@@ -300,7 +304,7 @@ public class Witcher3Service
         }
     }
 
-    public bool DisableMod(ModEntry mod, string? storageModsDir = null)
+    public OperationOutcome DisableMod(ModEntry mod, string? storageModsDir = null)
     {
         var journal = BeginJournal(OperationKind.Disable, mod);
         try
@@ -322,12 +326,12 @@ public class Witcher3Service
                 .Execute(plan, journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
-                DiagnosticLog.Write($"[deploy] nothing to disable for {step.Target}");
+                DiagnosticLog.Write($"[deploy] nothing to disable for {step.Domain}/{step.Subject}");
 
             if (!result.Ok)
             {
                 _storage?.Journals.Fail(journal, result.Failure);
-                return false;
+                return OperationOutcome.From(OperationKind.Disable, result);
             }
 
             // Update mods.settings
@@ -344,20 +348,20 @@ public class Witcher3Service
                 mod.InstalledPath = Path.Combine(gameModsPath, "~" + mod.GameModFolders[0]);
 
             _storage?.Journals.Complete(journal?.OperationId);
-            return true;
+            return OperationOutcome.Succeeded(OperationKind.Disable, null, result.Steps);
         }
         catch (Exception ex)
         {
             _storage?.Journals.Fail(journal, ex.Message);
-            return false;
+            return OperationOutcome.Failed(OperationKind.Disable, ex.Message);
         }
     }
-    public bool DeleteMod(ModEntry mod)
+    public OperationOutcome DeleteMod(ModEntry mod)
     {
         var journal = BeginJournal(OperationKind.Delete, mod);
         try
         {
-            var failed = false;
+            var notRemoved = new List<string>();
             var gameModsPath = GetGameModsPath();
             var storageDir = _storage?.GetModsDirectory() ?? Path.GetDirectoryName(mod.InstalledPath) ?? "";
 
@@ -389,24 +393,24 @@ public class Witcher3Service
                 .Execute(plan, journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
-                DiagnosticLog.Write($"[deploy] nothing to delete for {step.Target}");
+                DiagnosticLog.Write($"[deploy] nothing to delete for {step.Domain}/{step.Subject}");
 
             if (!result.Ok)
             {
                 _storage?.Journals.Fail(journal, result.Failure);
-                return false;
+                return OperationOutcome.From(OperationKind.Delete, result);
             }
 
             // Delete storage folders
             foreach (var folder in mod.GameModFolders)
             {
                 if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
-                DeleteIfExists(Path.Combine(storageDir, folder), ref failed);
+                DeleteIfExists(Path.Combine(storageDir, folder), notRemoved);
             }
             foreach (var dlcFolder in mod.GameDlcFolders)
             {
                 if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
-                DeleteIfExists(Path.Combine(storageDir, dlcFolder), ref failed);
+                DeleteIfExists(Path.Combine(storageDir, dlcFolder), notRemoved);
             }
 
             // Delete primary installed path
@@ -418,52 +422,54 @@ public class Witcher3Service
                 var sharedPrimary = IsSharedFolder(primaryName, mod, TargetDomain.Mods)
                                  || IsSharedFolder(primaryName, mod, TargetDomain.Dlc);
                 if (!sharedPrimary)
-                    DeleteIfExists(mod.InstalledPath, ref failed);
+                    DeleteIfExists(mod.InstalledPath, notRemoved);
             }
 
-            // If a game/storage folder could not be deleted, do NOT touch mods.settings or
-            // the storage bin copy; keep the record intact so the user can retry.
-            if (!failed)
+            // A folder that could not be deleted stops the operation here: mods.settings and the
+            // storage bin copy are left alone, and the record is kept so the user can retry.
+            if (notRemoved.Count > 0)
             {
-                // Update mods.settings
-                try
-                {
-                    var currentMods = GetEnabledModsFromSettings();
-                    foreach (var folder in mod.GameModFolders)
-                    {
-                        if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
-                        currentMods.RemoveAll(m => m.ModName == folder);
-                    }
-                    WriteModsSettings(currentMods);
-                }
-                catch { }
-
-                // Delete bin files
-                DeleteBinFiles(mod);
+                const string failure = "one or more paths could not be deleted";
+                _storage?.Journals.Fail(journal, failure);
+                return OperationOutcome.Failed(OperationKind.Delete, failure, notRemoved);
             }
 
-            // A record with nothing left on disk is still successfully removed; only a
-            // real deletion failure (path exists but could not be deleted) means stale.
-            if (!failed) _storage?.Journals.Complete(journal?.OperationId);
-            else _storage?.Journals.Fail(journal, "one or more paths could not be deleted");
+            // Update mods.settings
+            try
+            {
+                var currentMods = GetEnabledModsFromSettings();
+                foreach (var folder in mod.GameModFolders)
+                {
+                    if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
+                    currentMods.RemoveAll(m => m.ModName == folder);
+                }
+                WriteModsSettings(currentMods);
+            }
+            catch { }
 
-            return !failed;
+            // Delete bin files
+            DeleteBinFiles(mod);
+
+            // A record with nothing left on disk is still successfully removed; only a real
+            // deletion failure (path exists but could not be deleted) means stale.
+            _storage?.Journals.Complete(journal?.OperationId);
+            return OperationOutcome.Succeeded(OperationKind.Delete, null, result.Steps);
         }
         catch (Exception ex)
         {
             _storage?.Journals.Fail(journal, ex.Message);
-            return false;
+            return OperationOutcome.Failed(OperationKind.Delete, ex.Message);
         }
     }
 
-    private static void DeleteIfExists(string path, ref bool failed)
+    private static void DeleteIfExists(string path, ICollection<string> notRemoved)
     {
         try
         {
             if (Directory.Exists(path))
                 Directory.Delete(path, true);
         }
-        catch { failed = true; }
+        catch { notRemoved.Add(path); }
     }
 
 

@@ -422,12 +422,15 @@ public partial class ModListPage : UserControl
                 TranslationService.Instance.T("dialog.cancel"));
             if (!confirmed) return;
             _conflict?.InvalidateCache();
-            var deleteOk = true;
-            if (_w3 != null) deleteOk = _w3.DeleteMod(mod);
-            if (!deleteOk)
+            if (_w3 != null)
             {
-                MessageBox.Show(TranslationService.Instance.T("mods.delete_failed") + "： " + mod.Name, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                var outcome = _w3.DeleteMod(mod);
+                if (!outcome.Ok)
+                {
+                    MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.delete_failed"), mod.Name, outcome),
+                        TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
             }
             _storage?.RemoveMod(modId);
             RefreshModList();
@@ -549,14 +552,20 @@ public partial class ModListPage : UserControl
         {
             if (_w3 != null && _w3.GetGamePath() != null)
             {
-                var success = _w3.EnableMod(mod);
-                if (success) { mod.IsEnabled = true; _conflict?.InvalidateCache(); }
-                else
+                var outcome = _w3.EnableMod(mod);
+                if (!outcome.Ok)
                 {
-                    MessageBox.Show(TranslationService.Instance.T("mods.enable_failed") + "： " + mod.Name, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.enable_failed"), mod.Name, outcome),
+                        TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
                     chk.IsChecked = false;
                     return;
                 }
+                // Enabled, but not everything could be placed: say so instead of staying quiet.
+                if (outcome.HasNotes)
+                    MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.enable_incomplete"), mod.Name, outcome),
+                        TranslationService.Instance.T("dialog.warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                mod.IsEnabled = true;
+                _conflict?.InvalidateCache();
             }
             else { mod.IsEnabled = true; }
             _storage?.UpdateMod(mod);
@@ -571,10 +580,11 @@ public partial class ModListPage : UserControl
         {
             if (_w3 != null && _w3.GetGamePath() != null)
             {
-                var success = _w3.DisableMod(mod);
-                if (!success)
+                var outcome = _w3.DisableMod(mod);
+                if (!outcome.Ok)
                 {
-                    MessageBox.Show(TranslationService.Instance.T("mods.disable_failed") + "： " + mod.Name, TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.disable_failed"), mod.Name, outcome),
+                        TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
                     chk.IsChecked = true;
                     return;
                 }
@@ -681,9 +691,17 @@ public partial class ModListPage : UserControl
             TranslationService.Instance.T("mods.uninstall_confirm"),
             "\uEA3B", TranslationService.Instance.T("dialog.uninstall"), TranslationService.Instance.T("dialog.cancel"));
         if (!confirmed) return;
-        if (_backup != null) _backup.UninstallAllMods(_allMods);
+        var uninstall = _backup?.UninstallAllMods(_allMods);
         _conflict?.InvalidateCache();
         RefreshModList();
+        if (uninstall != null && !uninstall.Success)
+        {
+            // Saying "all mods uninstalled" when some are still in the game would be a lie.
+            MessageBox.Show(string.Format(TranslationService.Instance.T("mods.uninstall_issues"),
+                    string.Join("\n", uninstall.Errors)),
+                TranslationService.Instance.T("dialog.warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         MessageBox.Show(TranslationService.Instance.T("mods.uninstall_done"), TranslationService.Instance.T("dialog.done"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
