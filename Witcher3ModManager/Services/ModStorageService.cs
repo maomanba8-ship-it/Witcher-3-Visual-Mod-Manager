@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using Witcher3ModManager.Core.Analysis;
 using Witcher3ModManager.Core.Deployment;
@@ -14,8 +14,11 @@ public class ModStorageService
     private readonly string _dbPath;
     private readonly Core.Deployment.LibraryIndexStore _indexStore;
     private readonly Core.Deployment.OperationJournalStore _journals;
+    private readonly Core.Deployment.BinLedgerStore _binLedgerStore;
+    private readonly Core.Deployment.BinBackupStore _binBackups;
     private List<ModEntry> _mods = new();
     private Core.Deployment.LibraryIndex _index = Core.Deployment.LibraryIndex.Empty;
+    private Core.Deployment.BinLedger _binClaims = Core.Deployment.BinLedger.Empty;
 
     /// <summary>
     /// How the library file was read. The UI reports a damaged or unreadable library instead of
@@ -36,12 +39,15 @@ public class ModStorageService
         _dbPath = Path.Combine(_dataDir, "mods.json");
         _indexStore = new Core.Deployment.LibraryIndexStore(Path.Combine(_dataDir, "library.json"));
         _journals = new Core.Deployment.OperationJournalStore(Path.Combine(_dataDir, "journal"));
+        _binLedgerStore = new Core.Deployment.BinLedgerStore(Path.Combine(_dataDir, "bin-ledger.json"));
+        _binBackups = new Core.Deployment.BinBackupStore(Path.Combine(_dataDir, "binbackup"));
         
         Directory.CreateDirectory(_dataDir);
         Directory.CreateDirectory(_modsDir);
         Directory.CreateDirectory(_binDir);
         Load();
         _index = _indexStore.Load();
+        _binClaims = _binLedgerStore.Load();
     }
 
     /// <summary>
@@ -57,6 +63,43 @@ public class ModStorageService
     /// not finish, which is reported to the user rather than acted on.
     /// </summary>
     public Core.Deployment.OperationJournalStore Journals => _journals;
+
+    /// <summary>
+    /// What the manager wrote into the game's bin directory, and what was there first. Losing this
+    /// only costs the ability to put bin files back, which is why a failed save is reported and
+    /// then ignored rather than allowed to fail the operation.
+    /// </summary>
+    public Core.Deployment.BinLedger BinClaims => _binClaims;
+
+    public string? BinLedgerSaveError => _binLedgerStore.LastSaveError;
+
+    public Core.Storage.TextFileOutcome BinLedgerLoadOutcome => _binLedgerStore.LastLoadOutcome;
+
+    /// <summary>Where copies of overwritten bin files are kept, addressed by content hash.</summary>
+    public Core.Deployment.BinBackupStore BinBackups => _binBackups;
+
+    /// <summary>
+    /// Applies a change to the bin claims and persists them. Like the index, this is derived data
+    /// in one direction only: without it nothing can be put back, but nothing on disk is wrong,
+    /// so it must never be able to fail the operation that triggered it.
+    /// </summary>
+    public void UpdateBinClaims(Func<Core.Deployment.BinLedger, Core.Deployment.BinLedger> change)
+    {
+        if (change is null) return;
+
+        var updated = change(_binClaims) ?? _binClaims;
+        if (_binLedgerStore.Save(updated))
+        {
+            _binClaims = updated;
+            return;
+        }
+
+#if DEBUG
+        DiagnosticLog.Write($"[bin] failed to save the bin ledger: {_binLedgerStore.LastSaveError}");
+#endif
+        // Kept in memory even when the save failed: this session can still undo its own writes.
+        _binClaims = updated;
+    }
 
     /// <summary>
     /// Applies a change to the index and persists it. A failed save is reported but never

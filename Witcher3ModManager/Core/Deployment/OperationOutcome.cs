@@ -133,4 +133,14 @@ public sealed record OperationOutcome
         (plan?.WithoutSource ?? Array.Empty<EnablePlanStep>())
             .Select(step => new OperationNote(OperationNoteKind.NoSource, step.Domain, step.Folder))
             .ToList();
+
+    /// <summary>
+    /// The same thing for a plan of bin files: a file with no copy in the storage directory has
+    /// nothing to deploy from either, and saying so is the difference between "enabled" meaning
+    /// something and meaning nothing.
+    /// </summary>
+    public static IReadOnlyList<OperationNote> NoSourceNotes(DeploymentPlan? plan) =>
+        (plan?.Skipped ?? Array.Empty<DeploymentStep>())
+            .Select(step => new OperationNote(OperationNoteKind.NoSource, step.Domain, step.Subject))
+            .ToList();
 }

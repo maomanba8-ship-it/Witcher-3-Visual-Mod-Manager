@@ -127,7 +127,7 @@ public sealed class DeploymentEngine
         }
 
         if (step.Action == DeploymentAction.Copy)
-            CopyDirectory(step.SourcePath, destination);
+            CopyAnything(step.SourcePath, destination);
         else
             MoveOrCopy(step.SourcePath, destination);
 
@@ -194,13 +194,31 @@ public sealed class DeploymentEngine
 
         try
         {
-            Directory.Move(source, destination);
+            if (File.Exists(source)) File.Move(source, destination);
+            else Directory.Move(source, destination);
         }
         catch (IOException)
         {
-            CopyDirectory(source, destination);
+            CopyAnything(source, destination);
             RemoveCreated(source);
         }
+    }
+
+    /// <summary>
+    /// Copies a folder or a single file. Bin deployment moves individual files, so a step whose
+    /// source is a file has to work exactly like a folder step: the same staging, the same undo.
+    /// </summary>
+    private static void CopyAnything(string source, string destination)
+    {
+        if (File.Exists(source))
+        {
+            var parent = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+            File.Copy(source, destination, overwrite: true);
+            return;
+        }
+
+        CopyDirectory(source, destination);
     }
 
     private static void CopyDirectory(string source, string destination)

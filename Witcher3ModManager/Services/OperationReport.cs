@@ -69,9 +69,16 @@ public static class OperationReport
     private static string Line(string left, string right) =>
         string.Format(TranslationService.Instance.T("op.line"), left, right);
 
-    /// <summary>The folder as the user would look for it on disk: "mods\modA" or "dlc\dlcA".</summary>
-    private static string Folder(OperationNote note) =>
-        (note.Domain == TargetDomain.Dlc ? "dlc" : "mods") + "\\" + (note.Subject ?? "");
+    /// <summary>
+    /// The component as the user would look for it on disk: "mods\modA", "dlc\dlcA" or
+    /// "bin\config\...\input.xml".
+    /// </summary>
+    private static string Folder(OperationNote note) => note.Domain switch
+    {
+        TargetDomain.Dlc => "dlc\\" + (note.Subject ?? ""),
+        TargetDomain.Bin => "bin\\" + (note.Subject ?? "").Replace('/', '\\'),
+        _ => "mods\\" + (note.Subject ?? "")
+    };
 
     private static string Bullet(string text) => "· " + text;
 }

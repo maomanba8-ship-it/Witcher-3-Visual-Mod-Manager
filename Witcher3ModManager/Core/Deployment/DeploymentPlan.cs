@@ -49,4 +49,15 @@ public sealed record DeploymentPlan(IReadOnlyList<DeploymentStep> Steps)
     /// <summary>Steps recorded only to explain a skip.</summary>
     public IReadOnlyList<DeploymentStep> Skipped =>
         Steps.Where(s => s.Action == DeploymentAction.NothingToDo).ToList();
+
+    /// <summary>
+    /// Several plans as one, in the order given. Enabling a package deploys its folders and its bin
+    /// files in a single operation on purpose: one failure then rolls all of it back instead of
+    /// leaving half a package behind.
+    /// </summary>
+    public static DeploymentPlan Combined(params DeploymentPlan?[] plans) =>
+        new((plans ?? Array.Empty<DeploymentPlan>())
+            .Where(p => p is not null)
+            .SelectMany(p => p!.Steps)
+            .ToList());
 }

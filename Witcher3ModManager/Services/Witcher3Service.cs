@@ -127,16 +127,29 @@ public class Witcher3Service
                 mod.GameModFolders,
                 mod.GameDlcFolders);
 
+            // Bin files are part of the same operation: one plan, so a failure anywhere puts the
+            // whole package back instead of leaving its folders enabled and its files missing.
             var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
+            var binPlan = EnableBinPlanner.Plan(
+                Path.Combine(gameRoot, "bin"),
+                mod.BinStoragePath,
+                mod.GameBinFiles);
+
+            // Keep what is about to be overwritten BEFORE anything is written: the record has to
+            // describe the state before this enable, and after it that state is gone.
+            var captured = CaptureBinOriginals(binPlan);
+
             var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
-                .Execute(plan.ToDeploymentPlan(), journal?.OperationId);
+                .Execute(DeploymentPlan.Combined(plan.ToDeploymentPlan(), binPlan), journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
                 DiagnosticLog.Write($"[deploy] nothing to do for {step.Domain}/{step.Subject} ({step.Action})");
 
             // Folders with nothing to deploy from are worth reporting: the record would otherwise
             // end up enabled while nothing of it is in the game directory.
-            var notes = OperationOutcome.NoSourceNotes(plan);
+            var notes = OperationOutcome.NoSourceNotes(plan)
+                .Concat(OperationOutcome.NoSourceNotes(binPlan))
+                .ToList();
 
             if (!result.Ok)
             {
@@ -144,8 +157,9 @@ public class Witcher3Service
                 return OperationOutcome.From(OperationKind.Enable, result, notes);
             }
 
-            // Enable bin files
-            EnableBinFiles(mod);
+            // Remember what this enable wrote into the game's bin directory, so a later disable can
+            // put back what was there before it.
+            RecordBinWrites(mod, result, captured);
 
             // Update mods.settings priorities
             if (mod.ModType == ModType.Mod)
@@ -662,20 +676,65 @@ public class Witcher3Service
         }
     }
 
-    private void EnableBinFiles(ModEntry mod)
+    /// <summary>
+    /// Hashes and keeps a copy of every bin file this enable is about to overwrite, before it is
+    /// overwritten. A file that could not be kept is left out of the result entirely: recording it
+    /// as "there was nothing" would make a later disable delete a file that was always there, so
+    /// no record at all (and a report that says so) is the only safe answer.
+    /// </summary>
+    private IReadOnlyDictionary<string, string?> CaptureBinOriginals(DeploymentPlan? binPlan)
     {
-        if (mod.GameBinFiles.Count == 0 || string.IsNullOrEmpty(mod.BinStoragePath)) return;
-        var gamePath = GetGamePath();
-        if (gamePath == null) return;
-        var gameBinRoot = Path.Combine(gamePath, "bin");
-        foreach (var bf in mod.GameBinFiles)
+        var captured = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var backups = _storage?.BinBackups;
+        if (backups is null || binPlan is null) return captured;
+
+        foreach (var step in binPlan.Actionable)
         {
-            var src = Path.Combine(mod.BinStoragePath, bf.Replace('/', Path.DirectorySeparatorChar));
-            var dest = Path.Combine(gameBinRoot, bf.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(src)) continue;
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.Copy(src, dest, true);
+            var existing = BinBackupStore.HashOf(step.DestinationPath);
+            if (existing is null)
+            {
+                // Nothing there: the ledger has to remember that, so a later stop can remove the
+                // file this enable creates.
+                if (!File.Exists(step.DestinationPath)) captured[step.Subject] = null;
+                continue;
+            }
+
+            if (backups.Capture(step.DestinationPath) is not null)
+                captured[step.Subject] = existing;
         }
+
+        return captured;
+    }
+
+    /// <summary>
+    /// Records what this enable actually wrote, and what it replaced, in the bin ledger. Only the
+    /// steps that really ran are recorded: a file we never wrote must not end up claimed as ours.
+    /// </summary>
+    private void RecordBinWrites(
+        ModEntry mod,
+        DeploymentResult result,
+        IReadOnlyDictionary<string, string?> capturedOriginals)
+    {
+        var storage = _storage;
+        if (storage is null || capturedOriginals.Count == 0) return;
+
+        var written = result.Steps
+            .Where(s => s.Domain == TargetDomain.Bin && s.Outcome == DeploymentStepOutcome.Done)
+            .Select(s => (s.Subject, Hash: BinBackupStore.HashOf(s.Target)))
+            .Where(s => s.Hash is not null)
+            .ToList();
+        if (written.Count == 0) return;
+
+        storage.UpdateBinClaims(claims =>
+        {
+            var updated = claims;
+            foreach (var (subject, hash) in written)
+            {
+                if (!capturedOriginals.TryGetValue(subject, out var previous)) continue;
+                updated = updated.WithWrite(subject, mod.Id, hash!, previous, DateTime.Now);
+            }
+            return updated;
+        });
     }
 
     /// <summary>
