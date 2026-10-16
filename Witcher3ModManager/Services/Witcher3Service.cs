@@ -13,6 +13,12 @@ namespace Witcher3ModManager.Services;
 public class Witcher3Service
 {
     private readonly SettingsService _settings; private readonly ModStorageService? _storage;
+
+    /// <summary>
+    /// Where an operation parks whatever it has to move out of the way. Kept inside the game
+    /// directory so those moves stay on the same volume and cost nothing but a rename.
+    /// </summary>
+    private const string StagingFolderName = "_w3mm_staging";
     private string? _gamePath;
     private bool _isLaunching;
 
@@ -111,48 +117,28 @@ public class Witcher3Service
             var gameModsPath = GetGameModsPath();
             var storageDir = _storage?.GetModsDirectory() ?? System.IO.Path.GetDirectoryName(mod.InstalledPath) ?? "";
 
-            // Enable each mod folder
-            foreach (var folder in mod.GameModFolders)
+            // Everything is decided up front and then carried out by the deployer. It never
+            // deletes a target outright: whatever occupies the name is moved aside first, so a
+            // failure part-way through can put the previous state back.
+            var plan = EnablePlanner.Plan(
+                gameModsPath,
+                GetGameDlcPath(),
+                storageDir,
+                mod.GameModFolders,
+                mod.GameDlcFolders);
+
+            var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
+            var result = new EnableDeployer(Path.Combine(gameRoot, StagingFolderName))
+                .Execute(plan, journal?.OperationId);
+
+            foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
+                DiagnosticLog.Write($"[deploy] nothing to do for {step.Target} ({step.Action})");
+
+            if (!result.Ok)
             {
-                var srcInStorage = System.IO.Path.Combine(storageDir, folder);
-                var enabledPath = System.IO.Path.Combine(gameModsPath, folder);
-                var disabledPath = System.IO.Path.Combine(gameModsPath, "~" + folder);
-
-                if (Directory.Exists(disabledPath))
-                {
-                    if (Directory.Exists(enabledPath)) Directory.Delete(enabledPath, true);
-                    Directory.Move(disabledPath, enabledPath);
-                }
-                else if (Directory.Exists(srcInStorage))
-                {
-                    if (!Directory.Exists(enabledPath))
-                        CopyDirectoryRecursive(srcInStorage, enabledPath);
-                }
+                _storage?.Journals.Fail(journal, result.Failure);
+                return false;
             }
-
-
-            // Enable each DLC folder
-            if (mod.GameDlcFolders.Count > 0)
-            {
-                var gameDlcPath = GetGameDlcPath();
-                foreach (var dlcFolder in mod.GameDlcFolders)
-                {
-                    var srcInStorage = System.IO.Path.Combine(storageDir, dlcFolder);
-                    var dlcEnabled = System.IO.Path.Combine(gameDlcPath, dlcFolder);
-                    var dlcDisabled = System.IO.Path.Combine(gameDlcPath, "~" + dlcFolder);
-
-                    if (Directory.Exists(dlcDisabled))
-                    {
-                        if (Directory.Exists(dlcEnabled)) Directory.Delete(dlcEnabled, true);
-                        Directory.Move(dlcDisabled, dlcEnabled);
-                    }
-                    else if (!Directory.Exists(dlcEnabled) && Directory.Exists(srcInStorage))
-                    {
-                        CopyDirectoryRecursive(srcInStorage, dlcEnabled);
-                    }
-                }
-            }
-
 
             // Enable bin files
             EnableBinFiles(mod);
