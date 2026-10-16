@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using Witcher3ModManager.Core.Analysis;
 
 namespace Witcher3ModManager.Core.Deployment;
 
@@ -10,10 +11,17 @@ public enum DeploymentStepOutcome
 }
 
 /// <summary>
-/// What happened to one step. BackupPath is set when something previously at the destination was
-/// moved aside, which is what makes the step reversible.
+/// What happened to one step. Domain and Subject name the component the step was about, so a report
+/// can point at "mods\modA" instead of at a path: for a stash step the path would be a staging
+/// folder the user has no reason to know about.
+///
+/// Target is the location the step worked on (its destination, or the source when there is no
+/// destination to name). BackupPath is set when something previously at the destination was moved
+/// aside, which is what makes the step reversible.
 /// </summary>
 public sealed record DeploymentStepResult(
+    TargetDomain Domain,
+    string Subject,
     string Target,
     DeploymentAction Action,
     DeploymentStepOutcome Outcome,
@@ -67,7 +75,8 @@ public sealed class DeploymentEngine
         {
             if (step.Action == DeploymentAction.NothingToDo)
             {
-                steps.Add(new DeploymentStepResult(step.DestinationPath, step.Action, DeploymentStepOutcome.Skipped));
+                steps.Add(new DeploymentStepResult(step.Domain, step.Subject, step.DestinationPath,
+                    step.Action, DeploymentStepOutcome.Skipped));
                 continue;
             }
 
@@ -77,9 +86,12 @@ public sealed class DeploymentEngine
             }
             catch (Exception ex)
             {
-                steps.Add(new DeploymentStepResult(step.DestinationPath, step.Action,
+                // A stash step has no destination of its own, so the source is the location worth
+                // naming in the report.
+                var where = string.IsNullOrEmpty(step.DestinationPath) ? step.SourcePath : step.DestinationPath;
+                steps.Add(new DeploymentStepResult(step.Domain, step.Subject, where, step.Action,
                     DeploymentStepOutcome.Failed, Detail: ex.Message));
-                failure = $"{step.Action} failed for {step.DestinationPath}: {ex.Message}";
+                failure = $"{step.Action} failed for {where}: {ex.Message}";
                 break;
             }
         }
@@ -123,7 +135,8 @@ public sealed class DeploymentEngine
             ? (() => RemoveCreated(destination), $"remove the copy at {destination}")
             : (() => MoveOrCopy(destination, step.SourcePath), $"move {destination} back"));
 
-        return new DeploymentStepResult(destination, step.Action, DeploymentStepOutcome.Done, backup);
+        return new DeploymentStepResult(step.Domain, step.Subject, destination, step.Action,
+            DeploymentStepOutcome.Done, backup);
     }
 
     private static IReadOnlyList<string> RollBack(List<(Action Undo, string Description)> undos)
