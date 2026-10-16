@@ -338,6 +338,7 @@ public class TranslationService
                 ["op.bin.reason.no_backup"] = "保存的原始内容找不到了，无法还原",
                 ["mods.enable_incomplete"] = "启用不完整",
                 ["mods.disable_incomplete"] = "停用不完整",
+                ["mods.delete_incomplete"] = "删除不完整",
                 ["mods.uninstall_issues"] = "以下模组没有卸载完成：\n{0}",
                 ["preset.load_issues"] = "以下模组没有完全应用：\n{0}",
 
@@ -416,8 +417,6 @@ public class TranslationService
                 ["window.maximize"] = "最大化",
                 ["window.close"] = "关闭",
                 ["backup.failed"] = "备份 {0} 失败: {1}",
-                ["bin.delete_warning"] = "该 Mod 包含 {0} 个 bin 文件：\n･ {1}\n\n⚠ bin 文件保留在游戏目录中，未被删除。\n如果其他 Mod 也使用这些文件，删除会导致它们失效。\n请手动检查 game/bin/ 目录。",
-                ["bin.notice"] = "Bin 文件提示",
                 ["potential.no_overlaps"] = "未检测到潜在覆盖",
                 ["potential.title"] = "潜在覆盖",
 
@@ -657,6 +656,7 @@ public class TranslationService
                 ["op.bin.reason.no_backup"] = "the original content kept for it is gone, so it cannot be put back",
                 ["mods.enable_incomplete"] = "Enable incomplete",
                 ["mods.disable_incomplete"] = "Disable incomplete",
+                ["mods.delete_incomplete"] = "Delete incomplete",
                 ["mods.uninstall_issues"] = "These mods were not uninstalled:\n{0}",
                 ["preset.load_issues"] = "These mods were not applied completely:\n{0}",
 
@@ -736,8 +736,6 @@ public class TranslationService
                 ["window.maximize"] = "Maximize",
                 ["window.close"] = "Close",
                 ["backup.failed"] = "Failed to back up {0}: {1}",
-                ["bin.delete_warning"] = "This mod contains {0} bin file(s):\n･ {1}\n\n⚠ Bin files remain in the game directory.\nIf other mods also use these files, deleting them may break those mods.\nPlease manually check the game/bin/ directory.",
-                ["bin.notice"] = "Bin File Notice",
                 ["potential.no_overlaps"] = "No potential overrides detected",
                 ["potential.title"] = "Potential Overrides",
 

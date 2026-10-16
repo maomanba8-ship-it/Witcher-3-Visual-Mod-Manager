@@ -419,8 +419,20 @@ public class Witcher3Service
 
             var plan = DeletePlanner.Plan(gameModsPath, GetGameDlcPath(), modFolders, dlcFolders);
             var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
+
+            // Deleting a package puts its bin files back to what was there before it, exactly as
+            // disabling does: the mod's folders go away and the files it overwrote come back.
+            var binRestore = BinRestorePlanner.Plan(
+                _storage?.BinClaims,
+                _storage?.BinBackups,
+                mod.Id,
+                Path.Combine(gameRoot, "bin"),
+                mod.GameBinFiles,
+                relative => BinBackupStore.HashOf(Path.Combine(
+                    gameRoot, "bin", relative.Replace('/', Path.DirectorySeparatorChar))));
+
             var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
-                .Execute(plan, journal?.OperationId);
+                .Execute(DeploymentPlan.Combined(plan, binRestore.Steps), journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
                 DiagnosticLog.Write($"[deploy] nothing to delete for {step.Domain}/{step.Subject}");
@@ -428,7 +440,7 @@ public class Witcher3Service
             if (!result.Ok)
             {
                 _storage?.Journals.Fail(journal, result.Failure);
-                return OperationOutcome.From(OperationKind.Delete, result);
+                return OperationOutcome.From(OperationKind.Delete, result, binRestore.Notes);
             }
 
             // Delete storage folders
@@ -479,11 +491,12 @@ public class Witcher3Service
 
             // Delete bin files
             DeleteBinFiles(mod);
+            ForgetBinClaims(mod);
 
             // A record with nothing left on disk is still successfully removed; only a real
             // deletion failure (path exists but could not be deleted) means stale.
             _storage?.Journals.Complete(journal?.OperationId);
-            return OperationOutcome.Succeeded(OperationKind.Delete, null, result.Steps);
+            return OperationOutcome.Succeeded(OperationKind.Delete, binRestore.Notes, result.Steps);
         }
         catch (Exception ex)
         {
@@ -771,24 +784,16 @@ public class Witcher3Service
         });
     }
 
+    /// <summary>
+    /// Removes the storage copy of this package's bin files. The game's copies are the restore
+    /// planner's business: they are put back rather than deleted, and anything that could not be
+    /// put back is reported in the operation's result instead of in a dialog of its own.
+    /// </summary>
     private void DeleteBinFiles(ModEntry mod)
     {
-        // Clean storage copy only — game bin files are intentionally left in place
         if (!string.IsNullOrEmpty(mod.BinStoragePath) && Directory.Exists(mod.BinStoragePath))
         {
             try { Directory.Delete(mod.BinStoragePath, true); } catch { }
-        }
-
-        // Notify user that game bin files were NOT removed
-        if (mod.GameBinFiles.Count > 0)
-        {
-            var fileList = string.Join("\n\uff65 ", mod.GameBinFiles.Take(5));
-            if (mod.GameBinFiles.Count > 5) fileList += "\n\uff65 ...";
-            System.Windows.MessageBox.Show(
-                string.Format(TranslationService.Instance.T("bin.delete_warning"), mod.GameBinFiles.Count,fileList),
-                TranslationService.Instance.T("bin.notice"),
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Information);
         }
     }
 

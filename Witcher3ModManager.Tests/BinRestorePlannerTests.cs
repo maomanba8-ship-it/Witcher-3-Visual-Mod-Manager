@@ -125,6 +125,32 @@ public class BinRestorePlannerTests
         Assert.Empty(BinRestorePlanner.Plan(ledger, world.Backups, "modA", world.GameBin, Array.Empty<string>(), _ => "writtenHash").Steps.Steps);
     }
 
+    [Fact]
+    public void Several_files_are_planned_in_one_pass_including_when_they_differ()
+    {
+        using var world = new World();
+        var kept = world.Keep("ORIGINAL");
+        const string NewFile = "config/added.xml";
+
+        var ledger = BinLedger.Empty
+            .WithWrite(InputXml, "modA", "writtenHash", kept, When)
+            .WithWrite(NewFile, "modA", "writtenNew", shaBeforeWrite: null, When.AddMinutes(1));
+
+        // What is on disk differs per file, so the current content has to be answered per path.
+        var currents = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            [InputXml] = "writtenHash",
+            [NewFile] = "writtenNew"
+        };
+
+        var plan = BinRestorePlanner.Plan(ledger, world.Backups, "modA", world.GameBin,
+            new[] { InputXml, NewFile }, path => currents.TryGetValue(path, out var hash) ? hash : null).Steps.Steps;
+
+        Assert.Equal(2, plan.Count);
+        Assert.Contains(plan, s => s.Action == DeploymentAction.Copy && s.Subject == InputXml);
+        Assert.Contains(plan, s => s.Action == DeploymentAction.Stash && s.Subject == NewFile);
+    }
+
     /// <summary>A game directory and a backup store in a throwaway folder.</summary>
     private sealed class World : IDisposable
     {

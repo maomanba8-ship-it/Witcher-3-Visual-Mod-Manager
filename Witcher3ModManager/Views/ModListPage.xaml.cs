@@ -431,6 +431,11 @@ public partial class ModListPage : UserControl
                         TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
+                // Deleted, but a bin file could not be put back: the name would otherwise be gone
+                // while part of the mod is still in the game.
+                if (outcome.HasNotes)
+                    MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.delete_incomplete"), mod.Name, outcome),
+                        TranslationService.Instance.T("dialog.warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             _storage?.RemoveMod(modId);
             RefreshModList();
