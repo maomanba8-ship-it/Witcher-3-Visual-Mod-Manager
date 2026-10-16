@@ -80,7 +80,8 @@ public class OperationOutcomeTests
     [Fact]
     public void There_are_no_source_notes_without_a_plan()
     {
-        Assert.Empty(OperationOutcome.NoSourceNotes(null));
+        Assert.Empty(OperationOutcome.NoSourceNotes((EnablePlan?)null));
+        Assert.Empty(OperationOutcome.NoSourceNotes((DeploymentPlan?)null));
     }
 
     [Fact]

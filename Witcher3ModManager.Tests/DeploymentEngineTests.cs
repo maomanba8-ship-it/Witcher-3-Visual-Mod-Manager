@@ -139,6 +139,66 @@ public class DeploymentEngineTests
         Assert.Equal("CONTENT", File.ReadAllText(Path.Combine(world.GameMods, "modA", "content", "a.txt")));
     }
 
+    [Fact]
+    public void A_single_bin_file_is_copied_into_the_game()
+    {
+        using var world = new TestWorld();
+        world.WriteGameBinFile("config/input.xml", "ORIGINAL");
+        world.WriteStorageBinFile("config/input.xml", "MOD CONTENT");
+
+        var plan = EnableBinPlanner.Plan(world.GameBin, world.StorageBin, new[] { "config/input.xml" });
+        var result = world.Deploy(plan, "op4");
+
+        Assert.True(result.Ok);
+        Assert.Equal("MOD CONTENT", File.ReadAllText(Path.Combine(world.GameBin, "config", "input.xml")));
+        // The copy is recorded as done, and what it replaced was moved aside rather than deleted.
+        Assert.Equal(DeploymentStepOutcome.Done, Assert.Single(result.Steps).Outcome);
+        Assert.NotNull(Assert.Single(result.Backups).BackupPath);
+    }
+
+    [Fact]
+    public void A_bin_file_is_put_back_when_a_later_step_fails()
+    {
+        using var world = new TestWorld();
+        world.WriteGameBinFile("config/input.xml", "ORIGINAL");
+        world.WriteStorageBinFile("config/input.xml", "MOD CONTENT");
+
+        // The bin copy succeeds, then a step with no source fails the operation.
+        var plan = DeploymentPlan.Combined(
+            EnableBinPlanner.Plan(world.GameBin, world.StorageBin, new[] { "config/input.xml" }),
+            new DeploymentPlan(new[]
+            {
+                new DeploymentStep(TargetDomain.Mods, "modA", DeploymentAction.Move,
+                    Path.Combine(world.GameMods, "missing"), Path.Combine(world.GameMods, "modA"))
+            }));
+
+        var result = world.Deploy(plan, "op5");
+
+        Assert.False(result.Ok);
+        Assert.Empty(result.RollbackProblems);
+        Assert.Equal("ORIGINAL", File.ReadAllText(Path.Combine(world.GameBin, "config", "input.xml")));
+    }
+
+    [Fact]
+    public void A_bin_file_this_operation_created_is_taken_away_again_on_failure()
+    {
+        using var world = new TestWorld();
+        world.WriteStorageBinFile("config/new.xml", "MOD CONTENT");
+
+        var plan = DeploymentPlan.Combined(
+            EnableBinPlanner.Plan(world.GameBin, world.StorageBin, new[] { "config/new.xml" }),
+            new DeploymentPlan(new[]
+            {
+                new DeploymentStep(TargetDomain.Mods, "modA", DeploymentAction.Move,
+                    Path.Combine(world.GameMods, "missing"), Path.Combine(world.GameMods, "modA"))
+            }));
+
+        var result = world.Deploy(plan, "op6");
+
+        Assert.False(result.Ok);
+        Assert.False(File.Exists(Path.Combine(world.GameBin, "config", "new.xml")));
+    }
+
     /// <summary>A throwaway game/storage/staging layout so the engine can be exercised for real.</summary>
     private sealed class TestWorld : IDisposable
     {
@@ -149,16 +209,21 @@ public class DeploymentEngineTests
             _root = Path.Combine(Path.GetTempPath(), "w3mm_engine_" + Guid.NewGuid().ToString("N")[..8]);
             GameMods = Path.Combine(_root, "game", "mods");
             GameDlc = Path.Combine(_root, "game", "dlc");
+            GameBin = Path.Combine(_root, "game", "bin");
             Storage = Path.Combine(_root, "storage");
+            StorageBin = Path.Combine(Storage, "bin", "pkg");
             Staging = Path.Combine(_root, "staging");
             Directory.CreateDirectory(GameMods);
             Directory.CreateDirectory(GameDlc);
+            Directory.CreateDirectory(GameBin);
             Directory.CreateDirectory(Storage);
         }
 
         public string GameMods { get; }
         public string GameDlc { get; }
+        public string GameBin { get; }
         public string Storage { get; }
+        public string StorageBin { get; }
         public string Staging { get; }
 
         /// <summary>Plans an enable through the real planner, then executes it.</summary>
@@ -179,6 +244,10 @@ public class DeploymentEngineTests
 
         public void WriteGameDisabledFile(string folder, string relative, string content) =>
             WriteFile(Path.Combine(GameMods, "~" + folder), relative, content);
+
+        public void WriteGameBinFile(string relative, string content) => WriteFile(GameBin, relative, content);
+
+        public void WriteStorageBinFile(string relative, string content) => WriteFile(StorageBin, relative, content);
 
         private static void WriteFile(string root, string relative, string content)
         {
