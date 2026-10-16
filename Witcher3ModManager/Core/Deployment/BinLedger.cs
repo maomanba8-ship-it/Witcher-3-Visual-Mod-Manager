@@ -41,6 +41,12 @@ public enum BinRestoreReason
     /// <summary>The file is not on disk at all; leaving it that way is the honest answer.</summary>
     Missing,
 
+    /// <summary>
+    /// Nothing ever wrote this path on this package's behalf: the file, if it exists, has nothing
+    /// to do with it. Not worth telling the user about.
+    /// </summary>
+    NotOurs,
+
     /// <summary>Another package wrote after us; the content to put back is that one's.</summary>
     Superseded,
 
@@ -155,13 +161,17 @@ public sealed record BinLedger
         BinLedger? ledger,
         string packageId,
         IEnumerable<string>? paths,
-        Func<string, string?> currentSha256)
+        Func<string, string?> currentSha256,
+        IEnumerable<string>? pathsOnRecord = null)
     {
         ArgumentNullException.ThrowIfNull(currentSha256);
 
+        var onRecord = new HashSet<string>(
+            NormalizeAll(pathsOnRecord), StringComparer.OrdinalIgnoreCase);
+
         var steps = new List<BinRestoreStep>();
         foreach (var path in NormalizeAll(paths))
-            steps.Add(PlanOne(ledger, packageId, path, currentSha256));
+            steps.Add(PlanOne(ledger, packageId, path, currentSha256, onRecord));
 
         return steps;
     }
@@ -170,25 +180,38 @@ public sealed record BinLedger
         BinLedger? ledger,
         string packageId,
         string path,
-        Func<string, string?> currentSha256)
+        Func<string, string?> currentSha256,
+        IReadOnlySet<string> pathsOnRecord)
     {
         var record = ledger?.Find(path);
-        if (record is null) return Leave(path, BinRestoreReason.NoRecord);
+        var writers = record?.Writers ?? Array.Empty<BinWriter>();
+        var mine = writers
+            .Where(w => IsWrittenBy(w, packageId))
+            .ToList();
 
-        var mine = record.Writers.Where(w => IsWrittenBy(w, packageId)).ToList();
-        if (mine.Count == 0) return Leave(path, BinRestoreReason.NoRecord);
+        if (mine.Count == 0)
+        {
+            // The ledger says nothing about this package writing the file. If another record does
+            // — the ownership index, which remembers writes from before the ledger existed — then
+            // this package did write it once and it cannot be put back. Otherwise the file is none
+            // of this package's business and there is nothing to report.
+            return Leave(path, pathsOnRecord.Contains(path)
+                ? BinRestoreReason.NoRecord
+                : BinRestoreReason.NotOurs);
+        }
 
         var current = currentSha256(path);
         if (current is null) return Leave(path, BinRestoreReason.Missing);
         if (!string.Equals(current, mine[^1].Sha256, StringComparison.OrdinalIgnoreCase))
             return Leave(path, BinRestoreReason.ModifiedElsewhere);
 
-        var others = record.Writers.Where(w => !IsWrittenBy(w, packageId)).ToList();
+        var others = writers.Where(w => !IsWrittenBy(w, packageId)).ToList();
         if (others.Count > 0)
             return new BinRestoreStep(path, BinRestoreAction.WriteBack, others[^1].Sha256,
                 BinRestoreReason.Superseded);
 
-        return record.Original is null
+        // Having a claim of our own means the ledger knows this path, so record is not null here.
+        return record!.Original is null
             ? new BinRestoreStep(path, BinRestoreAction.Remove, null, BinRestoreReason.CreatedByUs)
             : new BinRestoreStep(path, BinRestoreAction.WriteBack, record.Original,
                 BinRestoreReason.BackToOriginal);

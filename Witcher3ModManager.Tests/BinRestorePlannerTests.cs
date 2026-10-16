@@ -78,19 +78,33 @@ public class BinRestorePlannerTests
     }
 
     [Fact]
-    public void Without_a_record_nothing_is_touched_and_it_says_so()
+    public void A_package_on_record_as_having_written_the_file_is_told_it_cannot_be_put_back()
     {
         using var world = new World();
-        var ledger = BinLedger.Empty.WithWrite(InputXml, "modA", "writtenHash", "original", When);
-
-        var plan = world.Plan(ledger, "modB", current: "writtenHash");
+        // The ledger has nothing (the write happened before the ledger existed), but the ownership
+        // index does.
+        var plan = world.Plan(BinLedger.Empty, "modA", current: "writtenHash", onRecord: new[] { InputXml });
 
         Assert.Empty(plan.Steps.Steps);
-        Assert.Equal(OperationNoteKind.BinNoRecord, Assert.Single(plan.Notes).Kind);
+        var note = Assert.Single(plan.Notes);
+        Assert.Equal(OperationNoteKind.BinNoRecord, note.Kind);
+        Assert.Equal(InputXml, note.Subject);
     }
 
     [Fact]
-    public void A_file_that_is_already_gone_is_reported_as_left_alone()
+    public void A_file_the_package_never_wrote_is_not_news()
+    {
+        using var world = new World();
+
+        // A fresh import that was never enabled: the file on disk belongs to something else.
+        var plan = world.Plan(BinLedger.Empty, "modB", current: "someoneElsesHash");
+
+        Assert.Empty(plan.Steps.Steps);
+        Assert.Empty(plan.Notes);
+    }
+
+    [Fact]
+    public void A_file_that_is_already_gone_is_a_clean_state_not_a_warning()
     {
         using var world = new World();
         var ledger = BinLedger.Empty.WithWrite(InputXml, "modA", "writtenHash", "original", When);
@@ -98,7 +112,8 @@ public class BinRestorePlannerTests
         var plan = world.Plan(ledger, "modA", current: null);
 
         Assert.Empty(plan.Steps.Steps);
-        Assert.Equal(OperationNoteKind.BinAlreadyGone, Assert.Single(plan.Notes).Kind);
+        // Nothing is in the game and nothing is claimed: there is nothing for the user to do.
+        Assert.Empty(plan.Notes);
     }
 
     [Fact]
@@ -178,8 +193,9 @@ public class BinRestorePlannerTests
         public string GamePath(string relative) =>
             Path.Combine(GameBin, relative.Replace('/', Path.DirectorySeparatorChar));
 
-        public BinRestorePlan Plan(BinLedger ledger, string packageId, string? current) =>
-            BinRestorePlanner.Plan(ledger, Backups, packageId, GameBin, new[] { InputXml }, _ => current);
+        public BinRestorePlan Plan(BinLedger ledger, string packageId, string? current,
+            IEnumerable<string>? onRecord = null) =>
+            BinRestorePlanner.Plan(ledger, Backups, packageId, GameBin, new[] { InputXml }, _ => current, onRecord);
 
         public void Dispose()
         {

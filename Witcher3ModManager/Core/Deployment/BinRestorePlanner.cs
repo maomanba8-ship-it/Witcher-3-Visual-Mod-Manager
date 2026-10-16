@@ -30,7 +30,8 @@ public static class BinRestorePlanner
         string packageId,
         string? gameBinRoot,
         IEnumerable<string>? relativePaths,
-        Func<string, string?> currentSha256)
+        Func<string, string?> currentSha256,
+        IEnumerable<string>? pathsOnRecord = null)
     {
         ArgumentNullException.ThrowIfNull(currentSha256);
         if (backups is null || string.IsNullOrWhiteSpace(gameBinRoot))
@@ -39,7 +40,7 @@ public static class BinRestorePlanner
         var steps = new List<DeploymentStep>();
         var notes = new List<OperationNote>();
 
-        foreach (var decision in BinLedger.PlanRestore(ledger, packageId, relativePaths, currentSha256))
+        foreach (var decision in BinLedger.PlanRestore(ledger, packageId, relativePaths, currentSha256, pathsOnRecord))
         {
             var gamePath = Path.Combine(gameBinRoot,
                 decision.Path.Replace('/', Path.DirectorySeparatorChar));
@@ -62,7 +63,10 @@ public static class BinRestorePlanner
                     break;
 
                 default:
-                    notes.Add(new OperationNote(KindFor(decision.Reason), TargetDomain.Bin, decision.Path));
+                    // Some "leave it alone" answers are not news: a file we never wrote, or one
+                    // that is already gone, is not something the user has to act on.
+                    if (IsWorthReporting(decision.Reason))
+                        notes.Add(new OperationNote(KindFor(decision.Reason), TargetDomain.Bin, decision.Path));
                     break;
             }
         }
@@ -78,4 +82,7 @@ public static class BinRestorePlanner
         BinRestoreReason.Missing => OperationNoteKind.BinAlreadyGone,
         _ => OperationNoteKind.BinNoRecord
     };
+
+    private static bool IsWorthReporting(BinRestoreReason reason) =>
+        reason is BinRestoreReason.NoRecord or BinRestoreReason.ModifiedElsewhere;
 }

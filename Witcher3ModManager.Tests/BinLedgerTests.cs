@@ -135,16 +135,29 @@ public class BinLedgerTests : IDisposable
         var step = Assert.Single(BinLedger.PlanRestore(BinLedger.Empty, "modA", new[] { InputXml }, _ => "hashA"));
 
         Assert.Equal(BinRestoreAction.LeaveAlone, step.Action);
-        Assert.Equal(BinRestoreReason.NoRecord, step.Reason);
+        // Nothing says this package ever wrote the file, so there is nothing to report either.
+        Assert.Equal(BinRestoreReason.NotOurs, step.Reason);
     }
 
     [Fact]
-    public void A_path_recorded_for_someone_else_is_not_ours_to_restore()
+    public void A_path_written_only_by_someone_else_is_not_ours_to_restore()
     {
         var ledger = BinLedger.Empty.WithWrite(InputXml, "modB", "hashB", "original", When);
 
         var step = Assert.Single(BinLedger.PlanRestore(ledger, "modA", new[] { InputXml }, _ => "hashB"));
 
+        Assert.Equal(BinRestoreReason.NotOurs, step.Reason);
+    }
+
+    [Fact]
+    public void A_package_on_record_as_having_written_the_path_is_told_it_has_no_record()
+    {
+        // The ownership index remembers writes from before the ledger existed, so this is the case
+        // where "no record" is genuine news: the file is there and cannot be put back.
+        var step = Assert.Single(BinLedger.PlanRestore(BinLedger.Empty, "modA", new[] { InputXml },
+            _ => "hashA", pathsOnRecord: new[] { InputXml }));
+
+        Assert.Equal(BinRestoreAction.LeaveAlone, step.Action);
         Assert.Equal(BinRestoreReason.NoRecord, step.Reason);
     }
 

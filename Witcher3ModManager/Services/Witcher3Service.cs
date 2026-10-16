@@ -346,7 +346,8 @@ public class Witcher3Service
                 Path.Combine(gameRoot, "bin"),
                 mod.GameBinFiles,
                 relative => BinBackupStore.HashOf(Path.Combine(
-                    gameRoot, "bin", relative.Replace('/', Path.DirectorySeparatorChar))));
+                    gameRoot, "bin", relative.Replace('/', Path.DirectorySeparatorChar))),
+                RecordedBinPaths(mod));
 
             var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
                 .Execute(DeploymentPlan.Combined(plan, binRestore.Steps), journal?.OperationId);
@@ -440,7 +441,8 @@ public class Witcher3Service
                 Path.Combine(gameRoot, "bin"),
                 mod.GameBinFiles,
                 relative => BinBackupStore.HashOf(Path.Combine(
-                    gameRoot, "bin", relative.Replace('/', Path.DirectorySeparatorChar))));
+                    gameRoot, "bin", relative.Replace('/', Path.DirectorySeparatorChar))),
+                RecordedBinPaths(mod));
 
             var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
                 .Execute(DeploymentPlan.Combined(plan, binRestore.Steps), journal?.OperationId);
@@ -793,6 +795,34 @@ public class Witcher3Service
                 updated = updated.WithoutWriter(relative, mod.Id);
             return updated;
         });
+    }
+
+    /// <summary>
+    /// Bin paths the ownership index says this package wrote. It remembers writes from before the
+    /// ledger existed, which is what lets the restore planner tell "we wrote this once and cannot
+    /// put it back" apart from "this file has nothing to do with this package".
+    /// </summary>
+    private IReadOnlyList<string> RecordedBinPaths(ModEntry mod)
+    {
+        var package = _storage?.Index.FindPackage(mod.Id);
+        if (package is null) return Array.Empty<string>();
+
+        return (package.Components ?? Array.Empty<ComponentRecord>())
+            .Where(c => c.Domain == TargetDomain.Bin)
+            .SelectMany(c => c.Targets ?? Array.Empty<TargetRecord>())
+            .Select(t => RelativeToGameBin(t.RelativePath))
+            .Where(p => p.Length > 0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Index targets are written as "bin/…" because they are relative to the game directory; the
+    /// ledger keys its records relative to the bin folder itself.
+    /// </summary>
+    private static string RelativeToGameBin(string? relativePath)
+    {
+        var path = BinLedger.Normalize(relativePath ?? "");
+        return path.StartsWith("bin/", StringComparison.OrdinalIgnoreCase) ? path[4..] : path;
     }
 
     /// <summary>
