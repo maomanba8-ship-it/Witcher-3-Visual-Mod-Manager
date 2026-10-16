@@ -178,6 +178,14 @@ public sealed class DeploymentEngine
         try
         {
             if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+
+            // Each operation uses its own folder under one root, so a finished operation leaves the
+            // root empty. Clearing that too keeps the game directory from slowly filling up with
+            // folders of ours; another operation's folder present means it stays.
+            var root = Path.GetDirectoryName(staging);
+            if (!string.IsNullOrEmpty(root) && Directory.Exists(root)
+                && !Directory.EnumerateFileSystemEntries(root).Any())
+                Directory.Delete(root);
         }
         catch
         {

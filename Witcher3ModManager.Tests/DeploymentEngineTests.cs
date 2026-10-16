@@ -230,6 +230,20 @@ public class DeploymentEngineTests
         Assert.Null(result.StagingLeftBehind);
     }
 
+    [Fact]
+    public void An_empty_staging_root_does_not_stay_behind_in_the_game_directory()
+    {
+        using var world = new TestWorld();
+        world.WriteStorageFile("modA", "content/a.txt", "AAA");
+
+        var result = world.DeployPlanned("modA", "op9");
+
+        Assert.True(result.Ok);
+        // The per-operation folder and the root that held it are both gone.
+        Assert.False(Directory.Exists(world.Staging));
+        Assert.Null(result.StagingLeftBehind);
+    }
+
     /// <summary>A throwaway game/storage/staging layout so the engine can be exercised for real.</summary>
     private sealed class TestWorld : IDisposable
     {

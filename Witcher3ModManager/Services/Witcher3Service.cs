@@ -545,7 +545,14 @@ public class Witcher3Service
                     result.Add((match.Groups[1].Value, int.Parse(match.Groups[2].Value)));
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // A failed read means "we do not know the current order", not "there is none". The
+            // write path re-reads the file itself and keeps foreign rows, so nothing is overwritten
+            // — but the priorities computed from this empty answer would be wrong, which is worth
+            // being able to see afterwards.
+            DiagnosticLog.Write($"[settings] could not read mods.settings: {ex.Message}");
+        }
         return result;
     }
 
