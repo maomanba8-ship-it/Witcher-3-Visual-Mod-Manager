@@ -9,7 +9,7 @@
 public static class AppInfo
 {
     /// <summary>Bare semantic version, without the leading "v".</summary>
-    public const string Version = "0.9.5";
+    public const string Version = "0.9.6";
 
     /// <summary>Version as shown to users.</summary>
     public const string DisplayVersion = "v" + Version;
