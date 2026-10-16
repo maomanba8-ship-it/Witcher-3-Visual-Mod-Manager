@@ -395,6 +395,17 @@ public class Witcher3Service
             var gameModsPath = GetGameModsPath();
             var storageDir = _storage?.GetModsDirectory() ?? Path.GetDirectoryName(mod.InstalledPath) ?? "";
 
+            // Directories shared between packages. Nothing may remove one of these, whatever a
+            // record says its InstalledPath is.
+            var sharedRoots = new List<string?>
+            {
+                storageDir,
+                _storage?.GetBinDirectory(),
+                gameModsPath,
+                GetGameDlcPath(),
+                Path.GetDirectoryName(gameModsPath)
+            };
+
             // Recovery for records created before folder-list plumbing: when neither
             // deployment list exists, derive it from the canonical GameModFolderName so
             // Delete can clean legacy entries (structural rule, not a per-mod case).
@@ -447,15 +458,15 @@ public class Witcher3Service
             foreach (var folder in mod.GameModFolders)
             {
                 if (IsSharedFolder(folder, mod, TargetDomain.Mods)) continue;
-                DeleteIfExists(Path.Combine(storageDir, folder), notRemoved);
+                DeleteComponent(Path.Combine(storageDir, folder), sharedRoots, notRemoved);
             }
             foreach (var dlcFolder in mod.GameDlcFolders)
             {
                 if (IsSharedFolder(dlcFolder, mod, TargetDomain.Dlc)) continue;
-                DeleteIfExists(Path.Combine(storageDir, dlcFolder), notRemoved);
+                DeleteComponent(Path.Combine(storageDir, dlcFolder), sharedRoots, notRemoved);
             }
 
-            // Delete primary installed path
+            // Delete primary installed path, unless it is one of the shared directories itself.
             if (!string.IsNullOrEmpty(mod.InstalledPath))
             {
                 var primaryName = Path.GetFileName(mod.InstalledPath.TrimEnd('\\', '/'));
@@ -464,7 +475,7 @@ public class Witcher3Service
                 var sharedPrimary = IsSharedFolder(primaryName, mod, TargetDomain.Mods)
                                  || IsSharedFolder(primaryName, mod, TargetDomain.Dlc);
                 if (!sharedPrimary)
-                    DeleteIfExists(mod.InstalledPath, notRemoved);
+                    DeleteComponent(mod.InstalledPath, sharedRoots, notRemoved);
             }
 
             // A folder that could not be deleted stops the operation here: mods.settings and the
@@ -793,8 +804,31 @@ public class Witcher3Service
     {
         if (!string.IsNullOrEmpty(mod.BinStoragePath) && Directory.Exists(mod.BinStoragePath))
         {
+            var sharedRoots = new[] { _storage?.GetBinDirectory() };
+            if (!RemovableTarget.IsComponent(mod.BinStoragePath, sharedRoots))
+            {
+                DiagnosticLog.Write($"[delete] refused to remove a shared directory: {mod.BinStoragePath}");
+                return;
+            }
+
             try { Directory.Delete(mod.BinStoragePath, true); } catch { }
         }
+    }
+
+    /// <summary>
+    /// Removes one component path, refusing the directories the manager shares between packages.
+    /// A refusal is logged rather than reported as a failure: nothing the user asked for was left
+    /// behind, and reporting it would suggest the delete did not work.
+    /// </summary>
+    private static void DeleteComponent(string path, IEnumerable<string?> sharedRoots, ICollection<string> notRemoved)
+    {
+        if (!RemovableTarget.IsComponent(path, sharedRoots))
+        {
+            DiagnosticLog.Write($"[delete] refused to remove a shared directory: {path}");
+            return;
+        }
+
+        DeleteIfExists(path, notRemoved);
     }
 
     private bool IsSharedFolder(string folder, ModEntry current, TargetDomain domain)
