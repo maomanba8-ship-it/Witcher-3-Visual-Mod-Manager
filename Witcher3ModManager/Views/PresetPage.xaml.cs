@@ -190,7 +190,12 @@ public partial class PresetPage : UserControl
             var troubled = new List<string>();
             foreach (var mod in allMods)
             {
-                bool shouldEnable = false; foreach (var f in mod.GameModFolders) { if (preset.ModStates.TryGetValue(f, out var en) && en) { shouldEnable = true; break; } }
+                // A new preset names the package; an old one names folders. Either way, a package
+                // the preset does not mention is one it does not want enabled.
+                var folders = mod.GameModFolders.Concat(mod.GameDlcFolders);
+                var wanted = Core.Deployment.PresetSelection.Wanted(
+                    mod.Id, folders, preset.ModStates, preset.Version);
+                var shouldEnable = wanted ?? false;
                 
                 if (shouldEnable && !mod.IsEnabled)
                 {

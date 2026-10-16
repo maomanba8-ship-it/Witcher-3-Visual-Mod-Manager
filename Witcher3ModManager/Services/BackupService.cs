@@ -47,7 +47,8 @@ public class BackupService
             return result;
 
         var backupRoot = GetBackupRoot();
-        var modBackupDir = Path.Combine(backupRoot, "Mods", mod.Name);
+        var modBackupDir = Path.Combine(backupRoot, "Mods",
+            Core.Deployment.PackageStorageKey.For(mod.Id, mod.Name));
 
         try
         {

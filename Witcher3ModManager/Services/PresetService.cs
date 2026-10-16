@@ -41,6 +41,7 @@ public class PresetService
         {
             Name = name,
             CreatedAt = DateTime.Now,
+            Version = Core.Deployment.PresetSelection.CurrentVersion,
             ModStates = BuildPresetStates(mods)
         };
 
@@ -71,7 +72,21 @@ public class PresetService
         catch { return null; }
     }
 
-    private static Dictionary<string, bool> BuildPresetStates(List<ModEntry> mods) { var s = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase); foreach (var m in mods) { foreach (var f in m.GameModFolders) s[f] = m.IsEnabled; foreach (var f in m.GameDlcFolders) s[f] = m.IsEnabled; } return s; }
+    /// <summary>
+    /// One entry per record, keyed by its id. A package's components share one enabled state, so a
+    /// preset has one opinion per package — the per-folder entries the old shape needed only
+    /// existed because matching happened by folder name.
+    /// </summary>
+    private static Dictionary<string, bool> BuildPresetStates(List<ModEntry> mods)
+    {
+        var states = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mod in mods)
+        {
+            if (string.IsNullOrWhiteSpace(mod.Id)) continue;
+            states[mod.Id] = mod.IsEnabled;
+        }
+        return states;
+    }
 
     private static string GetSafeFileName(string name)
     {
