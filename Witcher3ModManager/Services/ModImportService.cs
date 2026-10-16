@@ -1019,9 +1019,10 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
         var binRoot = binDirs.Length > 0 ? binDirs[0].FullName : Path.Combine(extractDir, "bin");
         var parentDir = new DirectoryInfo(binRoot).Parent;
-        var inferredName = parentDir != null && !string.Equals(parentDir.Name, Path.GetFileName(extractDir), StringComparison.OrdinalIgnoreCase)
-            ? parentDir.Name
-            : new DirectoryInfo(extractDir).Name;
+        // The extraction directory is this manager's own temporary folder, so it is not a name: the
+        // rule lives in Core where it can be tested without an archive.
+        var inferredName = Witcher3ModManager.Core.Analysis.BinOnlyPackageName.From(
+            parentDir?.Name, new DirectoryInfo(extractDir).Name, archiveName);
 
         var entry = new ModEntry
         {
