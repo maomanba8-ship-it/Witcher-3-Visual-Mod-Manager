@@ -17,6 +17,17 @@ public class AppInfoTests
     }
 
     [Fact]
+    public void Packaging_metadata_matches_the_app_version()
+    {
+        // The exe carries a version of its own so Explorer shows it. MSBuild cannot read the C#
+        // constant, so the number is written twice on purpose — and this test is what stops the
+        // two from drifting apart, which is exactly how the display version once fell behind.
+        var csproj = Path.Combine(FindAppProjectRoot(), "Witcher3ModManager.csproj");
+
+        Assert.Contains($"<Version>{AppInfo.Version}</Version>", File.ReadAllText(csproj), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_version_literal_lives_only_in_AppInfo()
     {
         // Guards the whole point of having a single source: the UI, the localisation tables and

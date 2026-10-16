@@ -8,6 +8,11 @@
     <UseWPF>true</UseWPF>
     <DebuggerSupport>false</DebuggerSupport>
     <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
+    <!-- Packaging metadata, so the built exe reports the same version as the app shows. The
+         number is restated here because MSBuild cannot read the C# constant; the test
+         Packaging_metadata_matches_the_app_version fails if the two ever drift apart. -->
+    <Version>0.9.6</Version>
+    <Product>巫师3 Mod 管理器</Product>
   </PropertyGroup>
 
   <ItemGroup>
