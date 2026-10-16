@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Witcher3ModManager.Core.Analysis;
@@ -8,7 +7,7 @@ using Xunit;
 
 namespace Witcher3ModManager.Tests;
 
-public class EnableDeployerTests
+public class DeploymentEngineTests
 {
     [Fact]
     public void A_storage_folder_is_copied_into_the_game_directory()
@@ -16,7 +15,7 @@ public class EnableDeployerTests
         using var world = new TestWorld();
         world.WriteStorageFile("modA", "content/a.txt", "AAA");
 
-        var result = world.Deploy(world.PlanFor("modA"));
+        var result = world.DeployPlanned("modA");
 
         Assert.True(result.Ok);
         Assert.Equal("AAA", File.ReadAllText(Path.Combine(world.GameMods, "modA", "content", "a.txt")));
@@ -29,7 +28,7 @@ public class EnableDeployerTests
         using var world = new TestWorld();
         world.WriteGameDisabledFile("modA", "content/a.txt", "DISABLED");
 
-        var result = world.Deploy(world.PlanFor("modA"));
+        var result = world.DeployPlanned("modA");
 
         Assert.True(result.Ok);
         Assert.True(Directory.Exists(Path.Combine(world.GameMods, "modA")));
@@ -38,36 +37,36 @@ public class EnableDeployerTests
     }
 
     [Fact]
-    public void An_occupied_target_is_backed_up_instead_of_deleted()
+    public void An_occupied_destination_is_backed_up_instead_of_deleted()
     {
         using var world = new TestWorld();
         world.WriteGameEnabledFile("modA", "content/a.txt", "OLD");
         world.WriteGameDisabledFile("modA", "content/a.txt", "NEW");
 
-        var result = world.Deploy(world.PlanFor("modA"), operationId: "op1");
+        var result = world.DeployPlanned("modA", operationId: "op1");
 
         Assert.True(result.Ok);
         Assert.Equal("NEW", File.ReadAllText(Path.Combine(world.GameMods, "modA", "content", "a.txt")));
 
-        // A backup was taken and then cleaned up, because the operation finished. That the backup
-        // really held the previous content is shown by the rollback tests below, where an
-        // unfinished operation puts it back.
-        var backup = Assert.Single(result.Backups).BackupPath;
-        Assert.NotNull(backup);
+        // A backup was taken and then cleaned up, because the operation finished. That it really
+        // held the previous content is shown by the rollback tests below.
+        Assert.NotNull(Assert.Single(result.Backups).BackupPath);
         Assert.False(Directory.Exists(Path.Combine(world.Staging, "op1")));
     }
 
     [Fact]
-    public void Nothing_is_touched_when_a_plan_has_no_work()
+    public void Nothing_is_touched_when_a_plan_has_nothing_to_do()
     {
         using var world = new TestWorld();
         world.WriteGameEnabledFile("modA", "content/a.txt", "KEEP");
         world.WriteStorageFile("modA", "content/a.txt", "IGNORED");
 
-        var result = world.Deploy(world.PlanFor("modA"));
+        var result = world.DeployPlanned("modA");
 
         Assert.True(result.Ok);
-        Assert.Empty(result.Steps);
+        // The step is recorded as a skip so a caller can explain why nothing happened.
+        Assert.Equal(DeploymentStepOutcome.Skipped, Assert.Single(result.Steps).Outcome);
+        Assert.False(Directory.Exists(Path.Combine(world.Staging, "unidentified")));
         Assert.Equal("KEEP", File.ReadAllText(Path.Combine(world.GameMods, "modA", "content", "a.txt")));
     }
 
@@ -75,75 +74,79 @@ public class EnableDeployerTests
     public void A_failure_part_way_through_puts_the_finished_steps_back()
     {
         using var world = new TestWorld();
-        // Step one is a plain copy; step two points at storage that does not exist.
         world.WriteStorageFile("modA", "content/a.txt", "AAA");
 
-        var plan = new EnablePlan(new[]
+        var result = world.Deploy(new DeploymentPlan(new[]
         {
-            new EnablePlanStep(TargetDomain.Mods, "modA",
-                Path.Combine(world.GameMods, "modA"),
-                Path.Combine(world.GameMods, "~modA"),
-                Path.Combine(world.Storage, "modA"), TargetOccupied: false,
-                EnableAction.CopyFromStorage),
-            new EnablePlanStep(TargetDomain.Mods, "modB",
-                Path.Combine(world.GameMods, "modB"),
-                Path.Combine(world.GameMods, "~modB"),
-                Path.Combine(world.Storage, "modB"), TargetOccupied: false,
-                EnableAction.CopyFromStorage)
-        });
-
-        var result = world.Deploy(plan);
+            new DeploymentStep(TargetDomain.Mods, "modA", DeploymentAction.Copy,
+                Path.Combine(world.Storage, "modA"), Path.Combine(world.GameMods, "modA")),
+            // Step two points at storage that does not exist, so it has to fail.
+            new DeploymentStep(TargetDomain.Mods, "modB", DeploymentAction.Copy,
+                Path.Combine(world.Storage, "modB"), Path.Combine(world.GameMods, "modB"))
+        }));
 
         Assert.False(result.Ok);
         Assert.NotNull(result.Failure);
         Assert.Empty(result.RollbackProblems);
-        // modA was copied, then undone: the game directory is back to how it started.
+        // modA was copied and then undone: the game directory is back to how it started.
         Assert.False(Directory.Exists(Path.Combine(world.GameMods, "modA")));
     }
 
     [Fact]
-    public void A_failure_after_replacing_an_occupied_target_restores_both_sides()
+    public void A_failure_after_replacing_an_occupied_destination_restores_both_sides()
     {
         using var world = new TestWorld();
         world.WriteGameEnabledFile("modA", "content/a.txt", "OLD");
         world.WriteGameDisabledFile("modA", "content/a.txt", "NEW");
 
-        var plan = new EnablePlan(new[]
+        var result = world.Deploy(new DeploymentPlan(new[]
         {
-            new EnablePlanStep(TargetDomain.Mods, "modA",
-                Path.Combine(world.GameMods, "modA"),
-                Path.Combine(world.GameMods, "~modA"),
-                null, TargetOccupied: true,
-                EnableAction.RestoreDisabledFolder),
-            new EnablePlanStep(TargetDomain.Mods, "modB",
-                Path.Combine(world.GameMods, "modB"),
-                Path.Combine(world.GameMods, "~modB"),
-                Path.Combine(world.Storage, "modB"), TargetOccupied: false,
-                EnableAction.CopyFromStorage)
-        });
-
-        var result = world.Deploy(plan, operationId: "op2");
+            new DeploymentStep(TargetDomain.Mods, "modA", DeploymentAction.Move,
+                Path.Combine(world.GameMods, "~modA"), Path.Combine(world.GameMods, "modA")),
+            new DeploymentStep(TargetDomain.Mods, "modB", DeploymentAction.Copy,
+                Path.Combine(world.Storage, "modB"), Path.Combine(world.GameMods, "modB"))
+        }), operationId: "op2");
 
         Assert.False(result.Ok);
         Assert.Empty(result.RollbackProblems);
-        // The disabled marker is back, and so is the content that used to sit at the target.
+        // The disabled marker is back, and so is the content that used to sit at the destination.
         Assert.True(Directory.Exists(Path.Combine(world.GameMods, "~modA")));
         Assert.Equal("NEW", File.ReadAllText(Path.Combine(world.GameMods, "~modA", "content", "a.txt")));
         Assert.Equal("OLD", File.ReadAllText(Path.Combine(world.GameMods, "modA", "content", "a.txt")));
 
         // Rolling back puts the files back, but the staging copy stays: an unfinished operation
-        // has to keep whatever it would need to be undone again.
+        // keeps whatever it would need to be undone again.
         Assert.True(Directory.Exists(Path.Combine(world.Staging, "op2")));
     }
 
-    /// <summary>A throwaway game/storage/staging layout so the deployer can be exercised for real.</summary>
+    [Fact]
+    public void A_stash_step_moves_things_out_of_the_way_and_can_be_undone()
+    {
+        using var world = new TestWorld();
+        world.WriteGameEnabledFile("modA", "content/a.txt", "CONTENT");
+
+        var result = world.Deploy(new DeploymentPlan(new[]
+        {
+            new DeploymentStep(TargetDomain.Mods, "modA", DeploymentAction.Stash,
+                Path.Combine(world.GameMods, "modA"), ""),
+            new DeploymentStep(TargetDomain.Mods, "modB", DeploymentAction.Copy,
+                Path.Combine(world.Storage, "modB"), Path.Combine(world.GameMods, "modB"))
+        }), operationId: "op3");
+
+        Assert.False(result.Ok);
+        Assert.Empty(result.RollbackProblems);
+        // The stashed folder is back where it was, with its content.
+        Assert.Equal("CONTENT", File.ReadAllText(Path.Combine(world.GameMods, "modA", "content", "a.txt")));
+    }
+
+    /// <summary>A throwaway game/storage/staging layout so the engine can be exercised for real.</summary>
     private sealed class TestWorld : IDisposable
     {
         private readonly string _root;
 
         public TestWorld()
         {
-            _root = Path.Combine(Path.GetTempPath(), "w3mm_deploy_" + Guid.NewGuid().ToString("N")[..8]);
+            _root = Path.Combine(Path.GetTempPath(), "w3mm_engine_" + Guid.NewGuid().ToString("N")[..8]);
             GameMods = Path.Combine(_root, "game", "mods");
             GameDlc = Path.Combine(_root, "game", "dlc");
             Storage = Path.Combine(_root, "storage");
@@ -158,11 +161,15 @@ public class EnableDeployerTests
         public string Storage { get; }
         public string Staging { get; }
 
-        public EnablePlan PlanFor(string folder) =>
-            EnablePlanner.Plan(GameMods, GameDlc, Storage, new[] { folder }, null);
+        /// <summary>Plans an enable through the real planner, then executes it.</summary>
+        public DeploymentResult DeployPlanned(string folder, string? operationId = null)
+        {
+            var plan = EnablePlanner.Plan(GameMods, GameDlc, Storage, new[] { folder }, null);
+            return Deploy(plan.ToDeploymentPlan(), operationId);
+        }
 
-        public DeploymentResult Deploy(EnablePlan plan, string? operationId = null) =>
-            new EnableDeployer(Staging).Execute(plan, operationId);
+        public DeploymentResult Deploy(DeploymentPlan plan, string? operationId = null) =>
+            new DeploymentEngine(Staging).Execute(plan, operationId);
 
         public void WriteStorageFile(string folder, string relative, string content) =>
             WriteFile(Path.Combine(Storage, folder), relative, content);

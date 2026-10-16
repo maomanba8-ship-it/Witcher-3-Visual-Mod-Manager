@@ -128,8 +128,8 @@ public class Witcher3Service
                 mod.GameDlcFolders);
 
             var gameRoot = Path.GetDirectoryName(gameModsPath) ?? gameModsPath;
-            var result = new EnableDeployer(Path.Combine(gameRoot, StagingFolderName))
-                .Execute(plan, journal?.OperationId);
+            var result = new DeploymentEngine(Path.Combine(gameRoot, StagingFolderName))
+                .Execute(plan.ToDeploymentPlan(), journal?.OperationId);
 
             foreach (var step in result.Steps.Where(s => s.Outcome == DeploymentStepOutcome.Skipped))
                 DiagnosticLog.Write($"[deploy] nothing to do for {step.Target} ({step.Action})");

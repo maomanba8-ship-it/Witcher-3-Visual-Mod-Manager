@@ -10,20 +10,19 @@ public enum DeploymentStepOutcome
 }
 
 /// <summary>
-/// What happened to one planned step. BackupPath is set when something previously at the target
-/// was moved aside, which is what makes the step reversible.
+/// What happened to one step. BackupPath is set when something previously at the destination was
+/// moved aside, which is what makes the step reversible.
 /// </summary>
 public sealed record DeploymentStepResult(
     string Target,
-    EnableAction Action,
+    DeploymentAction Action,
     DeploymentStepOutcome Outcome,
     string? BackupPath = null,
     string? Detail = null);
 
 /// <summary>
-/// The result of one deployment. When it failed, RollbackProblems names anything that could not
-/// be undone: an operation that cannot restore the previous state must say so rather than claim
-/// it is fine.
+/// The result of one deployment. When it failed, RollbackProblems names anything that could not be
+/// undone: an operation that cannot restore the previous state has to say so.
 /// </summary>
 public sealed record DeploymentResult(
     bool Ok,
@@ -36,43 +35,51 @@ public sealed record DeploymentResult(
 }
 
 /// <summary>
-/// Carries out an enable plan. It makes no decisions of its own: the plan already says which
-/// folders are involved and what has to happen to each.
+/// Carries out a plan. It makes no decisions: the plan already says what happens where.
 ///
-/// The one thing this adds over the previous inline code is that nothing is ever deleted outright.
-/// When a target is occupied, whatever is there is moved into this operation's staging folder
-/// first, and every completed step registers how to undo itself, so a failure part-way through
-/// can put things back instead of leaving half an enable behind.
+/// Two rules apply to every operation that goes through here, which is the point of having one
+/// engine instead of one code path per operation:
+///
+/// 1. Nothing at a destination is ever deleted outright. It is moved into this operation's staging
+///    area first, so the step can be undone and the content is not gone until the operation as a
+///    whole has succeeded.
+/// 2. Every completed step registers how to undo itself, so a failure part-way through puts things
+///    back instead of leaving half an operation behind.
 /// </summary>
-public sealed class EnableDeployer
+public sealed class DeploymentEngine
 {
     private readonly string _stagingRoot;
 
-    public EnableDeployer(string stagingRoot)
+    public DeploymentEngine(string stagingRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stagingRoot);
         _stagingRoot = stagingRoot;
     }
 
-    public DeploymentResult Execute(EnablePlan? plan, string? operationId = null)
+    public DeploymentResult Execute(DeploymentPlan? plan, string? operationId = null)
     {
         var steps = new List<DeploymentStepResult>();
         var undos = new List<(Action Undo, string Description)>();
         var staging = Path.Combine(_stagingRoot, string.IsNullOrWhiteSpace(operationId) ? "unidentified" : operationId);
-        var work = (plan ?? EnablePlan.Empty).Work;
         string? failure = null;
 
-        foreach (var step in work)
+        foreach (var step in (plan ?? DeploymentPlan.Empty).Steps)
         {
+            if (step.Action == DeploymentAction.NothingToDo)
+            {
+                steps.Add(new DeploymentStepResult(step.DestinationPath, step.Action, DeploymentStepOutcome.Skipped));
+                continue;
+            }
+
             try
             {
                 steps.Add(ExecuteStep(step, staging, undos));
             }
             catch (Exception ex)
             {
-                steps.Add(new DeploymentStepResult(step.TargetPath, step.Action,
+                steps.Add(new DeploymentStepResult(step.DestinationPath, step.Action,
                     DeploymentStepOutcome.Failed, Detail: ex.Message));
-                failure = $"{step.Action} failed for {step.TargetPath}: {ex.Message}";
+                failure = $"{step.Action} failed for {step.DestinationPath}: {ex.Message}";
                 break;
             }
         }
@@ -90,42 +97,33 @@ public sealed class EnableDeployer
     }
 
     private static DeploymentStepResult ExecuteStep(
-        EnablePlanStep step,
+        DeploymentStep step,
         string staging,
         List<(Action Undo, string Description)> undos)
     {
-        switch (step.Action)
+        var destination = step.Action == DeploymentAction.Stash
+            ? Path.Combine(staging, step.Domain.ToString(), step.Subject)
+            : step.DestinationPath;
+
+        // Whatever is already at the destination goes to staging rather than being deleted.
+        string? backup = null;
+        if (Directory.Exists(destination) || File.Exists(destination))
         {
-            case EnableAction.CopyFromStorage:
-            {
-                if (step.StorageSourcePath is null)
-                    throw new InvalidOperationException("no storage source recorded for this step");
-
-                MoveOrCopy(step.StorageSourcePath, step.TargetPath);
-                undos.Add((() => RemoveCreated(step.TargetPath), $"remove the copy at {step.TargetPath}"));
-                return new DeploymentStepResult(step.TargetPath, step.Action, DeploymentStepOutcome.Done);
-            }
-
-            case EnableAction.RestoreDisabledFolder:
-            {
-                string? backup = null;
-                if (step.TargetOccupied)
-                {
-                    // Never delete what is sitting there: move it aside so this step can be undone.
-                    backup = Path.Combine(staging, step.Domain.ToString(), step.Folder);
-                    MoveOrCopy(step.TargetPath, backup);
-                    undos.Add((() => MoveOrCopy(backup, step.TargetPath), $"put back {step.TargetPath}"));
-                }
-
-                MoveOrCopy(step.DisabledPath, step.TargetPath);
-                undos.Add((() => MoveOrCopy(step.TargetPath, step.DisabledPath), $"re-disable {step.TargetPath}"));
-
-                return new DeploymentStepResult(step.TargetPath, step.Action, DeploymentStepOutcome.Done, backup);
-            }
-
-            default:
-                return new DeploymentStepResult(step.TargetPath, step.Action, DeploymentStepOutcome.Skipped);
+            backup = Path.Combine(staging, "occupied", step.Domain.ToString(), step.Subject);
+            MoveOrCopy(destination, backup);
+            undos.Add((() => MoveOrCopy(backup, destination), $"put back {destination}"));
         }
+
+        if (step.Action == DeploymentAction.Copy)
+            CopyDirectory(step.SourcePath, destination);
+        else
+            MoveOrCopy(step.SourcePath, destination);
+
+        undos.Add(step.Action == DeploymentAction.Copy
+            ? (() => RemoveCreated(destination), $"remove the copy at {destination}")
+            : (() => MoveOrCopy(destination, step.SourcePath), $"move {destination} back"));
+
+        return new DeploymentStepResult(destination, step.Action, DeploymentStepOutcome.Done, backup);
     }
 
     private static IReadOnlyList<string> RollBack(List<(Action Undo, string Description)> undos)
@@ -168,8 +166,8 @@ public sealed class EnableDeployer
     }
 
     /// <summary>
-    /// Moves when it can and copies when it cannot, which keeps the common case cheap and still
-    /// works when the staging folder lives on another volume than the game directory.
+    /// Moves when it can and copies when it cannot, so the common case (staging beside the game
+    /// directory) costs a rename and a cross-volume case still works.
     /// </summary>
     private static void MoveOrCopy(string source, string destination)
     {

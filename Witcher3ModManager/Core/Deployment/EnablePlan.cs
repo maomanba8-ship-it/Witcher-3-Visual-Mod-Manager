@@ -52,4 +52,22 @@ public sealed record EnablePlan(IReadOnlyList<EnablePlanStep> Steps)
     /// <summary>True when a step would replace something already sitting at the target name.</summary>
     public bool ReplacesOccupiedTarget =>
         Work.Any(s => s.Action == EnableAction.RestoreDisabledFolder && s.TargetOccupied);
+
+    /// <summary>
+    /// Translates the decisions into mechanical steps. The planner says which case each folder is
+    /// in; the engine only needs to know what to do with a source and a destination.
+    /// </summary>
+    public DeploymentPlan ToDeploymentPlan() =>
+        new(Steps.Select(step => new DeploymentStep(
+                step.Domain,
+                step.Folder,
+                step.Action switch
+                {
+                    EnableAction.RestoreDisabledFolder => DeploymentAction.Move,
+                    EnableAction.CopyFromStorage => DeploymentAction.Copy,
+                    _ => DeploymentAction.NothingToDo
+                },
+                step.Action == EnableAction.RestoreDisabledFolder ? step.DisabledPath : step.StorageSourcePath ?? "",
+                step.TargetPath))
+            .ToList());
 }
