@@ -14,7 +14,8 @@ public static class LegacyLibraryAuditor
     public static LegacyLibraryAudit Audit(
         IEnumerable<LegacyLibraryEntry>? entries,
         Func<string, bool>? storageFolderExists = null,
-        Func<string, bool, bool>? gameFolderExists = null)
+        Func<string, bool, bool>? gameFolderExists = null,
+        IReadOnlyList<Core.Deployment.TargetDrift>? drifts = null)
     {
         var list = (entries ?? Enumerable.Empty<LegacyLibraryEntry>())
             .Where(e => e is not null)
@@ -50,8 +51,38 @@ public static class LegacyLibraryAuditor
         }
 
         AddSharedFolderFindings(findings, list);
+        AddDriftFindings(findings, drifts);
 
         return new LegacyLibraryAudit(list.Count, findings);
+    }
+
+    /// <summary>
+    /// Things the index says are deployed but are not there any more, or no longer hold what this
+    /// manager wrote. Grouped per record and kind, because a report reads better as "these files of
+    /// this mod were changed" than as one line per file.
+    /// </summary>
+    private static void AddDriftFindings(
+        List<LegacyAuditFinding> findings,
+        IReadOnlyList<Core.Deployment.TargetDrift>? drifts)
+    {
+        var byRecord = (drifts ?? Array.Empty<Core.Deployment.TargetDrift>())
+            .GroupBy(d => (d.DisplayName, d.Kind))
+            .OrderBy(g => g.Key.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Key.Kind);
+
+        foreach (var group in byRecord)
+        {
+            findings.Add(new LegacyAuditFinding(
+                group.Key.Kind == Core.Deployment.DriftKind.Missing
+                    ? LegacyAuditKind.DeployedTargetMissing
+                    : LegacyAuditKind.DeployedTargetModified,
+                new[] { string.IsNullOrWhiteSpace(group.Key.DisplayName) ? "?" : group.Key.DisplayName },
+                group.Select(d => d.RelativePath)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                    .ToList()));
+        }
     }
 
     private static void AddDuplicateTargetFindings(

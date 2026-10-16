@@ -127,6 +127,8 @@ public partial class LibraryAuditDialog : Window
             LegacyAuditKind.DuplicateTargetFolder => string.Format(t.T("audit.line.duplicate"), entries, subjects),
             LegacyAuditKind.SharedFolder => string.Format(t.T("audit.line.shared"), subjects, entries),
             LegacyAuditKind.EnabledButMissingInGame => string.Format(t.T("audit.line.enabled_missing"), entries, subjects),
+            LegacyAuditKind.DeployedTargetMissing => string.Format(t.T("audit.line.deployed_missing"), entries, subjects),
+            LegacyAuditKind.DeployedTargetModified => string.Format(t.T("audit.line.deployed_modified"), entries, subjects),
             _ => entries
         };
     }
@@ -139,6 +141,8 @@ public partial class LibraryAuditDialog : Window
         LegacyAuditKind.DuplicateTargetFolder => "audit.kind.duplicate",
         LegacyAuditKind.SharedFolder => "audit.kind.shared",
         LegacyAuditKind.EnabledButMissingInGame => "audit.kind.enabled_missing",
+        LegacyAuditKind.DeployedTargetMissing => "audit.kind.deployed_missing",
+        LegacyAuditKind.DeployedTargetModified => "audit.kind.deployed_modified",
         _ => "audit.kind.other"
     };
 

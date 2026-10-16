@@ -34,7 +34,13 @@ public enum LegacyAuditKind
     SharedFolder,
 
     /// <summary>Enabled, but none of its folders are present in the game directory.</summary>
-    EnabledButMissingInGame
+    EnabledButMissingInGame,
+
+    /// <summary>A target the index says was deployed is not in the game directory any more.</summary>
+    DeployedTargetMissing,
+
+    /// <summary>A deployed target no longer holds the content this manager wrote there.</summary>
+    DeployedTargetModified
 }
 
 /// <summary>

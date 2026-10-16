@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Core.Migration;
 using Xunit;
 
@@ -146,6 +148,81 @@ public class LegacyLibraryAuditorTests
         Assert.Equal(0, audit.EntryCount);
         Assert.Empty(audit.Findings);
     }
+
+    [Fact]
+    public void A_target_that_is_gone_is_reported_as_a_missing_deployment()
+    {
+        var audit = LegacyLibraryAuditor.Audit(
+            new[] { Entry("modA", mods: new[] { "modA" }) },
+            drifts: new[] { Drift("modA", "modA", @"mods\modA", DriftKind.Missing) });
+
+        var finding = Assert.Single(audit.Findings);
+        Assert.Equal(LegacyAuditKind.DeployedTargetMissing, finding.Kind);
+        Assert.Equal(new[] { "modA" }, finding.Entries);
+        Assert.Equal(new[] { @"mods\modA" }, finding.Subjects);
+    }
+
+    [Fact]
+    public void A_target_whose_content_changed_is_reported_separately()
+    {
+        var audit = LegacyLibraryAuditor.Audit(
+            new[] { Entry("modA", mods: new[] { "modA" }) },
+            drifts: new[]
+            {
+                Drift("modA", "modA", @"mods\modB", DriftKind.Missing),
+                Drift("modA", "modA", @"mods\modA", DriftKind.Modified)
+            });
+
+        Assert.Equal(new[] { LegacyAuditKind.DeployedTargetMissing, LegacyAuditKind.DeployedTargetModified },
+            audit.Findings.Select(f => f.Kind));
+    }
+
+    [Fact]
+    public void Drifts_about_one_record_are_grouped_into_one_line_each()
+    {
+        var audit = LegacyLibraryAuditor.Audit(
+            new[] { Entry("modA", mods: new[] { "modA" }) },
+            drifts: new[]
+            {
+                Drift("modA", "modA", @"mods\modB", DriftKind.Missing),
+                Drift("modA", "modA", @"mods\modA", DriftKind.Missing),
+                Drift("modA", "modA", @"mods\modA", DriftKind.Missing)
+            });
+
+        var finding = Assert.Single(audit.Findings);
+        // One line per record, with the paths in order and each only once.
+        Assert.Equal(new[] { @"mods\modA", @"mods\modB" }, finding.Subjects);
+    }
+
+    [Fact]
+    public void Drifts_from_two_records_are_kept_apart()
+    {
+        var audit = LegacyLibraryAuditor.Audit(
+            new[] { Entry("modA", mods: new[] { "modA" }), Entry("modB", mods: new[] { "modB" }) },
+            drifts: new[]
+            {
+                Drift("pkgA", "modA", @"mods\modA", DriftKind.Missing),
+                Drift("pkgB", "modB", @"mods\modB", DriftKind.Missing)
+            });
+
+        Assert.Equal(2, audit.Findings.Count);
+        Assert.Equal(new[] { "modA", "modB" },
+            audit.Findings.Select(f => f.Entries.Single()).OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Without_drifts_nothing_is_reported_about_deployed_content()
+    {
+        var audit = LegacyLibraryAuditor.Audit(
+            new[] { Entry("modA", mods: new[] { "modA" }) },
+            drifts: Array.Empty<TargetDrift>());
+
+        Assert.Empty(audit.Findings);
+        Assert.True(audit.IsClean);
+    }
+
+    private static TargetDrift Drift(string packageId, string displayName, string relativePath, DriftKind kind) =>
+        new(packageId, displayName, TargetDomain.Mods, relativePath, kind);
 
     private static LegacyLibraryEntry Entry(
         string name,

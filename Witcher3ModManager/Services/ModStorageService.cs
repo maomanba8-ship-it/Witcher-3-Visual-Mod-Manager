@@ -460,12 +460,71 @@ public class ModStorageService
         var gameMods = hasGame ? Path.Combine(gamePath!, "mods") : null;
         var gameDlc = hasGame ? Path.Combine(gamePath!, "dlc") : null;
 
+        // What the index says is deployed, compared with what is there now. Read-only: the report
+        // names the difference instead of "fixing" it, because the disk is the truth and a silent
+        // repair would throw away whatever someone else put there.
+        var drifts = hasGame
+            ? Core.Deployment.DeploymentDrift.Find(_index, target => PresenceOf(gamePath!, target))
+            : Array.Empty<Core.Deployment.TargetDrift>();
+
         return Core.Migration.LegacyLibraryAuditor.Audit(
             entries,
             folder => Directory.Exists(Path.Combine(_modsDir, folder)),
             hasGame
                 ? (folder, isDlc) => Directory.Exists(Path.Combine(isDlc ? gameDlc! : gameMods!, folder))
-                : null);
+                : null,
+            drifts);
+    }
+
+    /// <summary>
+    /// Whether a recorded target still holds what this manager wrote. Two details matter:
+    ///
+    /// - A folder renamed to its disabled form ("~name") counts as present: that is this manager's
+    ///   own way of turning a mod off, not drift.
+    /// - A folder's content is compared as a component fingerprint and a file's as a hash, using the
+    ///   same computations the index was written with.
+    /// </summary>
+    private static Core.Deployment.TargetPresence PresenceOf(string gamePath, Core.Deployment.DeployedTarget deployed)
+    {
+        var relative = (deployed.Target.RelativePath ?? "").Replace('/', Path.DirectorySeparatorChar);
+        if (relative.Length == 0) return Core.Deployment.TargetPresence.Missing;
+
+        var full = Path.Combine(gamePath, relative);
+
+        if (deployed.Target.Kind == Core.Deployment.TargetKind.File)
+        {
+            if (!File.Exists(full)) return Core.Deployment.TargetPresence.Missing;
+
+            var hash = Core.Deployment.DeployedContent.FileHash(full);
+            // A file that cannot be read is "cannot tell", and cannot-tell must never be presented
+            // as evidence of a change.
+            if (hash is null) return Core.Deployment.TargetPresence.Present;
+
+            return string.Equals(hash, deployed.Target.WrittenHash, StringComparison.OrdinalIgnoreCase)
+                ? Core.Deployment.TargetPresence.Present
+                : Core.Deployment.TargetPresence.Modified;
+        }
+
+        if (Directory.Exists(full))
+        {
+            var fingerprint = Core.Deployment.DeployedContent.FolderFingerprint(
+                full, deployed.PackageId, deployed.Domain);
+
+            if (fingerprint is null) return Core.Deployment.TargetPresence.Present;
+
+            return string.Equals(fingerprint, deployed.Target.WrittenHash, StringComparison.OrdinalIgnoreCase)
+                ? Core.Deployment.TargetPresence.Present
+                : Core.Deployment.TargetPresence.Modified;
+        }
+
+        var parent = Path.GetDirectoryName(full);
+        var disabled = string.IsNullOrEmpty(parent)
+            ? null
+            : Path.Combine(parent, "~" + Path.GetFileName(full));
+
+        return disabled is not null && Directory.Exists(disabled)
+            ? Core.Deployment.TargetPresence.Present
+            : Core.Deployment.TargetPresence.Missing;
     }
 
     private void Load()
