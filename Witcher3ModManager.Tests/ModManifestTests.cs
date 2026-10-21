@@ -79,8 +79,21 @@ public class ModManifestTests : IDisposable
         Assert.Null(manifest.Name);
         Assert.Null(manifest.Author);
         Assert.Null(manifest.Version);
-        Assert.Null(manifest.GameVersion);
         Assert.Equal(new[] { "ok" }, manifest.Dependencies);
+    }
+
+    [Fact]
+    public void Game_version_is_read_whether_it_is_a_number_or_a_string()
+    {
+        // Both forms appear in real 5.0 packages.
+        Write("{ \"gameVersion\": 29 }");
+        Assert.Equal(29, ModManifest.Read(_root)!.GameVersion);
+
+        Write("{ \"gameVersion\": \"29\" }");
+        Assert.Equal(29, ModManifest.Read(_root)!.GameVersion);
+
+        Write("{ \"gameVersion\": \"not a number\" }");
+        Assert.Null(ModManifest.Read(_root)!.GameVersion);
     }
 
     private void Write(string json) =>

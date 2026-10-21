@@ -1,0 +1,5 @@
+A manual-install package: the real game tree sits under GameFiles/, with wrapper folders above it.
+The scan is recursive, so the components are found anyway — this pins that behaviour.
+- Mod: modSample
+- Dlc: dlcSample
+- Bin: bin

@@ -63,11 +63,23 @@ public static class ModManifest
             ? (string.IsNullOrWhiteSpace(value.GetString()) ? null : value.GetString())
             : null;
 
-    private static int? Number(JsonElement root, string property) =>
-        root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number &&
-        value.TryGetInt32(out var number)
-            ? number
-            : null;
+    /// <summary>
+    /// gameVersion is written both ways in the wild: as a number (29) and as a string ("29"). Both
+    /// are the same fact, so both are read; anything else is simply unknown.
+    /// </summary>
+    private static int? Number(JsonElement root, string property)
+    {
+        if (!root.TryGetProperty(property, out var value)) return null;
+
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+            return number;
+
+        if (value.ValueKind == JsonValueKind.String &&
+            int.TryParse(value.GetString(), out var parsed))
+            return parsed;
+
+        return null;
+    }
 
     private static IReadOnlyList<string> Strings(JsonElement root, string property)
     {
