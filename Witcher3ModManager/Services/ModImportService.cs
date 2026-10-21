@@ -25,18 +25,6 @@ public class ModImportService
         @"C:\Program Files\7-Zip\7z.exe",
         @"C:\Program Files (x86)\7-Zip\7z.exe"
     };
-    /// <summary>
-    /// Data model produced by the scan phase. Group a mod/dlc root with
-    /// any nested folders of the opposite type (e.g. a mod containing a dlc).
-    /// Build phase uses this to install everything without touching tempExtractDir.
-    /// </summary>
-    private class ModCandidate
-    {
-        public required DirectoryInfo Root;
-        public readonly List<DirectoryInfo> AttachedDlcs = new();
-        public readonly List<DirectoryInfo> AttachedMods = new();
-    }
-
 
     public ModImportService(ModStorageService storage, SettingsService settings)
     {
@@ -98,13 +86,18 @@ public class ModImportService
         }
 
         // Step 1: Scan for mod candidates (read-only, no file system changes)
-        var modCandidates = ScanModCandidates(tempExtractDir);
-        var binFiles = ScanBinFiles(tempExtractDir);
+        var modCandidates = Core.Import.LegacyCandidateScanner.Scan(tempExtractDir);
+        var binFiles = Core.Import.LegacyCandidateScanner.ScanBinFiles(tempExtractDir);
         // (S5 closure) Always-on read-only structure check. Guards only the truly
         // unrecognized package: when neither the analyzer nor the legacy scan finds a
         // single mod/dlc/bin component, abort with unknown_format instead of letting the
         // legacy FindModRoot guess-install an unverifiable package.
         var analysis = PackageAnalyzer.Analyze(tempExtractDir);
+#if DEBUG
+        // Stage 20a: the analyzer's grouping runs beside the old scanner and only reports where the
+        // two disagree. Nothing is decided here — the switch happens once this comes up clean.
+        LogCandidateComparison(modCandidates, binFiles, analysis);
+#endif
         if (analysis.RejectReason != null && modCandidates.Count == 0 && binFiles.Count == 0)
         {
             try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
@@ -158,7 +151,7 @@ public class ModImportService
 
             foreach (var cand in modCandidates)
             {
-                bool isDlc = ClassifyRoot(cand.Root).IsDlc;
+                bool isDlc = Core.Import.LegacyCandidateScanner.Classify(cand.Root).IsDlc;
                 if (isDlc)
                     dlcRoots.Add(cand.Root);
                 else
@@ -217,7 +210,7 @@ public class ModImportService
                     modRoots, allAttachedMods, dlcRoots, allAttachedDlcs);
 
                 var primary = modRoots.Count > 0 ? modRoots[0] : dlcRoots[0];
-                var primaryType = ClassifyRoot(primary).IsDlc ? ModType.Dlc : ModType.Mod;
+                var primaryType = Core.Import.LegacyCandidateScanner.Classify(primary).IsDlc ? ModType.Dlc : ModType.Mod;
                 var entry = await BuildModEntry(primary.FullName, primaryType, groupId, archivePath, archiveName, progress, Path.GetFileName(primary.FullName));
                 if (entry != null)
                 {
@@ -380,131 +373,6 @@ public class ModImportService
         return (results, errorCode);
     }
 
-    /// <summary>
-    /// Recursively scan for mod*/dlc* folders that directly contain a "content" subfolder.
-    /// Deduplicates nested matches (keeps deepest).
-    /// </summary>
-    private static List<string> ScanBinFiles(string extractDir)
-    {
-        // Search recursively for bin/ directories (mods may nest bin inside a named folder)
-        var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
-        var results = new List<string>();
-        foreach (var binDir in binDirs)
-        {
-            var files = Directory.GetFiles(binDir.FullName, "*.*", SearchOption.AllDirectories);
-            results.AddRange(files.Select(f => f.Substring(binDir.FullName.Length + 1).Replace('\\', '/')));
-        }
-        return results;
-    }
-    /// <summary>
-    /// Classify a directory as Mod or Dlc based on name prefix AND its container parent.
-    /// A folder directly under a dlc/ or mods/ container is classified accordingly even
-    /// when its name does not start with dlc/mod (e.g. dlc\MagicSpellsRevamped).
-    /// Structural rule only - never a per-mod special case.
-    /// </summary>
-    private static (bool IsMod, bool IsDlc) ClassifyRoot(DirectoryInfo dir)
-    {
-        var name = dir.Name;
-        var parent = dir.Parent?.Name ?? "";
-
-        if (name.StartsWith("dlc", StringComparison.OrdinalIgnoreCase))
-            return (false, true);
-        if (name.StartsWith("mod", StringComparison.OrdinalIgnoreCase))
-            return (true, false);
-        if (parent.Equals("dlc", StringComparison.OrdinalIgnoreCase))
-            return (false, true);
-        if (parent.Equals("mods", StringComparison.OrdinalIgnoreCase))
-            return (true, false);
-        return (false, false);
-    }
-
-    private static bool IsCandidateDir(DirectoryInfo d)
-    {
-        var (isMod, isDlc) = ClassifyRoot(d);
-        if (!isMod && !isDlc) return false;
-        // A component root must contain a recognized capability marker (content/metadata/scripts).
-        return d.GetDirectories("content", SearchOption.TopDirectoryOnly).Length > 0 ||
-               d.GetDirectories("metadata", SearchOption.TopDirectoryOnly).Length > 0 ||
-               d.GetDirectories("scripts", SearchOption.TopDirectoryOnly).Length > 0;
-    }
-
-    /// <summary>
-    /// Scan phase (read-only). Build ModCandidate objects grouping each mod/dlc root
-    /// with any nested folders of the opposite type. Same-type nesting is deduplicated.
-    /// Does NOT modify the file system.
-    /// </summary>
-    private static List<ModCandidate> ScanModCandidates(string extractDir)
-    {
-        var allDirs = new DirectoryInfo(extractDir).GetDirectories("*", SearchOption.AllDirectories);
-
-        var allCandidates = allDirs.Where(IsCandidateDir).ToList();
-
-        var result = new List<ModCandidate>();
-        var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // Process shallowest first so outer containers are established before inner ones
-        var sorted = allCandidates.OrderBy(d => d.FullName.Length).ToList();
-
-        foreach (var cand in sorted)
-        {
-            if (processed.Contains(cand.FullName)) continue;
-
-            // Check if contained by an already-registered candidate of the SAME type
-            // (dedup: keep outermost)
-            bool isDedup = false;
-            foreach (var mc in result)
-            {
-                bool sameType = ClassifyRoot(cand).IsMod == ClassifyRoot(mc.Root).IsMod;
-                if (sameType && cand.FullName.StartsWith(
-                    mc.Root.FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                {
-                    isDedup = true;
-                    break;
-                }
-            }
-            if (isDedup) { processed.Add(cand.FullName); continue; }
-
-            var mcNew = new ModCandidate { Root = cand };
-            processed.Add(cand.FullName);
-
-            // Scan for nested folders of the OPPOSITE type inside this root
-            foreach (var inner in sorted)
-            {
-                if (processed.Contains(inner.FullName)) continue;
-                if (!inner.FullName.StartsWith(
-                    cand.FullName + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
-
-                bool sameType = ClassifyRoot(inner).IsMod == ClassifyRoot(cand).IsMod;
-                if (sameType) continue; // same-type handled by dedup above
-
-                if (ClassifyRoot(inner).IsDlc)
-                    mcNew.AttachedDlcs.Add(inner);
-                else
-                    mcNew.AttachedMods.Add(inner);
-                processed.Add(inner.FullName);
-            }
-
-            result.Add(mcNew);
-        }
-
-#if DEBUG
-        DiagnosticLog.Write($"ScanModCandidates: {result.Count} root(s)");
-        foreach (var mc in result)
-        {
-            DiagnosticLog.Write($"  Root: {mc.Root.FullName}");
-            foreach (var ad in mc.AttachedDlcs)
-                DiagnosticLog.Write($"    AttachedDlc: {ad.FullName}");
-            foreach (var am in mc.AttachedMods)
-                DiagnosticLog.Write($"    AttachedMod: {am.FullName}");
-        }
-#endif
-
-        return result
-            .OrderBy(mc => ClassifyRoot(mc.Root).IsDlc ? 1 : 0)
-            .ThenBy(mc => mc.Root.Name)
-            .ToList();
-    }
-
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
         string archivePath, string archiveName, IProgress<string>? progress, string? canonicalName = null)
     {
@@ -585,6 +453,78 @@ public class ModImportService
         foreach (var root in dlcRoots) Collect(TargetDomain.Dlc, root);
         foreach (var root in attachedDlcs) Collect(TargetDomain.Dlc, root);
         return entries;
+    }
+
+    /// <summary>
+    /// Runs the analyzer's grouping beside the legacy scanner and reports where the two disagree.
+    ///
+    /// Nothing here decides anything: the container path keeps using the old scanner until this
+    /// comparison comes up clean on the fixtures and on real packages. That is the point of this
+    /// stage — the switch has to be observed before it is made.
+    /// </summary>
+    private static void LogCandidateComparison(
+        List<Core.Import.LegacyCandidate> legacyCandidates,
+        List<string> legacyBinFiles,
+        AnalysisResult analysis)
+    {
+        var byAnalysis = Core.Import.ImportCandidates.From(analysis);
+
+        var legacyMods = legacyCandidates
+            .SelectMany(candidate => new[] { candidate.Root }.Concat(candidate.AttachedMods))
+            .Where(dir => !Core.Import.LegacyCandidateScanner.Classify(dir).IsDlc)
+            .Select(dir => dir.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var legacyDlcs = legacyCandidates
+            .SelectMany(candidate => new[] { candidate.Root }.Concat(candidate.AttachedDlcs))
+            .Where(dir => Core.Import.LegacyCandidateScanner.Classify(dir).IsDlc)
+            .Select(dir => dir.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var analysisMods = byAnalysis.Mods.Select(c => c.Name)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+        var analysisDlcs = byAnalysis.Dlcs.Select(c => c.Name)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+
+        var binRoots = byAnalysis.BinRoots
+            .Select(root => (Root: root,
+                RelativePaths: (IEnumerable<string>)Core.Import.ImportCandidates.RelativePathsUnder(root)))
+            .ToList();
+        var analysisBinFiles = binRoots.Sum(root => root.RelativePaths.Count());
+
+        DiagnosticLog.Write(
+            $"[candidates] legacy mods=[{string.Join(", ", legacyMods)}] " +
+            $"dlcs=[{string.Join(", ", legacyDlcs)}] binFiles={legacyBinFiles.Count}");
+        DiagnosticLog.Write(
+            $"[candidates] analysis mods=[{string.Join(", ", analysisMods)}] " +
+            $"dlcs=[{string.Join(", ", analysisDlcs)}] binRoots={binRoots.Count} binFiles={analysisBinFiles}");
+
+        ReportDifference("mods", legacyMods, analysisMods);
+        ReportDifference("dlcs", legacyDlcs, analysisDlcs);
+
+        foreach (var warning in byAnalysis.Warnings)
+            DiagnosticLog.Write($"[candidates] analysis warning: {warning}");
+
+        foreach (var path in Core.Import.ImportCandidates.BinPathCollisions(binRoots))
+            DiagnosticLog.Write($"[candidates] bin path claimed by more than one root: {path}");
+    }
+
+    private static void ReportDifference(
+        string what,
+        IReadOnlyList<string> legacy,
+        IReadOnlyList<string> analysis)
+    {
+        var onlyLegacy = legacy.Except(analysis, StringComparer.OrdinalIgnoreCase).ToList();
+        var onlyAnalysis = analysis.Except(legacy, StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (onlyLegacy.Count > 0)
+            DiagnosticLog.Write($"[candidates] {what} only in the legacy scan: {string.Join(", ", onlyLegacy)}");
+        if (onlyAnalysis.Count > 0)
+            DiagnosticLog.Write($"[candidates] {what} only in the analysis: {string.Join(", ", onlyAnalysis)}");
     }
 
     private static ModType? AskModOrDlc(string archiveName)

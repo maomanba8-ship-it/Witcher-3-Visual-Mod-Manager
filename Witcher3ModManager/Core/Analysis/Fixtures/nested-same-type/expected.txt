@@ -1,0 +1,2 @@
+Two same-kind components, one inside the other: only the outermost is a component of its own.
+- Mod: modOuter

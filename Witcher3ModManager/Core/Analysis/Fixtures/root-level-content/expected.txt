@@ -1,0 +1,5 @@
+A package extracted so that content/ is the top level: there is no component folder to name.
+The analyzer only reports folders inside the extraction root, so this is "not recognized" for now.
+The importer is expected to offer an explicit manual install for exactly this shape.
+(none recognized)
+Warning: no recognizable mod/dlc/bin component found
