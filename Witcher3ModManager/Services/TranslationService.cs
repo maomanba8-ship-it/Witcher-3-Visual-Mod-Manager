@@ -481,7 +481,7 @@ public class TranslationService
                 ["import.overwrite_msg"] = "以下组件在仓库/游戏目录已存在：{0}\n\n继续将覆盖这些组件，是否继续？",
                 ["import.cancelled"] = "已取消导入，未写入任何数据。",
                 ["import.duplicate_title"] = "重复模组",
-                ["import.ask_location_msg"] = "无法自动识别 \"{0}\" 的安装位置。\n\n该模组应该安装到哪个目录？\n\n是 = Mods 文件夹\n否 = DLC 文件夹\n取消 = 跳过该模组",
+                ["import.ask_location_msg"] = "无法识别这个压缩包的结构（{0}）。\n\n要把它整体安装成 mod 还是 dlc？\n\n是 = mods 文件夹\n否 = dlc 文件夹\n取消 = 不安装",
                 ["import.ask_location_title"] = "选择安装位置",
                 ["import.text_truncated"] = "\n\n... (内容过长已截断)",
 
@@ -835,7 +835,7 @@ public class TranslationService
                 ["import.overwrite_msg"] = "These components already exist in storage/game: {0}\n\nContinuing will overwrite them. Continue?",
                 ["import.cancelled"] = "Import cancelled; no data was written.",
                 ["import.duplicate_title"] = "Duplicate Mod",
-                ["import.ask_location_msg"] = "Cannot determine install location for \"{0}\".\n\nWhere should this mod be installed?\n\nYes = Mods folder\nNo = DLC folder\nCancel = Skip this mod",
+                ["import.ask_location_msg"] = "The structure of this archive could not be recognised ({0}).\n\nInstall the whole folder as a mod or a dlc?\n\nYes = mods folder\nNo = dlc folder\nCancel = do not install",
                 ["import.ask_location_title"] = "Select Install Location",
                 ["import.text_truncated"] = "\n\n... (content truncated)",
 

@@ -244,42 +244,47 @@ public class ModImportService
             }
             else
             {
-                // Step 2: Fallback to FindModRoot
-                var root = FindModRoot(tempExtractDir);
-                if (root != null)
+                // Nothing identifiable. Ask once, explicitly, instead of guessing: install the
+                // whole tree as a mod or a dlc, or do not install it at all.
+                var manualRoot = Core.Import.ManualInstallRoot.From(tempExtractDir);
+                if (manualRoot is null)
                 {
-                    var modType = Application.Current.Dispatcher.Invoke(() => AskModOrDlc(archiveName));
-                    if (modType != null)
-                    {
-                        // Fallback path bypasses the candidate planner, but must still
-                        // apply the same final-storage-name conflict gate before writing.
-                        var targetName = EnsureModPrefix(Path.GetFileName(root), modType.Value);
-                        var fbDuplicates = FindExistingPlannedNames(new List<string> { targetName });
-                        // The fallback path answers its own prompt: it has no plan preview to
-                        // fold the overwrite question into.
-                        if (!ResolveDuplicateTargetsBeforeWrite(fbDuplicates, tempExtractDir, confirmedOverwriteNames, alreadyConfirmed: false, out var fbCancel))
-                        {
-                            errorCode = fbCancel;
-                            progress?.Report(TranslationService.Instance.T("import.cancelled"));
-                            return (new List<ModEntry>(), errorCode);
-                        }
-
-                        var fallbackDomain = modType.Value == ModType.Dlc ? TargetDomain.Dlc : TargetDomain.Mods;
-                        var fallbackFingerprint = ComponentFingerprintCollector.FromRoot(fallbackDomain, targetName, root);
-                        var entry = await BuildModEntry(root, modType.Value, groupId, archivePath, archiveName, progress);
-                        if (entry != null)
-                        {
-                            if (fallbackFingerprint != null)
-                                entry.ComponentFingerprints.Add(fallbackFingerprint);
-                            results.Add(entry);
-                        }
-                    }
+                    errorCode = "unknown_format";
+                    progress?.Report(string.Format(TranslationService.Instance.T("import.progress.unrecognized"), archiveName));
                 }
                 else
                 {
-                    // Step 3: Can't identify
-                    errorCode = "unknown_format";
-                    progress?.Report(string.Format(TranslationService.Instance.T("import.progress.unrecognized"), archiveName));
+                    var modType = Application.Current.Dispatcher.Invoke(() => AskModOrDlc(archiveName));
+                    if (modType is null)
+                    {
+                        try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+                        progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                        return (new List<ModEntry>(), "cancelled");
+                    }
+
+                    // The whole extraction tree has no name of its own, so the archive names it.
+                    var nameFromArchive = IsSamePath(manualRoot, tempExtractDir);
+                    var targetName = EnsureModPrefix(
+                        nameFromArchive ? archiveName : Path.GetFileName(manualRoot), modType.Value);
+
+                    // Manual installs answer their own prompt, but still go through the same
+                    // final-storage-name conflict gate before anything is written.
+                    var duplicates = FindExistingPlannedNames(new List<string> { targetName });
+                    if (!ResolveDuplicateTargetsBeforeWrite(duplicates, tempExtractDir, confirmedOverwriteNames, alreadyConfirmed: false, out var manualCancel))
+                    {
+                        errorCode = manualCancel;
+                        progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                        return (new List<ModEntry>(), errorCode);
+                    }
+
+                    var domain = modType.Value == ModType.Dlc ? TargetDomain.Dlc : TargetDomain.Mods;
+                    var fingerprint = ComponentFingerprintCollector.FromRoot(domain, targetName, manualRoot);
+                    var entry = await BuildModEntry(manualRoot, modType.Value, groupId, archivePath, archiveName, progress, targetName);
+                    if (entry != null)
+                    {
+                        if (fingerprint != null) entry.ComponentFingerprints.Add(fingerprint);
+                        results.Add(entry);
+                    }
                 }
             }
         }
@@ -507,58 +512,6 @@ public class ModImportService
         };
     }
 
-private static string FindModRoot(string sourceDir)
-    {
-        var current = sourceDir;
-
-        while (true)
-        {
-            var subDirs = Directory.GetDirectories(current);
-            var files = Directory.GetFiles(current);
-
-            // Root if: has "content" or "scripts" subfolder, or has modinfo.ini
-            if (subDirs.Any(d =>
-                    Path.GetFileName(d).Equals("content", StringComparison.OrdinalIgnoreCase) ||
-                    Path.GetFileName(d).Equals("scripts", StringComparison.OrdinalIgnoreCase)) ||
-                files.Any(f => Path.GetFileName(f).Equals("modinfo.ini", StringComparison.OrdinalIgnoreCase)))
-            {
-                break;
-            }
-
-            // Exactly one subfolder, no files — drill in
-            if (subDirs.Length == 1 && files.Length == 0)
-            {
-                current = subDirs[0];
-                continue;
-            }
-
-            // Multiple items: check if exactly ONE subfolder looks like a mod root
-            // (i.e., it contains content/scripts/modinfo.ini). If so, drill into it.
-            // This handles archives with extra readme files at the top level.
-            if (subDirs.Length >= 1 && (subDirs.Length > 1 || files.Length > 0))
-            {
-                var modCandidates = subDirs.Where(d =>
-                {
-                    var childSubs = Directory.GetDirectories(d);
-                    var childFiles = Directory.GetFiles(d);
-                    return childSubs.Any(c =>
-                               Path.GetFileName(c).Equals("content", StringComparison.OrdinalIgnoreCase) ||
-                               Path.GetFileName(c).Equals("scripts", StringComparison.OrdinalIgnoreCase)) ||
-                           childFiles.Any(f => Path.GetFileName(f).Equals("modinfo.ini", StringComparison.OrdinalIgnoreCase));
-                }).ToArray();
-
-                if (modCandidates.Length == 1)
-                {
-                    current = modCandidates[0];
-                    continue;
-                }
-            }
-
-            break;
-        }
-
-        return current;
-    }
 
     /// <summary>
     /// Renders the read-only import plan for the confirmation dialog: what will be created, what
