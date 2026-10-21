@@ -232,7 +232,18 @@ public partial class MainWindow : Window
         _settingsPage.NavigateBackRequested += OnSettingsBack;
         _settingsPage.BackgroundImageChanged -= OnBackgroundChanged;
         _settingsPage.BackgroundImageChanged += OnBackgroundChanged;
-        _settingsPage.Initialize(_settings, () => _storage!.GetLibraryAudit(_w3?.GetGamePath()));
+        _settingsPage.Initialize(
+            _settings,
+            () => _storage!.GetLibraryAudit(_w3?.GetGamePath()),
+            _storage,
+            () => _w3?.GetGamePath(),
+            () =>
+            {
+                // The library changed under the pages that were already built, so show the new state
+                // instead of letting them keep the old list.
+                _modListPage?.RefreshModList();
+                RefreshStatusBar();
+            });
         PageHost.Content = _settingsPage;
         SetBackgroundBlur(true);
         MainStatusBar.Visibility = Visibility.Collapsed;

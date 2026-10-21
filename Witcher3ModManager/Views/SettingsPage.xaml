@@ -2,6 +2,31 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="Transparent">
+    <UserControl.Resources>
+        <!-- One template for the maintenance buttons, so three rows do not carry three copies. -->
+        <Style x:Key="ToolButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="#8BA4B5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="6" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="#14161E" TextElement.FontSize="12"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -320,6 +345,34 @@
                                     </ControlTemplate>
                                 </Button.Template>
                             </Button>
+                        </Grid>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock x:Name="StorageCopyLabel" Text="把游戏里的模组收进存储" FontSize="12"
+                                           Foreground="#9A9EAA"/>
+                                <TextBlock x:Name="StorageCopyHint" FontSize="11"
+                                           Foreground="#5E626E" TextWrapping="Wrap" Margin="0,2,12,0"/>
+                            </StackPanel>
+                            <Button x:Name="StorageCopyBtn" Grid.Column="1" Style="{StaticResource ToolButtonStyle}"
+                                    Content="Copy" Click="StorageCopy_Click"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock x:Name="ClearLibraryLabel" Text="清空资料库记录" FontSize="12"
+                                           Foreground="#9A9EAA"/>
+                                <TextBlock x:Name="ClearLibraryHint" FontSize="11"
+                                           Foreground="#5E626E" TextWrapping="Wrap" Margin="0,2,12,0"/>
+                            </StackPanel>
+                            <Button x:Name="ClearLibraryBtn" Grid.Column="1" Style="{StaticResource ToolButtonStyle}"
+                                    Background="#E0556A" Content="Clear" Click="ClearLibrary_Click"/>
                         </Grid>
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>

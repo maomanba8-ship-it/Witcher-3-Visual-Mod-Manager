@@ -555,6 +555,168 @@ public class ModStorageService
     }
     public string GetModsDirectory() => _modsDir;
 
+    /// <summary>One record whose folders exist only in the game directory.</summary>
+    public sealed record StorageCopyCandidate(
+        string PackageId,
+        string DisplayName,
+        IReadOnlyList<Core.Deployment.StorageCopyItem> Items,
+        long Bytes);
+
+    public sealed record StorageCopySummary(
+        int ModsCopied,
+        int FoldersCopied,
+        long BytesCopied,
+        IReadOnlyList<string> Problems);
+
+    public sealed record LibraryClearSummary(
+        int RecordsCleared,
+        IReadOnlyList<string> PreservedCopies,
+        IReadOnlyList<string> Problems);
+
+    /// <summary>
+    /// Records with folders that are in the game directory but have no copy in storage. Exactly the
+    /// state every adopted or earlier-installed package is in.
+    /// </summary>
+    public IReadOnlyList<StorageCopyCandidate> FindStorageCopyCandidates(string? gamePath)
+    {
+        if (string.IsNullOrWhiteSpace(gamePath)) return Array.Empty<StorageCopyCandidate>();
+
+        var candidates = new List<StorageCopyCandidate>();
+        foreach (var mod in _mods)
+        {
+            var items = Core.Deployment.StorageCopyPlanner
+                .Plan(mod.GameModFolders, Path.Combine(gamePath, "mods"), _modsDir)
+                .Concat(Core.Deployment.StorageCopyPlanner
+                    .Plan(mod.GameDlcFolders, Path.Combine(gamePath, "dlc"), _modsDir))
+                .ToList();
+
+            if (items.Count == 0) continue;
+
+            candidates.Add(new StorageCopyCandidate(
+                mod.Id, mod.Name, items,
+                items.Sum(item => Measure(item.SourcePath).Bytes)));
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
+    /// Copies those folders into the storage directory. The game directory is only read: nothing is
+    /// moved or deleted there, and an existing storage copy is never overwritten (the planner does
+    /// not offer those folders in the first place).
+    ///
+    /// Each copy is checked against its source by file count and total size — cheap to compute and
+    /// enough to catch a truncated copy, which is the failure that would otherwise only surface the
+    /// day the game copy is gone.
+    /// </summary>
+    public StorageCopySummary CopyToStorage(IEnumerable<StorageCopyCandidate>? candidates)
+    {
+        var mods = 0;
+        var folders = 0;
+        long bytes = 0;
+        var problems = new List<string>();
+
+        foreach (var candidate in candidates ?? Array.Empty<StorageCopyCandidate>())
+        {
+            var copiedAny = false;
+            foreach (var item in candidate.Items)
+            {
+                // Copy next to the target first: a failed or truncated copy must never be left where
+                // a later run could mistake it for a finished one.
+                var staging = item.TargetPath + ".w3mm-copy";
+                try
+                {
+                    if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+                    CopyDirectoryRecursive(item.SourcePath, staging);
+
+                    var source = Measure(item.SourcePath);
+                    var copied = Measure(staging);
+                    if (source.Files != copied.Files || source.Bytes != copied.Bytes)
+                    {
+                        problems.Add(string.Format(
+                            TranslationService.Instance.T("library.copy_mismatch"),
+                            candidate.DisplayName + " / " + item.Folder,
+                            source.Files, source.Bytes, copied.Files, copied.Bytes));
+                        continue;
+                    }
+
+                    Directory.Move(staging, item.TargetPath);
+                    folders++;
+                    bytes += copied.Bytes;
+                    copiedAny = true;
+                }
+                catch (Exception ex)
+                {
+                    problems.Add($"{candidate.DisplayName} / {item.Folder}: {ex.Message}");
+                }
+                finally
+                {
+                    TryDeleteDirectory(staging);
+                }
+            }
+
+            if (copiedAny) mods++;
+        }
+
+        return new StorageCopySummary(mods, folders, bytes, problems);
+    }
+
+    /// <summary>
+    /// Forgets every record. Only the library is cleared: the game directory, the storage copies and
+    /// the backups stay exactly as they are — the user cleans those up themselves.
+    ///
+    /// The three documents are copied beside themselves first, so a decision made in a hurry is
+    /// still reversible by hand. Nothing restores them automatically.
+    /// </summary>
+    public LibraryClearSummary ClearLibrary()
+    {
+        var (copies, problems) = Core.Deployment.LibraryReset.Preserve(new[]
+        {
+            _dbPath,
+            Path.Combine(_dataDir, "library.json"),
+            Path.Combine(_dataDir, "bin-ledger.json")
+        }, DateTime.Now);
+
+        var cleared = _mods.Count;
+        _mods.Clear();
+        Save();
+
+        UpdateIndex(_ => Core.Deployment.LibraryIndex.Empty);
+        UpdateBinClaims(_ => Core.Deployment.BinLedger.Empty);
+
+        return new LibraryClearSummary(cleared, copies, problems);
+    }
+
+    /// <summary>Files and bytes under a folder, counted without reading any content.</summary>
+    private static (int Files, long Bytes) Measure(string path)
+    {
+        try
+        {
+            var files = Directory.GetFiles(path, "*", SearchOption.AllDirectories);
+            return (files.Length, files.Sum(f =>
+            {
+                try { return new FileInfo(f).Length; }
+                catch { return 0L; }
+            }));
+        }
+        catch
+        {
+            return (0, 0);
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+            // A leftover staging folder is reported by the next attempt, which reuses the same name.
+        }
+    }
+
     /// <summary>
     /// Read-only audit of the library as it stands: folders that are not on disk, shared folders,
     /// enabled mods the game directory does not have, and records that name no component at all.

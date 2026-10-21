@@ -14,6 +14,9 @@ public partial class SettingsPage : UserControl
     public event Action<string>? BackgroundImageChanged;
     private IDisposable? _languageSubscription;
     private Func<Core.Migration.LegacyLibraryAudit>? _auditProvider;
+    private ModStorageService? _storage;
+    private Func<string?>? _gamePathProvider;
+    private Action? _libraryChanged;
 
     public SettingsPage()
     {
@@ -35,10 +38,18 @@ public partial class SettingsPage : UserControl
         };
     }
 
-    public void Initialize(SettingsService settings, Func<Core.Migration.LegacyLibraryAudit>? auditProvider = null)
+    public void Initialize(
+        SettingsService settings,
+        Func<Core.Migration.LegacyLibraryAudit>? auditProvider = null,
+        ModStorageService? storage = null,
+        Func<string?>? gamePathProvider = null,
+        Action? libraryChanged = null)
     {
         _settings = settings;
         _auditProvider = auditProvider;
+        _storage = storage;
+        _gamePathProvider = gamePathProvider;
+        _libraryChanged = libraryChanged;
         LoadSettings();
     }
 
@@ -53,6 +64,83 @@ public partial class SettingsPage : UserControl
         var dialog = new LibraryAuditDialog(_auditProvider());
         dialog.ShowDialog();
     }
+
+    /// <summary>
+    /// Copies the folders that only exist in the game directory into storage, after showing how
+    /// much that is. The game directory is only read: nothing there is moved or deleted.
+    /// </summary>
+    private void StorageCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if (_storage == null) return;
+        var t = TranslationService.Instance;
+
+        var gamePath = _gamePathProvider?.Invoke();
+        if (string.IsNullOrWhiteSpace(gamePath))
+        {
+            MessageBox.Show(t.T("game.not_detected"), t.T("dialog.warning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var candidates = _storage.FindStorageCopyCandidates(gamePath);
+        if (candidates.Count == 0)
+        {
+            MessageBox.Show(t.T("library.copy_none"), t.T("dialog.done"), MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var folders = candidates.Sum(c => c.Items.Count);
+        var bytes = candidates.Sum(c => c.Bytes);
+        var confirmed = ConfirmDialog.Show(
+            t.T("library.copy_title"),
+            string.Format(t.T("library.copy_confirm"), candidates.Count, folders, FormatSize(bytes)),
+            "\uE8B7", t.T("library.copy_go"), t.T("dialog.cancel"),
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#8BA4B5"));
+        if (!confirmed) return;
+
+        var summary = _storage.CopyToStorage(candidates);
+        var message = string.Format(t.T("library.copy_done"),
+            summary.ModsCopied, summary.FoldersCopied, FormatSize(summary.BytesCopied));
+        if (summary.Problems.Count > 0)
+            message += "\n\n" + string.Format(t.T("library.copy_problems"), string.Join("\n", summary.Problems));
+
+        MessageBox.Show(message, t.T("library.copy_title"), MessageBoxButton.OK,
+            summary.Problems.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+        _libraryChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Forgets every record. Only the library documents are cleared: the game directory, the
+    /// storage copies and the backups are left alone, and the previous documents are kept beside
+    /// the new empty ones.
+    /// </summary>
+    private void ClearLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        if (_storage == null) return;
+        var t = TranslationService.Instance;
+
+        var confirmed = ConfirmDialog.Show(
+            t.T("library.clear_title"),
+            t.T("library.clear_confirm"),
+            "\uE74D", t.T("library.clear_go"), t.T("dialog.cancel"),
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#E0556A"));
+        if (!confirmed) return;
+
+        var summary = _storage.ClearLibrary();
+        var message = string.Format(t.T("library.clear_done"), summary.RecordsCleared);
+        if (summary.PreservedCopies.Count > 0)
+            message += "\n\n" + string.Format(t.T("library.clear_copies"), string.Join("\n", summary.PreservedCopies));
+        if (summary.Problems.Count > 0)
+            message += "\n\n" + string.Format(t.T("library.copy_problems"), string.Join("\n", summary.Problems));
+
+        MessageBox.Show(message, t.T("library.clear_title"), MessageBoxButton.OK,
+            summary.Problems.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+        _libraryChanged?.Invoke();
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes >= 1024L * 1024 * 1024
+            ? $"{bytes / (1024d * 1024 * 1024):0.0} GB"
+            : $"{bytes / (1024d * 1024):0.0} MB";
 
     private void LoadSettings()
     {
@@ -234,6 +322,12 @@ public partial class SettingsPage : UserControl
         LibraryCheckLabel.Text = ts.T("settings.library_check");
         LibraryCheckHint.Text = ts.T("settings.library_check_hint");
         LibraryCheckBtn.Content = ts.T("settings.library_check");
+        StorageCopyLabel.Text = ts.T("settings.storage_copy");
+        StorageCopyHint.Text = ts.T("settings.storage_copy_hint");
+        StorageCopyBtn.Content = ts.T("settings.storage_copy_btn");
+        ClearLibraryLabel.Text = ts.T("settings.clear_library");
+        ClearLibraryHint.Text = ts.T("settings.clear_library_hint");
+        ClearLibraryBtn.Content = ts.T("settings.clear_library_btn");
         AutoBackupCheckText.Text = ts.T("settings.auto_backup");
         AutoBackupDescText.Text = ts.T("settings.auto_backup_desc");
         MoreFeaturesHeader.Text = ts.T("settings.more");
