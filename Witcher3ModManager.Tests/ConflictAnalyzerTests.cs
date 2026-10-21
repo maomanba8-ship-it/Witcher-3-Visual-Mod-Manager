@@ -116,6 +116,18 @@ public class ConflictAnalyzerTests
             new[] { "DuplicateContent" }
         };
 
+        // 5.0 precompiled scripts arrive as content/precompiled.rsblob; a different blob is a
+        // script-level override, which Script Merger Remastered can report.
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "content/precompiled.rsblob", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/precompiled.rsblob", "shaB", 1),
+            },
+            new[] { "ScriptOverride" }
+        };
+
         // Opaque bundle with different hash stays UnsupportedContainer (not downgraded).
         yield return new object[]
         {

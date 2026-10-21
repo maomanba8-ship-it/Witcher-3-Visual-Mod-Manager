@@ -1,0 +1,10 @@
+{
+    "name": "fixsample",
+    "modName": "FixSample",
+    "version": "1.0.0",
+    "gameVersion": "29",
+    "description": "sample",
+    "author": "",
+    "dependencies": [],
+    "useLooseScripts": false
+}

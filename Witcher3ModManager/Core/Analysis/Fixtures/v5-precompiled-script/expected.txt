@@ -1,0 +1,4 @@
+A 5.0 script package: the script lives precompiled in content/precompiled.rsblob, next to a loose
+annotation script. The blob is a plain file to the structure scan; only conflict analysis treats it
+as a script.
+- Mod: modSample

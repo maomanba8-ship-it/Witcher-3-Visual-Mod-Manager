@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace Witcher3ModManager.Core.Analysis;
 
@@ -139,8 +139,12 @@ public static class ConflictAnalyzer
             }
             else
             {
+                // 5.0 can ship scripts precompiled into content/precompiled.rsblob. Script Merger
+                // Remastered reports conflicts in that blob too, so it belongs with the loose script
+                // extensions rather than with plain content overrides.
                 var isScript = group.Key.NormalizedRelativePath.EndsWith(".ws", StringComparison.OrdinalIgnoreCase) ||
-                               group.Key.NormalizedRelativePath.EndsWith(".es", StringComparison.OrdinalIgnoreCase);
+                               group.Key.NormalizedRelativePath.EndsWith(".es", StringComparison.OrdinalIgnoreCase) ||
+                               group.Key.NormalizedRelativePath.EndsWith(".rsblob", StringComparison.OrdinalIgnoreCase);
                 kind = isScript ? ConflictKind.ScriptOverride : ConflictKind.DefiniteOverride;
                 action = isScript ? "存在脚本覆盖，建议运行 Script Merger 处理。" : "同一目标不同内容，存在确定覆盖。";
             }
