@@ -49,6 +49,20 @@ public class ImportCandidatesTests
     }
 
     [Fact]
+    public void Components_are_ordered_by_name_so_the_primary_is_stable()
+    {
+        var set = From(
+            Component("modZulu", ComponentKind.Mod, @"C:\x\modZulu"),
+            Component("modAlpha", ComponentKind.Mod, @"C:\x\modAlpha"),
+            Component("dlcZulu", ComponentKind.Dlc, @"C:\x\dlcZulu"),
+            Component("dlcAlpha", ComponentKind.Dlc, @"C:\x\dlcAlpha"));
+
+        Assert.Equal(new[] { "modAlpha", "modZulu" }, set.Mods.Select(c => c.Name));
+        Assert.Equal(new[] { "dlcAlpha", "dlcZulu" }, set.Dlcs.Select(c => c.Name));
+        Assert.Equal("modAlpha", set.Primary!.Name);
+    }
+
+    [Fact]
     public void Without_components_the_primary_is_null()
     {
         Assert.Null(ImportCandidates.From(null).Primary);

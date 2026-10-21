@@ -70,7 +70,13 @@ public static class ImportCandidates
             }
         }
 
-        return new ImportCandidateSet(mods, dlcs, binRoots, warnings);
+        // Ordered by name so the record built from the first mod is the same one every time (and
+        // the same one the legacy scan would have picked).
+        return new ImportCandidateSet(
+            mods.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+            dlcs.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+            binRoots.OrderBy(r => r, StringComparer.OrdinalIgnoreCase).ToList(),
+            warnings);
     }
 
     /// <summary>

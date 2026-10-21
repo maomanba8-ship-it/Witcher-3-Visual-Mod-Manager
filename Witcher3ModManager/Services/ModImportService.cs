@@ -85,46 +85,52 @@ public class ModImportService
             return (new List<ModEntry>(), "bundle_patch");
         }
 
-        // Step 1: Scan for mod candidates (read-only, no file system changes)
-        var modCandidates = Core.Import.LegacyCandidateScanner.Scan(tempExtractDir);
-        var binFiles = Core.Import.LegacyCandidateScanner.ScanBinFiles(tempExtractDir);
-        // (S5 closure) Always-on read-only structure check. Guards only the truly
-        // unrecognized package: when neither the analyzer nor the legacy scan finds a
-        // single mod/dlc/bin component, abort with unknown_format instead of letting the
-        // legacy FindModRoot guess-install an unverifiable package.
+        // Step 1: read the package structure (read-only). The analyzer decides what the package
+        // contains; the legacy folder-name scan still runs in DEBUG only, to compare conclusions.
         var analysis = PackageAnalyzer.Analyze(tempExtractDir);
+        var candidates = Core.Import.ImportCandidates.From(analysis);
+
+        // Flat list of the bin files this package would deploy, for the checks that compare against
+        // what other packages already have.
+        var binFiles = candidates.BinRoots
+            .SelectMany(Core.Import.ImportCandidates.RelativePathsUnder)
+            .ToList();
+
 #if DEBUG
-        // Stage 20a: the analyzer's grouping runs beside the old scanner and only reports where the
-        // two disagree. Nothing is decided here — the switch happens once this comes up clean.
-        LogCandidateComparison(modCandidates, binFiles, analysis);
+        LogCandidateComparison(
+            Core.Import.LegacyCandidateScanner.Scan(tempExtractDir),
+            Core.Import.LegacyCandidateScanner.ScanBinFiles(tempExtractDir),
+            analysis);
 #endif
-        if (analysis.RejectReason != null && modCandidates.Count == 0 && binFiles.Count == 0)
+
+        if (analysis.RejectReason != null && candidates.IsEmpty)
         {
             try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
             progress?.Report(TranslationService.Instance.T("import.progress.unrecognized"));
             return (new List<ModEntry>(), "unknown_format");
         }
-        // (S5 closed-loop) If the analyzer flagged ambiguous components that need a user decision,
-        // show them and require explicit confirmation BEFORE any filesystem write. In the
-        // container-typed path these are folded into the import plan preview below, together with
-        // the targets that would be replaced, so the user answers one question instead of two.
-        // The fallback path cannot describe itself as a plan, so it keeps this prompt.
-        if (analysis.RequiresUserDecision.Count > 0 && modCandidates.Count == 0)
+        // Two bin roots inside this package that write the same relative path would lose a file
+        // silently once they are merged, so this is refused rather than resolved by picking one.
+        var internalBinCollisions = Core.Import.ImportCandidates.BinPathCollisions(
+            candidates.BinRoots.Select(root => (Root: root,
+                RelativePaths: (IEnumerable<string>)Core.Import.ImportCandidates.RelativePathsUnder(root))));
+
+        if (internalBinCollisions.Count > 0)
         {
-            var previewMsg = BuildImportPreviewMessage(analysis);
-            var confirmed = Application.Current.Dispatcher.Invoke(() =>
-                MessageBox.Show(
-                    previewMsg,
-                    TranslationService.Instance.T("import.preview_title"),
-                    MessageBoxButton.OKCancel,
-                    MessageBoxImage.Warning) == MessageBoxResult.OK);
-            if (!confirmed)
-            {
-                try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
-                progress?.Report(TranslationService.Instance.T("import.cancelled"));
-                return (new List<ModEntry>(), "cancelled");
-            }
+            var message = string.Format(
+                TranslationService.Instance.T("import.bin_collision_internal"),
+                string.Join("\n", internalBinCollisions.Select(p => "bin/" + p)));
+            Application.Current.Dispatcher.Invoke(() => MessageBox.Show(
+                message,
+                TranslationService.Instance.T("import.bin_collision_title"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning));
+
+            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+            progress?.Report(TranslationService.Instance.T("import.cancelled"));
+            return (new List<ModEntry>(), "bin_collision");
         }
+
         // A bin file another package already deploys is a conflict the user has to agree to before
         // anything is written. Storage cannot show it: each package keeps its own copy, and the two
         // only meet in the game's bin directory. This runs before the folder pre-flight below so it
@@ -137,47 +143,39 @@ public class ModImportService
             return (new List<ModEntry>(), "cancelled");
         }
 
-        if (modCandidates.Count > 0)
+        if (candidates.Mods.Count > 0 || candidates.Dlcs.Count > 0)
         {
             // Parallel (read-only) analyzer comparison. Does NOT change old install flow.
 #if DEBUG
             LogAnalyzerComparison(tempExtractDir);
 #endif
-            // Collect all mod and dlc roots (flatten ModCandidate)
-            var modRoots = new List<DirectoryInfo>();
-            var dlcRoots = new List<DirectoryInfo>();
-            var allAttachedDlcs = new List<DirectoryInfo>();
-            var allAttachedMods = new List<DirectoryInfo>();
+            var modRoots = candidates.Mods;
+            var dlcRoots = candidates.Dlcs;
 
-            foreach (var cand in modCandidates)
-            {
-                bool isDlc = Core.Import.LegacyCandidateScanner.Classify(cand.Root).IsDlc;
-                if (isDlc)
-                    dlcRoots.Add(cand.Root);
-                else
-                    modRoots.Add(cand.Root);
-
-                foreach (var ad in cand.AttachedDlcs)
-                    if (!allAttachedDlcs.Any(x => x.Name.Equals(ad.Name, StringComparison.OrdinalIgnoreCase)))
-                        allAttachedDlcs.Add(ad);
-                foreach (var am in cand.AttachedMods)
-                    if (!allAttachedMods.Any(x => x.Name.Equals(am.Name, StringComparison.OrdinalIgnoreCase)))
-                        allAttachedMods.Add(am);
-            }
-
-            // Merge all mod + dlc roots into a single ModEntry (package grouping)
-            if (modRoots.Count > 0 || dlcRoots.Count > 0)
-            {
                 // Pre-discussion: detect duplicate planned storage names BEFORE any move/delete.
                 // Cancel cleans temp and reports cancelled; confirm allows overwrite of listed targets only.
-                var plannedNames = CollectPlannedStorageNames(modRoots, dlcRoots, allAttachedDlcs, allAttachedMods);
+                var plannedNames = modRoots.Select(c => c.Name)
+                    .Concat(dlcRoots.Select(c => c.Name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
                 var duplicateNames = FindExistingPlannedNames(plannedNames);
 
                 // One read-only preview of the whole import: what will be created, what will be
                 // replaced, and anything the analyzer was unsure about. Nothing has been written
                 // at this point, so cancelling leaves storage, the game directory and the records
                 // untouched.
-                var plan = ImportPlanner.Build(analysis, duplicateNames, component => component.Name);
+                // The preview describes what is actually going to be installed: components the
+                // adapter dropped (a folder with no files) must not appear as "to be added".
+                var planned = new AnalysisResult(
+                    modRoots.Cast<PackageComponent>()
+                        .Concat(dlcRoots)
+                        .Concat(analysis.Components.Where(c => c.Kind == ComponentKind.Bin))
+                        .ToList(),
+                    analysis.Warnings,
+                    analysis.RequiresUserDecision,
+                    analysis.RejectReason);
+
+                var plan = ImportPlanner.Build(planned, duplicateNames, component => component.Name);
                 if (plan.RequiresConfirmation)
                 {
                     var previewMsg = BuildImportPlanPreview(plan);
@@ -203,95 +201,45 @@ public class ModImportService
                     return (new List<ModEntry>(), errorCode);
                 }
 
-                // Record each component's own imported content while its bytes are still in
-                // temp: a later import may delete and overwrite a shared storage folder, so
-                // fingerprinting after the move would describe whichever package won.
-                var componentFingerprints = CollectComponentFingerprints(
-                    modRoots, allAttachedMods, dlcRoots, allAttachedDlcs);
+                // Record each component's own imported content while its bytes are still in temp: a
+                // later import may delete and overwrite a shared storage folder, so fingerprinting
+                // after the move would describe whichever package won.
+                var componentFingerprints = CollectComponentFingerprints(modRoots, dlcRoots);
 
-                var primary = modRoots.Count > 0 ? modRoots[0] : dlcRoots[0];
-                var primaryType = Core.Import.LegacyCandidateScanner.Classify(primary).IsDlc ? ModType.Dlc : ModType.Mod;
-                var entry = await BuildModEntry(primary.FullName, primaryType, groupId, archivePath, archiveName, progress, Path.GetFileName(primary.FullName));
+                var primary = candidates.Primary!;
+                var primaryType = primary.Kind == ComponentKind.Dlc ? ModType.Dlc : ModType.Mod;
+                var entry = await BuildModEntry(primary.RootPath, primaryType, groupId, archivePath, archiveName, progress, primary.Name);
                 if (entry != null)
                 {
                     entry.ComponentFingerprints = componentFingerprints;
+
                     entry.GameModFolders.Clear();
-                    foreach (var mr in modRoots)
-                        entry.GameModFolders.Add(mr.Name);
+                    foreach (var component in modRoots)
+                        entry.GameModFolders.Add(component.Name);
 
-                    // Add attached mods (e.g. DLC root containing nested mods)
-                    foreach (var am in allAttachedMods)
-                        if (!entry.GameModFolders.Contains(am.Name))
-                            entry.GameModFolders.Add(am.Name);
+                    entry.GameDlcFolders.Clear();
+                    foreach (var component in dlcRoots)
+                        entry.GameDlcFolders.Add(component.Name);
 
-                    // DLC roots
-                    if (dlcRoots.Count > 0)
-                    {
-                        entry.GameDlcFolders.Clear();
-                        foreach (var dr in dlcRoots)
-                            entry.GameDlcFolders.Add(dr.Name);
+                    // The record is built, so every other root goes into storage. The primary is
+                    // already there, which the existence check skips.
+                    foreach (var component in modRoots.Concat(dlcRoots)
+                                 .Where(c => !IsSamePath(c.RootPath, primary.RootPath)))
+                        MoveComponentToStorage(component.RootPath);
 
-                        // Move dlc root folders to storage
-                        foreach (var dr in dlcRoots)
-                        {
-                            if (!Directory.Exists(dr.FullName)) continue;
-                            var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), dr.Name);
-                            if (Directory.Exists(dlcStorageDir))
-                                Directory.Delete(dlcStorageDir, true);
-                            Directory.Move(dr.FullName, dlcStorageDir);
-                        }
-                    }
-
-                    // Move attached DLCs to storage
-                    foreach (var ad in allAttachedDlcs)
-                    {
-                        if (!entry.GameDlcFolders.Contains(ad.Name))
-                            entry.GameDlcFolders.Add(ad.Name);
-                        if (!Directory.Exists(ad.FullName)) continue;
-                        var dlcStorageDir = Path.Combine(_storage.GetModsDirectory(), ad.Name);
-                        if (Directory.Exists(dlcStorageDir))
-                            Directory.Delete(dlcStorageDir, true);
-                        Directory.Move(ad.FullName, dlcStorageDir);
-                    }
-
-                    // Move remaining mod roots to storage (primary already moved by BuildModEntry)
-                    for (int mi = 1; mi < modRoots.Count; mi++)
-                    {
-                        var mr = modRoots[mi];
-                        if (!Directory.Exists(mr.FullName)) continue;
-                        var modStorageDir = Path.Combine(_storage.GetModsDirectory(), mr.Name);
-                        if (Directory.Exists(modStorageDir))
-                            Directory.Delete(modStorageDir, true);
-                        if (Directory.Exists(mr.FullName))
-                            Directory.Move(mr.FullName, modStorageDir);
-                    }
-
-                    // Move attached mods to storage
-                    foreach (var am in allAttachedMods)
-                    {
-                        if (!Directory.Exists(am.FullName)) continue;
-                        var modStorageDir = Path.Combine(_storage.GetModsDirectory(), am.Name);
-                        if (Directory.Exists(modStorageDir))
-                            Directory.Delete(modStorageDir, true);
-                        if (Directory.Exists(am.FullName))
-                            Directory.Move(am.FullName, modStorageDir);
-                    }
-
-                    // Attach bin files
                     if (binFiles.Count > 0)
-                        AttachBinFiles(entry, tempExtractDir, binFiles);
+                        AttachBinFiles(entry, candidates.BinRoots);
 
                     results.Add(entry);
                 }
             }
-        }
         else
         {
-            // No mod*/dlc* candidates — check for pure bin or try FindModRoot
-            if (binFiles.Count > 0)
+            // No mod/dlc components — a pure bin package, or something to ask about by hand.
+            if (candidates.BinRoots.Count > 0)
             {
                 // Pure bin mod — no mod/dlc folders
-                var entry = CreatePureBinEntry(archivePath, archiveName, groupId, tempExtractDir, binFiles);
+                var entry = CreatePureBinEntry(archivePath, archiveName, groupId, tempExtractDir, candidates.BinRoots);
                 if (entry != null) results.Add(entry);
             }
             else
@@ -433,27 +381,43 @@ public class ModImportService
     /// rather than as a match.
     /// </summary>
     private static List<ComponentFingerprintEntry> CollectComponentFingerprints(
-        IEnumerable<DirectoryInfo> modRoots,
-        IEnumerable<DirectoryInfo> attachedMods,
-        IEnumerable<DirectoryInfo> dlcRoots,
-        IEnumerable<DirectoryInfo> attachedDlcs)
+        IEnumerable<PackageComponent> mods,
+        IEnumerable<PackageComponent> dlcs)
     {
         var entries = new List<ComponentFingerprintEntry>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        void Collect(TargetDomain domain, DirectoryInfo root)
+        void Collect(TargetDomain domain, PackageComponent component)
         {
-            if (!seen.Add(domain + "\u0001" + root.Name)) return;
-            var entry = ComponentFingerprintCollector.FromRoot(domain, root.Name, root.FullName);
+            if (!seen.Add(domain + "\u0001" + component.Name)) return;
+            var entry = ComponentFingerprintCollector.FromRoot(domain, component.Name, component.RootPath);
             if (entry != null) entries.Add(entry);
         }
 
-        foreach (var root in modRoots) Collect(TargetDomain.Mods, root);
-        foreach (var root in attachedMods) Collect(TargetDomain.Mods, root);
-        foreach (var root in dlcRoots) Collect(TargetDomain.Dlc, root);
-        foreach (var root in attachedDlcs) Collect(TargetDomain.Dlc, root);
+        foreach (var component in mods) Collect(TargetDomain.Mods, component);
+        foreach (var component in dlcs) Collect(TargetDomain.Dlc, component);
         return entries;
     }
+
+    /// <summary>
+    /// Moves one component root into the storage directory, replacing an existing target (those
+    /// were confirmed by the duplicate pre-flight). A root that is no longer there is skipped: the
+    /// primary was already moved while its record was built.
+    /// </summary>
+    private void MoveComponentToStorage(string rootPath)
+    {
+        if (!Directory.Exists(rootPath)) return;
+
+        var target = Path.Combine(_storage.GetModsDirectory(), Path.GetFileName(rootPath));
+        if (Directory.Exists(target)) Directory.Delete(target, true);
+        if (Directory.Exists(rootPath)) Directory.Move(rootPath, target);
+    }
+
+    private static bool IsSamePath(string? left, string? right) =>
+        string.Equals(
+            (left ?? "").TrimEnd('\\', '/'),
+            (right ?? "").TrimEnd('\\', '/'),
+            StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Runs the analyzer's grouping beside the legacy scanner and reports where the two disagree.
@@ -594,31 +558,6 @@ private static string FindModRoot(string sourceDir)
         }
 
         return current;
-    }
-
-    /// <summary>
-    /// Builds the S5 import-preview confirmation message from the analyzer result.
-    /// </summary>
-    private static string BuildImportPreviewMessage(AnalysisResult analysis)
-    {
-        var decisions = string.Join("\n", analysis.RequiresUserDecision);
-        var components = string.Join("\n\n", analysis.Components.Select(c =>
-        {
-            var files = ManifestBuilder.ListFiles(c.RootPath);
-            var head = files.Take(6).ToList();
-            var fileList = head.Count > 0
-                ? "\n      " + string.Join("\n      ", head)
-                : "";
-            var more = files.Count > head.Count
-                ? $"\n      ... (+{files.Count - head.Count} more files)"
-                : "";
-            return $"{c.Name} ({c.Kind}) — {string.Join(", ", c.Evidence)}\n      {files.Count} file(s):{fileList}{more}";
-        }));
-        var warnings = analysis.Warnings.Count > 0
-            ? "\n\n" + string.Join("\n", analysis.Warnings)
-            : "";
-        return string.Format(TranslationService.Instance.T("import.preview_body"), decisions, components) + warnings
-             + "\n\n" + TranslationService.Instance.T("import.preview_ask");
     }
 
     /// <summary>
@@ -1004,11 +943,12 @@ private static string DeepFlatten(string sourceDir, string targetDir)
     /// Create a ModEntry for a pure bin mod (no mod/dlc folders).
     /// </summary>
     private ModEntry? CreatePureBinEntry(string archivePath, string archiveName, string groupId,
-        string extractDir, List<string> binFiles)
+        string extractDir, IReadOnlyList<string> binRoots)
     {
-        // Infer name from the parent of the bin/ directory (may be nested)
-        var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
-        var binRoot = binDirs.Length > 0 ? binDirs[0].FullName : Path.Combine(extractDir, "bin");
+        if (binRoots.Count == 0) return null;
+
+        // Infer name from the parent of the first bin/ root (may be nested).
+        var binRoot = binRoots[0];
         var parentDir = new DirectoryInfo(binRoot).Parent;
         // The extraction directory is this manager's own temporary folder, so it is not a name: the
         // rule lives in Core where it can be tested without an archive.
@@ -1024,32 +964,41 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             IsEnabled = false
         };
 
-        AttachBinFiles(entry, extractDir, binFiles);
+        AttachBinFiles(entry, binRoots);
         return entry;
     }
 
     /// <summary>
-    /// Copy bin files from extract directory to mod storage and populate GameBinFiles.
+    /// Copies the package's bin files into its storage folder, each from the root it actually came
+    /// from. The old shape took the first bin/ directory and used it for every file, which is how a
+    /// second root's files ended up copied from the wrong place.
     /// </summary>
-    private void AttachBinFiles(ModEntry entry, string extractDir, List<string> binFiles)
+    private void AttachBinFiles(ModEntry entry, IReadOnlyList<string> binRoots)
     {
-        if (binFiles.Count == 0) return;
-
-        // Find actual bin directory (may be nested: ModName/bin/..., not just bin/...)
-        var binDirs = new DirectoryInfo(extractDir).GetDirectories("bin", SearchOption.AllDirectories);
-        var binRoot = binDirs.Length > 0 ? binDirs[0].FullName : Path.Combine(extractDir, "bin");
+        if (binRoots.Count == 0) return;
 
         var binStorageDir = _storage.GetModBinDirectory(entry.Id);
-        entry.BinStoragePath = binStorageDir;
-        entry.GameBinFiles.AddRange(binFiles);
+        var copied = 0;
 
-        foreach (var bf in binFiles)
+        foreach (var root in binRoots)
         {
-            var src = Path.Combine(binRoot, bf.Replace('/', Path.DirectorySeparatorChar));
-            var dest = Path.Combine(binStorageDir, bf.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            if (File.Exists(src)) File.Copy(src, dest, true);
+            foreach (var relative in Core.Import.ImportCandidates.RelativePathsUnder(root))
+            {
+                var source = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(source)) continue;
+
+                var target = Path.Combine(binStorageDir, relative.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(source, target, overwrite: true);
+
+                if (!entry.GameBinFiles.Contains(relative, StringComparer.OrdinalIgnoreCase))
+                    entry.GameBinFiles.Add(relative);
+                copied++;
+            }
         }
+
+        // Only claim a storage folder when something actually went into it.
+        if (copied > 0) entry.BinStoragePath = binStorageDir;
     }
 
         private static void MoveDirectory(string sourceDir, string targetDir)
@@ -1077,28 +1026,6 @@ private static string DeepFlatten(string sourceDir, string targetDir)
             var dest = Path.Combine(targetDir, Path.GetFileName(dir));
             CopyDirectoryRecursive(dir, dest);
         }
-    }
-
-    /// <summary>
-    /// Collect the storage directory names this import plans to write into (mod roots,
-    /// dlc roots, attached dlc/mod fetches). Used to detect duplicates before any move/delete.
-    /// </summary>
-    private List<string> CollectPlannedStorageNames(
-        IReadOnlyList<DirectoryInfo> modRoots,
-        IReadOnlyList<DirectoryInfo> dlcRoots,
-        IReadOnlyList<DirectoryInfo> attachedDlcs,
-        IReadOnlyList<DirectoryInfo> attachedMods)
-    {
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // Candidate-path components are already container-typed; their raw root name is the
-        // canonical storage name (matches BuildModEntry canonicalName). Bare "Foo -> modFoo"
-        // is handled by the fallback path, which prefixes explicitly.
-        for (int i = 0; i < modRoots.Count; i++)
-            names.Add(modRoots[i].Name);
-        foreach (var dr in dlcRoots) names.Add(dr.Name);
-        foreach (var ad in attachedDlcs) names.Add(ad.Name);
-        foreach (var am in attachedMods) names.Add(am.Name);
-        return names.ToList();
     }
 
     /// <summary>
