@@ -849,8 +849,8 @@ public partial class ModListPage : UserControl
         if (CategoryHeaderText != null) CategoryHeaderText.Text = t.T("mods.categories");
         if (DropHintText != null) DropHintText.Text = t.T("mods.drop_hint");
 
-        // TODO(v1.x): Language refresh currently rebuilds the category list.
-        // Consider separating data loading from display refresh.
+        // Rebuilding the category list here is deliberate: its labels come from the translation
+        // table, so a language change has to re-create the items rather than re-label them.
         LoadCategories();
     }
 

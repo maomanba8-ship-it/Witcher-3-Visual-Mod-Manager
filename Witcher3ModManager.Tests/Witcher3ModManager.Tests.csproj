@@ -22,6 +22,9 @@
 
   <ItemGroup>
     <Compile Include="..\Witcher3ModManager\Core\**\*.cs" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Linked on its own: the data-folder name is the boundary between the test build and a
+         release build, so it is worth a test even though it lives outside Core\. -->
+    <Compile Include="..\Witcher3ModManager\AppDataPath.cs" Link="AppDataPath.cs" />
   </ItemGroup>
 
 </Project>
