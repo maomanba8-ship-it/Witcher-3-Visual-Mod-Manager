@@ -1,0 +1,10 @@
+{
+    "name": "modsample",
+    "modName": "modSample",
+    "version": "1.0.0",
+    "gameVersion": 29,
+    "description": "sample manifest",
+    "author": "",
+    "dependencies": [],
+    "useLooseScripts": false
+}

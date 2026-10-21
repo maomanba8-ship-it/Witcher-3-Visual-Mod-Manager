@@ -1,0 +1,4 @@
+A package in the 5.0 shape: the classic mods/ + dlc/ layout, with the official content/info.json
+manifest and the generated artifacts (texture.cache, metadata.store, w3strings) a 5.0 mod ships.
+- Mod: modSample
+- Dlc: dlcSample

@@ -335,17 +335,27 @@ public class ModImportService
         await Task.Run(() => MoveDirectory(modRoot, finalModDir));
 
         var modInfo = ParseModInfo(finalModDir);
+        // The v5.0 manifest (content/info.json) carries metadata a folder cannot: author, version,
+        // description. Its own "name" is id-shaped ("gwentfaithfullyeroticartwork"), which makes a
+        // poor display name, so the folder/ini name still wins.
+        var manifest = ModManifest.Read(finalModDir);
         var category = DetectCategory(finalModDir, archiveName, modInfo);
         var screenshot = FindScreenshot(finalModDir, modInfo);
+
+        var author = modInfo.GetValueOrDefault("author", "");
+        if (author.Length == 0) author = manifest?.Author ?? "";
+        var version = modInfo.GetValueOrDefault("version", "");
+        if (version.Length == 0) version = manifest?.Version ?? "";
+        var description = modInfo.GetValueOrDefault("description", "");
+        if (description.Length == 0) description = manifest?.Description ?? "";
+        if (description.Length == 0) description = ScanReadmeForImport(finalModDir);
 
         var buildEntry = new ModEntry
         {
             Name = modInfo.TryGetValue("name", out var n) ? n : originalName,
-            Author = modInfo.GetValueOrDefault("author", ""),
-            Version = modInfo.GetValueOrDefault("version", ""),
-            Description = modInfo.GetValueOrDefault("description", "") != ""
-                ? modInfo.GetValueOrDefault("description", "")
-                : ScanReadmeForImport(finalModDir),
+            Author = author,
+            Version = version,
+            Description = description,
             Category = category,
             ScreenshotPath = screenshot ?? "",
             SourceArchive = archivePath,
