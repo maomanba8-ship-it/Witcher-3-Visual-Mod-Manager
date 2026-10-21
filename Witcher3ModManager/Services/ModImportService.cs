@@ -34,16 +34,11 @@ public class ModImportService
     }
 
     /// <summary>
-    /// [技术债] Import 流程重构 — BuildModEntry 只负责生成 ModEntry，禁止操作文件系统。
-    /// ImportArchiveAsync 统一负责：解压、扫描、重名处理、Move、SaveMod、清理 temp。
-    /// 当前 BuildModEntry 和 ImportArchiveAsync 的职责边界已模糊，请勿继续添加。
-
-
-    /// [技术债] 中英文切换 — 当前 150+ 处硬编码中文，计划改为 Loc 字典 + 动态刷新，避免用 resx（防止 BAML 脱壳）。
-    /// [技术债] bin/ 目录支持 — 部分 Mod 需要 bin\config\...\xxx.xml 复制到游戏 bin 目录，启动游戏菜单才能读取。
-    /// 需要改动: ModEntry.GameBinFiles, ScanBinFiles(), EnableBin/DisableBin, ConflictService bin检测。
-    /// 当前状态: bin 文件导入后无法在Mod 管理器里控制（游戏菜单读取）。
-    /// 狮鹫多文件 / Bathhouse重复dlc / 重复导入 / 目录改名 等问题反复出现。
+    /// Imports one archive: extract, read the structure, pre-flight the plan, then install.
+    ///
+    /// Structure comes from the analyzer alone (the old folder-name scanner was retired once the
+    /// two agreed on every fixture and on a real package). Nothing that identifies a component is
+    /// decided from a mod's name.
     /// </summary>
     public async Task<(List<ModEntry> Results, string? Error)> ImportArchiveAsync(string archivePath,
         IProgress<string>? progress = null)
@@ -85,8 +80,8 @@ public class ModImportService
             return (new List<ModEntry>(), "bundle_patch");
         }
 
-        // Step 1: read the package structure (read-only). The analyzer decides what the package
-        // contains; the legacy folder-name scan still runs in DEBUG only, to compare conclusions.
+        // Step 1: read the package structure (read-only). The analyzer is the only source of truth
+        // for what the package contains; the old folder-name scan has been retired.
         var analysis = PackageAnalyzer.Analyze(tempExtractDir);
         var candidates = Core.Import.ImportCandidates.From(analysis);
 
@@ -95,13 +90,6 @@ public class ModImportService
         var binFiles = candidates.BinRoots
             .SelectMany(Core.Import.ImportCandidates.RelativePathsUnder)
             .ToList();
-
-#if DEBUG
-        LogCandidateComparison(
-            Core.Import.LegacyCandidateScanner.Scan(tempExtractDir),
-            Core.Import.LegacyCandidateScanner.ScanBinFiles(tempExtractDir),
-            analysis);
-#endif
 
         if (analysis.RejectReason != null && candidates.IsEmpty)
         {
@@ -423,78 +411,6 @@ public class ModImportService
             (left ?? "").TrimEnd('\\', '/'),
             (right ?? "").TrimEnd('\\', '/'),
             StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Runs the analyzer's grouping beside the legacy scanner and reports where the two disagree.
-    ///
-    /// Nothing here decides anything: the container path keeps using the old scanner until this
-    /// comparison comes up clean on the fixtures and on real packages. That is the point of this
-    /// stage — the switch has to be observed before it is made.
-    /// </summary>
-    private static void LogCandidateComparison(
-        List<Core.Import.LegacyCandidate> legacyCandidates,
-        List<string> legacyBinFiles,
-        AnalysisResult analysis)
-    {
-        var byAnalysis = Core.Import.ImportCandidates.From(analysis);
-
-        var legacyMods = legacyCandidates
-            .SelectMany(candidate => new[] { candidate.Root }.Concat(candidate.AttachedMods))
-            .Where(dir => !Core.Import.LegacyCandidateScanner.Classify(dir).IsDlc)
-            .Select(dir => dir.Name)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var legacyDlcs = legacyCandidates
-            .SelectMany(candidate => new[] { candidate.Root }.Concat(candidate.AttachedDlcs))
-            .Where(dir => Core.Import.LegacyCandidateScanner.Classify(dir).IsDlc)
-            .Select(dir => dir.Name)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var analysisMods = byAnalysis.Mods.Select(c => c.Name)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
-        var analysisDlcs = byAnalysis.Dlcs.Select(c => c.Name)
-            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
-
-        var binRoots = byAnalysis.BinRoots
-            .Select(root => (Root: root,
-                RelativePaths: (IEnumerable<string>)Core.Import.ImportCandidates.RelativePathsUnder(root)))
-            .ToList();
-        var analysisBinFiles = binRoots.Sum(root => root.RelativePaths.Count());
-
-        DiagnosticLog.Write(
-            $"[candidates] legacy mods=[{string.Join(", ", legacyMods)}] " +
-            $"dlcs=[{string.Join(", ", legacyDlcs)}] binFiles={legacyBinFiles.Count}");
-        DiagnosticLog.Write(
-            $"[candidates] analysis mods=[{string.Join(", ", analysisMods)}] " +
-            $"dlcs=[{string.Join(", ", analysisDlcs)}] binRoots={binRoots.Count} binFiles={analysisBinFiles}");
-
-        ReportDifference("mods", legacyMods, analysisMods);
-        ReportDifference("dlcs", legacyDlcs, analysisDlcs);
-
-        foreach (var warning in byAnalysis.Warnings)
-            DiagnosticLog.Write($"[candidates] analysis warning: {warning}");
-
-        foreach (var path in Core.Import.ImportCandidates.BinPathCollisions(binRoots))
-            DiagnosticLog.Write($"[candidates] bin path claimed by more than one root: {path}");
-    }
-
-    private static void ReportDifference(
-        string what,
-        IReadOnlyList<string> legacy,
-        IReadOnlyList<string> analysis)
-    {
-        var onlyLegacy = legacy.Except(analysis, StringComparer.OrdinalIgnoreCase).ToList();
-        var onlyAnalysis = analysis.Except(legacy, StringComparer.OrdinalIgnoreCase).ToList();
-
-        if (onlyLegacy.Count > 0)
-            DiagnosticLog.Write($"[candidates] {what} only in the legacy scan: {string.Join(", ", onlyLegacy)}");
-        if (onlyAnalysis.Count > 0)
-            DiagnosticLog.Write($"[candidates] {what} only in the analysis: {string.Join(", ", onlyAnalysis)}");
-    }
 
     private static ModType? AskModOrDlc(string archiveName)
     {

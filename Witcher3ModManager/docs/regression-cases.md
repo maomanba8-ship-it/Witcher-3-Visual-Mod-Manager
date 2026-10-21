@@ -77,6 +77,34 @@
 - **样本**：`same_component_dup_file`。
 - **期望**：无冲突。
 
+### 11. 同类型组件嵌套（只认最外层）
+- **输入**：`modOuter\modInner\content`。
+- **样本**：`Fixtures\nested-same-type`。
+- **期望**：只识别 `(Mod, modOuter)`；内层同类型不额外成为组件。
+- **测试**：`PackageAnalyzerTests`（fixture）+ `ImportCandidatesTests`（组件去重）。
+
+### 12. 顶层直接是 `content/`（没有包装文件夹）
+- **输入**：解压后根目录下只有 `content\`。
+- **样本**：`Fixtures\root-level-content`。
+- **期望**：分析器**认不出**（`unknown_structure`），这是刻意的：没有组件名可借。
+- **补偿路径**：导入时提供**显式**手动入口「整体安装为 mod / dlc」，装的是**解压根**（保住 `content` 层级）。
+- **测试**：`PackageAnalyzerTests`（fixture）+ `ManualInstallRootTests`（6 个用例）。
+
+### 13. 包内两个 bin 根写同一相对路径
+- **输入**：例如 `A\bin\config\x.xml` 与 `B\bin\config\x.xml` 同一个压缩包内。
+- **样本**：`Fixtures\multi-bin-roots`（结构）+ `ImportCandidatesTests`（`BinPathCollisions`）。
+- **期望**：**拒绝导入**并列出冲突路径（不能静默二选一）。
+- **测试**：`ImportCandidatesTests`。
+
+### 14. `mod*` 名字但没有任何标记的空文件夹
+- **输入**：名为 `modFoo`、里面没有任何文件。
+- **期望**：丢弃并给警告，不安装一个空模组文件夹。
+- **测试**：`ImportCandidatesTests`（`A_component_with_no_file_is_dropped_with_a_warning`）。
+- **说明**：不建 fixture —— 空目录无法进 Git，且这条规则只取决于「有没有文件」。
+
+### 15. 结构识别的唯一入口
+- 旧的文件夹名扫描器（`ScanModCandidates` / `FindModRoot`）**已退役**（第 20 项）。结构识别只经过 `PackageAnalyzer`，再由 `ImportCandidates` 分组；任何新结构都必须先落到 `Fixtures\` 再改这两处。
+
 ## 四、新问题上线流程
 
 1. 先写**匿名样本** + 期望结果 + 测试（`PackageAnalyzerTests` / `ConflictAnalyzerTests` / `ManifestBuilderTests` / `SharedResourceResolverTests` / FixtureRunner）。

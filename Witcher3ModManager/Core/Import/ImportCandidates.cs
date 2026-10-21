@@ -7,9 +7,9 @@ namespace Witcher3ModManager.Core.Import;
 /// One package's components, grouped the way the importer needs them: mods, dlcs, and the bin roots
 /// whose contents all end up in the same folder in the game directory.
 ///
-/// This exists so the importer can be driven by the analyzer alone. The old scanner decided the same
-/// things from folder names, and giving both the same shape is what makes the switch comparable
-/// instead of a rewrite nobody can verify.
+/// The importer is driven by the analyzer alone. The old folder-name scanner was retired after the
+/// two were compared on every structure fixture and on a real package and agreed everywhere except
+/// the documented "marker-only component" case.
 /// </summary>
 public sealed record ImportCandidateSet(
     IReadOnlyList<PackageComponent> Mods,
