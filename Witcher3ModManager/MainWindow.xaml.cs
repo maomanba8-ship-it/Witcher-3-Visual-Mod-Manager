@@ -402,7 +402,23 @@ public partial class MainWindow : Window
 
         var archived = _storage.Journals.Handle(leftovers.Select(l => l.OperationId));
         DiagnosticLog.Write($"[journal] {archived} unfinished journal(s) were marked as handled");
+
+        // Marking a journal as handled archives the record, not the data it moved aside. Those
+        // folders are reported with their size and left alone: after a rollback that could not
+        // finish, one of them may hold the only copy of something.
+        var staging = Core.Deployment.StagingReport.Find(
+            _w3?.GetGamePath(), leftovers.Select(l => l.OperationId));
+        if (staging.Count == 0) return;
+
+        var stagingLines = staging.Select(s => "· " + s.Path + "  (" + FormatSize(s.Bytes) + ")");
+        MessageBox.Show(
+            string.Format(t.T("journal.staging_left"), staging.Count, string.Join("\n", stagingLines)),
+            t.T("journal.staging_left_title"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    private static string FormatSize(long bytes) => bytes >= 1024L * 1024
+        ? $"{bytes / (1024d * 1024):0.0} MB"
+        : $"{bytes / 1024d:0.0} KB";
 
     private static string OperationKindKey(Core.Deployment.OperationKind kind) => kind switch
     {
