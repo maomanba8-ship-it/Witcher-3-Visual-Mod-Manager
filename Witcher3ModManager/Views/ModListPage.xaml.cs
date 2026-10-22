@@ -30,6 +30,14 @@ public partial class ModListPage : UserControl
     public event Action<int, int, int, int, int, int>? StatusUpdated;  // enabled, total, conflicts, potentialOverrides, bundleCount, sharedCount
     private List<OrphanModInfo> _orphans = new();
 
+    /// <summary>
+    /// True while the code is putting a toggle back after a failed operation. Setting the checkbox
+    /// raises its own event, which used to start the opposite operation — a failed disable became
+    /// an enable attempt, whose failure became a disable attempt again, leaving one journal per
+    /// round trip. The guard makes the revert silent.
+    /// </summary>
+    private bool _revertingToggle;
+
     public ModListPage()
     {
         InitializeComponent();
@@ -551,8 +559,18 @@ public partial class ModListPage : UserControl
     #endregion
 
     #region Enable/Disable
+    /// <summary>Puts a toggle back without letting the change start an operation.</summary>
+    private void RevertToggle(CheckBox chk, bool wanted)
+    {
+        _revertingToggle = true;
+        try { chk.IsChecked = wanted; }
+        finally { _revertingToggle = false; }
+    }
+
     private void ToggleButton_Checked(object sender, RoutedEventArgs e)
     {
+        if (_revertingToggle) return;
+
         if (sender is CheckBox chk && chk.Tag is ModEntry mod)
         {
             if (_w3 != null && _w3.GetGamePath() != null)
@@ -562,7 +580,7 @@ public partial class ModListPage : UserControl
                 {
                     MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.enable_failed"), mod.Name, outcome),
                         TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
-                    chk.IsChecked = false;
+                    RevertToggle(chk, false);
                     return;
                 }
                 // Enabled, but not everything could be placed: say so instead of staying quiet.
@@ -581,6 +599,8 @@ public partial class ModListPage : UserControl
 
     private void ToggleButton_Unchecked(object sender, RoutedEventArgs e)
     {
+        if (_revertingToggle) return;
+
         if (sender is CheckBox chk && chk.Tag is ModEntry mod)
         {
             if (_w3 != null && _w3.GetGamePath() != null)
@@ -590,7 +610,7 @@ public partial class ModListPage : UserControl
                 {
                     MessageBox.Show(OperationReport.Text(TranslationService.Instance.T("mods.disable_failed"), mod.Name, outcome),
                         TranslationService.Instance.T("dialog.error"), MessageBoxButton.OK, MessageBoxImage.Warning);
-                    chk.IsChecked = true;
+                    RevertToggle(chk, true);
                     return;
                 }
                 // Disabled, but a bin file could not be put back: say so rather than let the user
