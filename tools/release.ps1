@@ -8,6 +8,9 @@
     with the tests and the fixture runner as gates: if either fails, nothing is published and no
     archive is produced.
 
+    The publish is single-file: the archive holds one Witcher3ModManager.exe, the Resources folder
+    and the two documents. Nobody has to scroll past 250 runtime DLLs to find the program.
+
     The version shown inside the app comes from Witcher3ModManager\Core\AppInfo.cs. The csproj
     carries the same number for the exe metadata, and a unit test fails if the two drift apart.
 
@@ -74,7 +77,10 @@ if (Test-Path -LiteralPath $publishFull) {
     Get-ChildItem -LiteralPath $publishFull -Force | Remove-Item -Recurse -Force
 }
 
-$publishArgs = @('publish', $appProject, '-c', 'Release', '-o', $publishDir, '--nologo')
+$publishArgs = @(
+    'publish', $appProject, '-c', 'Release', '-o', $publishDir, '--nologo',
+    '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None'
+)
 if (-not $FrameworkDependent) { $publishArgs += @('-r', 'win-x64', '--self-contained', 'true') }
 & dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
@@ -104,6 +110,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Archiving failed.' }
 # 5. Verify the artifact instead of trusting the commands above.
 $exe = Join-Path $publishDir 'Witcher3ModManager.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "Published exe is missing: $exe" }
+
+# Single-file is the point of this layout; loose DLLs mean it silently fell back to the old shape.
+$looseDlls = @(Get-ChildItem -LiteralPath $publishFull -Filter *.dll -File)
+if ($looseDlls.Count -gt 0) {
+    throw "Publish produced $($looseDlls.Count) loose DLL(s); single-file publishing did not take effect."
+}
 
 $fileVersion = (Get-Item -LiteralPath $exe).VersionInfo.FileVersion
 if (-not $fileVersion.StartsWith("$Version.", [System.StringComparison]::Ordinal)) {
