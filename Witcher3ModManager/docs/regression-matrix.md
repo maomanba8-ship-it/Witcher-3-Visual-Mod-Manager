@@ -44,6 +44,8 @@
 - **操作**：启用一条含 mod+dlc 的记录 → 再停用。
 - **期望**：游戏目录出现 `mods\<名>`、`dlc\<名>`；`mods.settings` 出现对应行（外来行保持原样）；
   停用后两处都变成 `~<名>`，内容不动，`mods.settings` 该行消失。
+- **格式**：该行必须是 `[modName]` + `Enabled=1` + `Priority=N` 段格式（游戏与 Script Merger 都只认这个）；
+  文件里不应再出现旧的 `"modName" = N` 行。
 
 ### B2 失败提示到组件
 - **前置**：用 cmd 窗口把当前目录停在待停用的文件夹里（PowerShell 不行）。

@@ -1,6 +1,5 @@
 ﻿using System.IO;
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Witcher3ModManager.Core.Analysis;
 using Witcher3ModManager.Core.Deployment;
@@ -538,12 +537,9 @@ public class Witcher3Service
 
         try
         {
-            foreach (var line in File.ReadAllLines(path))
-            {
-                var match = Regex.Match(line, @"^\s*""([^""]+)""\s*=\s*(\d+)\s*$");
-                if (match.Success)
-                    result.Add((match.Groups[1].Value, int.Parse(match.Groups[2].Value)));
-            }
+            foreach (var entry in Core.Settings.ModsSettingsFile.Parse(File.ReadAllLines(path)))
+                if (entry.Enabled)
+                    result.Add((entry.ModName, entry.Priority));
         }
         catch (Exception ex)
         {
@@ -592,23 +588,11 @@ public class Witcher3Service
                 : new HashSet<string>(mods.Select(m => m.ModName), StringComparer.OrdinalIgnoreCase);
             var desired = mods.Where(m => owned.Contains(m.ModName)).ToList();
 
-            var preserved = new List<string>();
-            if (File.Exists(path))
-            {
-                foreach (var line in File.ReadAllLines(path))
-                {
-                    var match = Regex.Match(line, @"^\s*""([^""]+)""\s*=\s*(\d+)\s*$");
-                    // Drop an existing line only if it is one of OUR owned keys; the desired
-                    // list decides which of those survive (stale/disabled owned rows vanish).
-                    if (match.Success && owned.Contains(match.Groups[1].Value))
-                        continue;
-                    preserved.Add(line);
-                }
-            }
-
-            var sorted = desired.OrderBy(m => m.Priority).ToList();
-            var managedLines = sorted.Select(m => $@"""{m.ModName}"" = {m.Priority}");
-            var allLines = preserved.Concat(managedLines).ToList();
+            // The game reads "[name] / Enabled= / Priority=" sections. Rows written by older
+            // builds in the "name" = N form are converted here, and everything that is not ours
+            // survives untouched.
+            var existing = File.Exists(path) ? File.ReadAllLines(path) : Array.Empty<string>();
+            var allLines = Core.Settings.ModsSettingsFile.Rewrite(existing, desired, owned);
 
             // Same-volume temporary file, atomic replace, and the previous file kept as .bak:
             // this is the file the game reads for load order, so a half-written file or a lost
