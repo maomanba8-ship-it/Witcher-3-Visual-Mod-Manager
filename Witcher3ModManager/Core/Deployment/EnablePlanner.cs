@@ -20,13 +20,15 @@ public static class EnablePlanner
         string? storageRoot,
         IEnumerable<string>? modFolders,
         IEnumerable<string>? dlcFolders,
-        Func<string, bool>? directoryExists = null)
+        Func<string, bool>? directoryExists = null,
+        Func<string, bool>? directoryIsEmpty = null)
     {
         var exists = directoryExists ?? Directory.Exists;
+        var isEmpty = directoryIsEmpty ?? IsEmptyDirectory;
 
         var steps = new List<EnablePlanStep>();
-        steps.AddRange(PlanDomain(TargetDomain.Mods, gameModsRoot, storageRoot, modFolders, exists));
-        steps.AddRange(PlanDomain(TargetDomain.Dlc, gameDlcRoot, storageRoot, dlcFolders, exists));
+        steps.AddRange(PlanDomain(TargetDomain.Mods, gameModsRoot, storageRoot, modFolders, exists, isEmpty));
+        steps.AddRange(PlanDomain(TargetDomain.Dlc, gameDlcRoot, storageRoot, dlcFolders, exists, isEmpty));
 
         return steps.Count == 0
             ? EnablePlan.Empty
@@ -38,7 +40,8 @@ public static class EnablePlanner
         string? gameRoot,
         string? storageRoot,
         IEnumerable<string>? folders,
-        Func<string, bool> exists)
+        Func<string, bool> exists,
+        Func<string, bool> isEmpty)
     {
         if (string.IsNullOrWhiteSpace(gameRoot)) yield break;
 
@@ -51,7 +54,10 @@ public static class EnablePlanner
                 : Path.Combine(storageRoot, folder);
 
             var hasDisabled = exists(disabled);
-            var targetOccupied = exists(target);
+            // An existing but empty folder is not "already deployed": it is what a failed or
+            // interrupted operation leaves behind. Treating it as occupied silently marked the
+            // package as enabled while nothing of it was on disk.
+            var targetOccupied = exists(target) && !isEmpty(target);
             var hasStorage = storageSource is not null && exists(storageSource);
 
             var action =
@@ -65,6 +71,20 @@ public static class EnablePlanner
                 hasStorage ? storageSource : null,
                 targetOccupied,
                 action);
+        }
+    }
+
+    private static bool IsEmptyDirectory(string path)
+    {
+        try
+        {
+            using var entries = Directory.EnumerateFileSystemEntries(path).GetEnumerator();
+            return !entries.MoveNext();
+        }
+        catch
+        {
+            // A path that cannot be read is not evidence of emptiness; leave the old decision.
+            return false;
         }
     }
 

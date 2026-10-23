@@ -65,6 +65,22 @@ public class EnablePlannerTests
     }
 
     [Fact]
+    public void An_empty_folder_in_the_game_directory_is_refilled_from_storage()
+    {
+        // A failed or interrupted operation can leave the target folder behind with nothing in
+        // it. That is not "already in place": treating it as such reported the package as enabled
+        // while the game directory held no mod at all.
+        var plan = Plan(new[] { "modA" },
+            existing: new[] { @"C:\game\mods\modA", @"C:\data\mods\modA" },
+            empty: new[] { @"C:\game\mods\modA" });
+
+        var step = Assert.Single(plan.Steps);
+        Assert.Equal(EnableAction.CopyFromStorage, step.Action);
+        Assert.False(step.TargetOccupied);
+        Assert.Equal(step, Assert.Single(plan.Work));
+    }
+
+    [Fact]
     public void A_folder_with_no_source_is_reported_rather_than_failing()
     {
         var plan = Plan(new[] { "modA", "modB" }, existing: Array.Empty<string>());
@@ -132,9 +148,11 @@ public class EnablePlannerTests
     private static EnablePlan Plan(
         IEnumerable<string>? mods,
         IEnumerable<string>? dlcs = null,
-        IEnumerable<string>? existing = null)
+        IEnumerable<string>? existing = null,
+        IEnumerable<string>? empty = null)
     {
         var set = new HashSet<string>(existing ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
-        return EnablePlanner.Plan(GameMods, GameDlc, Storage, mods, dlcs, set.Contains);
+        var emptySet = new HashSet<string>(empty ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        return EnablePlanner.Plan(GameMods, GameDlc, Storage, mods, dlcs, set.Contains, emptySet.Contains);
     }
 }
