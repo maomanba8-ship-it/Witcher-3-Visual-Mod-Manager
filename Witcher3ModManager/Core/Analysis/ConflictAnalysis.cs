@@ -91,10 +91,37 @@ public static class ConflictAnalyzer
                normalizedPath.Equals("content/info.json", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Documentation is never read by the game. Two mods that each ship a README are not in
+    /// conflict — they only happen to share a name — so these files stay out of the conflict
+    /// list entirely instead of showing up as a red "content override".
+    /// </summary>
+    private static bool IsDocumentationPath(string normalizedPath)
+    {
+        if (string.IsNullOrEmpty(normalizedPath)) return false;
+
+        var fileName = Path.GetFileName(normalizedPath);
+        if (fileName.StartsWith("readme", StringComparison.OrdinalIgnoreCase)) return true;
+
+        var extension = Path.GetExtension(normalizedPath);
+        return extension.Equals(".txt", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".markdown", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".rtf", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".nfo", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".doc", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".docx", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".odt", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".html", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".htm", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static IReadOnlyList<ConflictEvidence> Analyze(IEnumerable<ComponentFile> files)
     {
         var grouped = files
             .Select(f => f with { NormalizedRelativePath = NormalizePath(f.NormalizedRelativePath) })
+            .Where(f => !IsDocumentationPath(f.NormalizedRelativePath))
             .GroupBy(f => (f.Domain, f.NormalizedRelativePath))
             .OrderBy(g => g.Key.Domain)
             .ThenBy(g => g.Key.NormalizedRelativePath)

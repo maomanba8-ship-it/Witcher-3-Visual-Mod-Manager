@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Witcher3ModManager.Core.Analysis;
@@ -14,8 +14,8 @@ public class ConflictAnalyzerTests
         {
             new ComponentFile[]
             {
-                new(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-                new(TargetDomain.Dlc, "dlcA", "content/a.txt", "shaB", 1),
+                new(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+                new(TargetDomain.Dlc, "dlcA", "content/a.dat", "shaB", 1),
             },
             Array.Empty<string>()
         };
@@ -24,8 +24,8 @@ public class ConflictAnalyzerTests
         {
             new ComponentFile[]
             {
-                new(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-                new(TargetDomain.Mods, "modB", "content/a.txt", "shaA", 1),
+                new(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/a.dat", "shaA", 1),
             },
             new[] { "DuplicateContent" }
         };
@@ -34,8 +34,8 @@ public class ConflictAnalyzerTests
         {
             new ComponentFile[]
             {
-                new(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-                new(TargetDomain.Mods, "modB", "content/a.txt", "shaB", 1),
+                new(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "content/a.dat", "shaB", 1),
             },
             new[] { "DefiniteOverride" }
         };
@@ -54,8 +54,8 @@ public class ConflictAnalyzerTests
         {
             new ComponentFile[]
             {
-                new(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-                new(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
+                new(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+                new(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
             },
             Array.Empty<string>()
         };
@@ -170,6 +170,34 @@ public class ConflictAnalyzerTests
             },
             new[] { "UnsupportedContainer" }
         };
+        // Documentation never reaches the game, so two mods each shipping one is not a conflict.
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modPetCat", "README.txt", "shaA", 1),
+                new(TargetDomain.Mods, "modFullRefund", "README.txt", "shaB", 1),
+            },
+            Array.Empty<string>()
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "readme", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "README", "shaB", 1),
+            },
+            Array.Empty<string>()
+        };
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modA", "notes.md", "shaA", 1),
+                new(TargetDomain.Mods, "modB", "notes.md", "shaB", 1),
+            },
+            Array.Empty<string>()
+        };
     }
 
     [Theory]
@@ -182,3 +210,4 @@ public class ConflictAnalyzerTests
         Assert.Equal(expKinds, kinds);
     }
 }
+
