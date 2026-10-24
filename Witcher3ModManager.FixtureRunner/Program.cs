@@ -121,18 +121,18 @@ internal static class Program
     {
         new ConflictCase("mod_vs_dlc_same_path_diff_hash", new[]
         {
-            new ComponentFile(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-            new ComponentFile(TargetDomain.Dlc, "dlcA", "content/a.txt", "shaB", 1),
+            new ComponentFile(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+            new ComponentFile(TargetDomain.Dlc, "dlcA", "content/a.dat", "shaB", 1),
         }, new string[] { }),
         new ConflictCase("same_domain_same_hash", new[]
         {
-            new ComponentFile(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-            new ComponentFile(TargetDomain.Mods, "modB", "content/a.txt", "shaA", 1),
+            new ComponentFile(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+            new ComponentFile(TargetDomain.Mods, "modB", "content/a.dat", "shaA", 1),
         }, new string[] { "DuplicateContent" }),
         new ConflictCase("same_domain_diff_hash", new[]
         {
-            new ComponentFile(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-            new ComponentFile(TargetDomain.Mods, "modB", "content/a.txt", "shaB", 1),
+            new ComponentFile(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+            new ComponentFile(TargetDomain.Mods, "modB", "content/a.dat", "shaB", 1),
         }, new string[] { "DefiniteOverride" }),
         new ConflictCase("same_domain_ws_diff_hash", new[]
         {
@@ -141,8 +141,9 @@ internal static class Program
         }, new string[] { "ScriptOverride" }),
         new ConflictCase("same_component_dup_file", new[]
         {
-            new ComponentFile(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
-            new ComponentFile(TargetDomain.Mods, "modA", "content/a.txt", "shaA", 1),
+            new ComponentFile(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
+            new ComponentFile(TargetDomain.Mods, "modA", "content/a.dat", "shaA", 1),
         }, new string[] { }),
     };
 }
+
