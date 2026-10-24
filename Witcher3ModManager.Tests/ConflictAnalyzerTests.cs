@@ -78,6 +78,23 @@ public class ConflictAnalyzerTests
             new[] { "UnsupportedContainer" }
         };
 
+        // The real Walk by Default / No Map Borders pair: the same three content files with
+        // different bytes. Nothing here is a hard conflict — the two blobs touch different
+        // symbols, which Script Merger confirms.
+        yield return new object[]
+        {
+            new ComponentFile[]
+            {
+                new(TargetDomain.Mods, "modwalkbydefault", "content/info.json", "shaI1", 399),
+                new(TargetDomain.Mods, "modnomapborders", "content/info.json", "shaI2", 379),
+                new(TargetDomain.Mods, "modwalkbydefault", "content/metadata.store", "shaM1", 114),
+                new(TargetDomain.Mods, "modnomapborders", "content/metadata.store", "shaM2", 114),
+                new(TargetDomain.Mods, "modwalkbydefault", "content/precompiled.rsblob", "shaR1", 165),
+                new(TargetDomain.Mods, "modnomapborders", "content/precompiled.rsblob", "shaR2", 241),
+            },
+            new[] { "GeneratedArtifactDiff", "GeneratedArtifactDiff", "UnsupportedContainer" }
+        };
+
         // Known auto-generated WolvenKit artifacts: same path, different hash.
         yield return new object[]
         {
@@ -116,8 +133,10 @@ public class ConflictAnalyzerTests
             new[] { "DuplicateContent" }
         };
 
-        // 5.0 precompiled scripts arrive as content/precompiled.rsblob; a different blob is a
-        // script-level override, which Script Merger Remastered can report.
+        // 5.0 precompiled scripts arrive as content/precompiled.rsblob. The blob is a container
+        // of compiled functions: two different blobs only conflict when their symbols overlap,
+        // which a file hash cannot tell. It is therefore an opaque container, not a script
+        // override (Walk by Default and No Map Borders both ship a blob and do not conflict).
         yield return new object[]
         {
             new ComponentFile[]
@@ -125,7 +144,7 @@ public class ConflictAnalyzerTests
                 new(TargetDomain.Mods, "modA", "content/precompiled.rsblob", "shaA", 1),
                 new(TargetDomain.Mods, "modB", "content/precompiled.rsblob", "shaB", 1),
             },
-            new[] { "ScriptOverride" }
+            new[] { "UnsupportedContainer" }
         };
 
         // Opaque bundle with different hash stays UnsupportedContainer (not downgraded).

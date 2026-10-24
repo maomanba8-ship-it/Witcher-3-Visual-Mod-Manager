@@ -67,6 +67,7 @@ public static class ConflictAnalyzer
         if (normalizedPath.Contains("bundles/", StringComparison.OrdinalIgnoreCase)) return true;
         var ext = Path.GetExtension(normalizedPath);
         return ext.Equals(".bundle", StringComparison.OrdinalIgnoreCase) ||
+               ext.Equals(".rsblob", StringComparison.OrdinalIgnoreCase) ||
                ext.Equals(".bms", StringComparison.OrdinalIgnoreCase) ||
                ext.Equals(".zip", StringComparison.OrdinalIgnoreCase) ||
                ext.Equals(".7z", StringComparison.OrdinalIgnoreCase) ||
@@ -147,7 +148,10 @@ public static class ConflictAnalyzer
             if (isOpaqueContainer)
             {
                 kind = allSameHash ? ConflictKind.DuplicateContent : ConflictKind.UnsupportedContainer;
-                action = allSameHash ? null : "无法静态展开的容器内容存在差异，建议人工确认。";
+                action = allSameHash ? null
+                    : group.Key.NormalizedRelativePath.EndsWith(".rsblob", StringComparison.OrdinalIgnoreCase)
+                        ? "预编译脚本 blob 内容不同，是否冲突取决于内部函数是否重叠，建议用 Script Merger 复核。"
+                        : "无法静态展开的容器内容存在差异，建议人工确认。";
             }
             else if (group.Key.Domain == TargetDomain.Bin)
             {
@@ -166,12 +170,12 @@ public static class ConflictAnalyzer
             }
             else
             {
-                // 5.0 can ship scripts precompiled into content/precompiled.rsblob. Script Merger
-                // Remastered reports conflicts in that blob too, so it belongs with the loose script
-                // extensions rather than with plain content overrides.
+                // Loose scripts override by file path. precompiled.rsblob is NOT treated as a
+                // script here: it is a container of compiled functions, and two different blobs
+                // only conflict when their symbols overlap. A file hash cannot tell that apart,
+                // so the blob stays an opaque container (see IsOpaqueContainerPath).
                 var isScript = group.Key.NormalizedRelativePath.EndsWith(".ws", StringComparison.OrdinalIgnoreCase) ||
-                               group.Key.NormalizedRelativePath.EndsWith(".es", StringComparison.OrdinalIgnoreCase) ||
-                               group.Key.NormalizedRelativePath.EndsWith(".rsblob", StringComparison.OrdinalIgnoreCase);
+                               group.Key.NormalizedRelativePath.EndsWith(".es", StringComparison.OrdinalIgnoreCase);
                 kind = isScript ? ConflictKind.ScriptOverride : ConflictKind.DefiniteOverride;
                 action = isScript ? "存在脚本覆盖，建议运行 Script Merger 处理。" : "同一目标不同内容，存在确定覆盖。";
             }
