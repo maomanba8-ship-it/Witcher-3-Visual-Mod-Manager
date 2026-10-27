@@ -1,39 +1,8 @@
 using System.IO;
 using System.Text;
+using Witcher3ModManager.Core.Analysis.Script;
 
 namespace Witcher3ModManager.Core.Analysis.Rsblob;
-
-/// <summary>Where a compiled script symbol came from inside the blob.</summary>
-public enum RsblobSymbolKind
-{
-    /// <summary>A method of a class the blob redefines.</summary>
-    ClassFunction,
-
-    /// <summary>A global function.</summary>
-    GlobalFunction,
-
-    /// <summary>An @replace / @wrap annotation that replaces the whole function.</summary>
-    Replace,
-
-    /// <summary>An @addMethod annotation.</summary>
-    Add,
-
-    /// <summary>An @wrapMethod annotation.</summary>
-    Wrap,
-
-    /// <summary>An @addField annotation.</summary>
-    AddProperty
-}
-
-/// <summary>
-/// One script symbol the blob defines or annotates. <see cref="ClassName"/> and
-/// <see cref="MethodName"/> are the join key used to compare two mods.
-/// </summary>
-public sealed record RsblobSymbol(
-    string ClassName,
-    string MethodName,
-    RsblobSymbolKind Kind,
-    uint Flags);
 
 /// <summary>
 /// The parts of a blob the conflict analysis needs. Only metadata is read; bytecode is skipped.
@@ -43,7 +12,7 @@ public sealed record RsblobDocument(
     string BuildPlatform,
     string BuildVersion,
     string BuildConfig,
-    IReadOnlyList<RsblobSymbol> Symbols);
+    IReadOnlyList<ScriptSymbol> Symbols);
 
 /// <summary>
 /// Reads the symbol table of a Witcher 3 <c>precompiled.rsblob</c>.
@@ -90,7 +59,7 @@ public static class RsblobReader
         cursor.Position = definitionsStart;
 
         var strings = new StringTable(stringTable);
-        var symbols = new List<RsblobSymbol>();
+        var symbols = new List<ScriptSymbol>();
 
         // Enums
         var enumCount = ReadArray(cursor);
@@ -130,7 +99,8 @@ public static class RsblobReader
             for (var j = 0; j < functionCount; j++)
             {
                 var function = ReadFunction(cursor, strings);
-                symbols.Add(new RsblobSymbol(className, function.Name, RsblobSymbolKind.ClassFunction, function.Flags));
+                symbols.Add(new ScriptSymbol(
+                    className, function.Name, ScriptSymbolKind.ClassFunction, ScriptSymbolOrigin.Rsblob, function.Flags));
             }
 
             SkipDefaultValues(cursor, strings);
@@ -141,20 +111,22 @@ public static class RsblobReader
         for (var i = 0; i < globalFunctionCount; i++)
         {
             var function = ReadFunction(cursor, strings);
-            symbols.Add(new RsblobSymbol("", function.Name, RsblobSymbolKind.GlobalFunction, function.Flags));
+            symbols.Add(new ScriptSymbol(
+                "", function.Name, ScriptSymbolKind.GlobalFunction, ScriptSymbolOrigin.Rsblob, function.Flags));
         }
 
         // Annotations: @replace (global), @replace (class), @addMethod, @wrapMethod, @addField
-        ReadAnnotationArray(cursor, strings, symbols, RsblobSymbolKind.Replace);
-        ReadAnnotationArray(cursor, strings, symbols, RsblobSymbolKind.Replace);
-        ReadAnnotationArray(cursor, strings, symbols, RsblobSymbolKind.Add);
-        ReadAnnotationArray(cursor, strings, symbols, RsblobSymbolKind.Wrap);
+        ReadAnnotationArray(cursor, strings, symbols, ScriptSymbolKind.Replace);
+        ReadAnnotationArray(cursor, strings, symbols, ScriptSymbolKind.Replace);
+        ReadAnnotationArray(cursor, strings, symbols, ScriptSymbolKind.Add);
+        ReadAnnotationArray(cursor, strings, symbols, ScriptSymbolKind.Wrap);
 
         var addedPropertyCount = ReadArray(cursor);
         for (var i = 0; i < addedPropertyCount; i++)
         {
             var property = ReadProperty(cursor, strings);
-            symbols.Add(new RsblobSymbol(property.ClassName, property.Name, RsblobSymbolKind.AddProperty, property.Flags));
+            symbols.Add(new ScriptSymbol(
+                property.ClassName, property.Name, ScriptSymbolKind.AddProperty, ScriptSymbolOrigin.Rsblob, property.Flags));
         }
 
         // The remaining tables describe imports used by bytecode; nothing to extract there.
@@ -186,14 +158,15 @@ public static class RsblobReader
     private static void ReadAnnotationArray(
         Cursor cursor,
         StringTable strings,
-        List<RsblobSymbol> symbols,
-        RsblobSymbolKind kind)
+        List<ScriptSymbol> symbols,
+        ScriptSymbolKind kind)
     {
         var count = ReadArray(cursor);
         for (var i = 0; i < count; i++)
         {
             var function = ReadFunction(cursor, strings);
-            symbols.Add(new RsblobSymbol(function.OverrideClass, function.Name, kind, function.Flags));
+            symbols.Add(new ScriptSymbol(
+                function.OverrideClass, function.Name, kind, ScriptSymbolOrigin.Rsblob, function.Flags));
         }
     }
 

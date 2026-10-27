@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Witcher3ModManager.Core.Analysis.Rsblob;
+using Witcher3ModManager.Core.Analysis.Script;
 using Xunit;
 
 namespace Witcher3ModManager.Tests;
@@ -52,7 +53,8 @@ public class RsblobReaderTests
         var symbol = Assert.Single(document.Symbols);
         Assert.Equal("W3DamageManagerProcessor", symbol.ClassName);
         Assert.Equal("ProcessActionReaction", symbol.MethodName);
-        Assert.Equal(RsblobSymbolKind.ClassFunction, symbol.Kind);
+        Assert.Equal(ScriptSymbolKind.ClassFunction, symbol.Kind);
+        Assert.Equal(ScriptSymbolOrigin.Rsblob, symbol.Origin);
         Assert.Equal(0x4000u, symbol.Flags);
     }
 
@@ -82,7 +84,8 @@ public class RsblobReaderTests
 
         var symbol = Assert.Single(RsblobReader.Read(blob.ToArray()).Symbols);
 
-        Assert.Equal(RsblobSymbolKind.Wrap, symbol.Kind);
+        Assert.Equal(ScriptSymbolKind.Wrap, symbol.Kind);
+        Assert.Equal(ScriptSymbolOrigin.Rsblob, symbol.Origin);
         Assert.Equal("W3DamageManagerProcessor", symbol.ClassName);
         Assert.Equal("ProcessDismemberment", symbol.MethodName);
     }
