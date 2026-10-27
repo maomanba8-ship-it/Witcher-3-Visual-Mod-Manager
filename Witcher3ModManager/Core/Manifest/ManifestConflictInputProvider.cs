@@ -74,7 +74,7 @@ public static class ManifestConflictInputProvider
     /// the deploy prefix stripped/added for the claim's domain. Pure name rule only - never a
     /// per-mod special case. Returns null when no variant exists.
     /// </summary>
-    public static string? ResolveStorageFolder(string storageModsDir, string folder, TargetDomain domain)
+    private static string? ResolveStorageFolder(string storageModsDir, string folder, TargetDomain domain)
     {
         var exact = Path.Combine(storageModsDir, folder);
         if (Directory.Exists(exact)) return exact;
