@@ -91,7 +91,7 @@ public class ScriptSymbolConflictAnalyzerTests
     {
         var symbols = new[]
         {
-            new ScriptSymbol("CR4Player", "OnSpawned", ScriptSymbolKind.Wrap, ScriptSymbolOrigin.LooseScript)
+            new ScriptSymbol("CR4Player", "OnSpawned", ScriptSymbolKind.ClassFunction, ScriptSymbolOrigin.Rsblob)
         };
 
         var evidence = ScriptSymbolConflictAnalyzer.Analyze(new[]
@@ -104,11 +104,31 @@ public class ScriptSymbolConflictAnalyzerTests
     }
 
     [Fact]
+    public void Wraps_alone_are_not_a_conflict()
+    {
+        // The engine chains every @wrapMethod in load order, so three mods wrapping the same
+        // method is normal. Reporting it was the false positive that flooded the conflict list.
+        var wrap = new[]
+        {
+            new ScriptSymbol("CR4Player", "OnSpawned", ScriptSymbolKind.Wrap, ScriptSymbolOrigin.LooseScript)
+        };
+
+        var evidence = ScriptSymbolConflictAnalyzer.Analyze(new[]
+        {
+            new ComponentSymbols("a", wrap),
+            new ComponentSymbols("b", wrap),
+            new ComponentSymbols("c", wrap)
+        });
+
+        Assert.Empty(evidence);
+    }
+
+    [Fact]
     public void Unknown_fingerprints_keep_the_conflict()
     {
         var symbols = new[]
         {
-            new ScriptSymbol("CR4Player", "OnSpawned", ScriptSymbolKind.Wrap, ScriptSymbolOrigin.LooseScript)
+            new ScriptSymbol("CR4Player", "OnSpawned", ScriptSymbolKind.ClassFunction, ScriptSymbolOrigin.Rsblob)
         };
 
         var evidence = ScriptSymbolConflictAnalyzer.Analyze(new[]

@@ -7,12 +7,14 @@ public sealed record ComponentSymbols(
     string? Fingerprint = null);
 
 /// <summary>
-/// Finds methods that more than one component overrides. The join key is
-/// <c>Class::Method</c>, so a compiled blob and a loose script are compared on equal terms — the
-/// case file-level comparison misses entirely.
+/// Finds methods that more than one component overrides. The join key is <c>Class::Method</c>, so
+/// a compiled blob and a loose script are compared on equal terms — the case file-level comparison
+/// misses entirely.
 ///
-/// Two different mechanisms touching the same method cannot be merged by Script Merger; at
-/// runtime one of them wins. That is a real conflict, not an informational overlap.
+/// Only a definition counts. <c>@wrapMethod</c> is composable: the engine chains every wrapper in
+/// load order, so two mods wrapping the same method is normal and never a conflict. A blob class
+/// function, a <c>@replaceMethod</c> or an added method, on the other hand, replaces the body and
+/// collides with any other definition of the same symbol.
 /// </summary>
 public static class ScriptSymbolConflictAnalyzer
 {
@@ -32,13 +34,13 @@ public static class ScriptSymbolConflictAnalyzer
 
             fingerprints.TryAdd(component.ComponentId, component.Fingerprint);
 
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase); // key -> is definition
             foreach (var symbol in component.Symbols)
             {
                 if (string.IsNullOrWhiteSpace(symbol.MethodName)) continue;
 
                 var key = symbol.ClassName + "::" + symbol.MethodName;
-                if (!seen.Add(key)) continue;
+                var isDefinition = symbol.Kind != ScriptSymbolKind.Wrap;
 
                 if (!groups.TryGetValue(key, out var group))
                 {
@@ -46,12 +48,25 @@ public static class ScriptSymbolConflictAnalyzer
                     groups[key] = group;
                 }
 
+                if (isDefinition) group.HasDefinition = true;
+
+                if (seen.TryGetValue(key, out var alreadyDefinition))
+                {
+                    // The same component may contribute the symbol twice (a blob plus a wrapper,
+                    // for example). A definition anywhere in it still counts.
+                    if (isDefinition && !alreadyDefinition) seen[key] = true;
+                    continue;
+                }
+
+                seen[key] = isDefinition;
                 group.Components.Add(component.ComponentId);
             }
         }
 
         return groups.Values
-            .Where(group => group.Components.Count >= 2 && !AllIdentical(group, fingerprints))
+            .Where(group => group.Components.Count >= 2
+                            && group.HasDefinition
+                            && !AllIdentical(group, fingerprints))
             .OrderBy(group => group.ClassName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(group => group.MethodName, StringComparer.OrdinalIgnoreCase)
             .Select(group => new ConflictEvidence(
@@ -94,5 +109,8 @@ public static class ScriptSymbolConflictAnalyzer
         public string MethodName { get; }
 
         public SortedSet<string> Components { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>True when at least one contributor replaces rather than wraps the method.</summary>
+        public bool HasDefinition { get; set; }
     }
 }

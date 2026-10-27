@@ -20,7 +20,7 @@
 - 修复：游戏目录里只剩一个空文件夹时，启用不再把它当成「已部署」——之前会报告成功但实际什么都没复制（「房子升级」mod 就是这样没生效的）。
 - 冲突列表不再统计文档文件（`README.txt`、`readme`、`.md`、`.pdf` 等）：两个 mod 各带一份说明文件不算冲突，Script Merger 同样忽略这类文件。
 - 修复：`content\precompiled.rsblob` 不再按「脚本覆盖」报红。它是编译函数的容器，两个不同的 blob 只有函数重叠才冲突（Walk by Default 与 No Map Borders 就是误报）；现在按蓝色「无法静态判断」处理，并提示用 Script Merger 复核。
-- 新增脚本符号级冲突检测：读取 `precompiled.rsblob` 的类/函数表与松散 `.ws` 的 `@wrapMethod` / `@addMethod` / `@replaceMethod` / `@addField`，同一「类::函数」被两个 mod 覆盖时报告红色冲突（标题显示符号名，如 `W3DamageManagerProcessor::ProcessActionReaction`）。blob 解析失败或版本不认识时退回「无法判断」；脚本内容完全相同的两份副本不重复报告。
+- 新增脚本符号级冲突检测：读取 `precompiled.rsblob` 的类/函数表与松散 `.ws` 的注解，同一「类::函数」发生**定义级**重叠时报告红色冲突（标题显示符号名，如 `W3DamageManagerProcessor::ProcessActionReaction`）。多个 `@wrapMethod` 包装同一函数是引擎支持的叠加行为，不算冲突；只有 `precompiled.rsblob` 类函数、`@replaceMethod`、`@addMethod`、整类重定义才参与判定。blob 解析失败或版本不认识时退回「无法判断」；脚本内容完全相同的两份副本不重复报告。
 - 孤儿接管只登记、不复制；只带 bin 负载的模组文件夹也能被发现；预设按记录 ID 保存（旧预设仍可读）；备份目录按记录 ID 存放；预设文件损坏会保留副本并提示。
 
 **工程**
