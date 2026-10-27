@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Analysis.Script;
 using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Core.Shared;
@@ -84,7 +85,9 @@ public class ConflictService
         if (binClaims.Count > 0)
             files = files.Concat(ManifestConflictInputProvider.BuildFromRoots(binClaims)).ToList();
 
-        var evidence = ConflictAnalyzer.Analyze(files);
+        var evidence = ConflictAnalyzer.Analyze(files)
+            .Concat(BuildScriptSymbolConflicts(storageDir, claims))
+            .ToList();
 #if DEBUG
         // Diagnostics only: record the full evidence, including the informational kinds the
         // user-facing list intentionally leaves out, so a report of "no conflicts" can still be
@@ -104,6 +107,43 @@ public class ConflictService
     }
 
     // ���� Potential Override ��������������������������������������������������������������������������������
+
+    /// <summary>
+    /// Symbol-level script conflicts. File-level comparison cannot see these: a compiled
+    /// <c>content\precompiled.rsblob</c> and a loose <c>.ws</c> sit at different paths even when
+    /// they override the same class method. The storage copy is read because it is what gets
+    /// deployed; a blob that cannot be parsed is logged and simply contributes no symbols.
+    /// </summary>
+    private static List<ConflictEvidence> BuildScriptSymbolConflicts(
+        string storageDir,
+        IReadOnlyList<FolderClaim> claims)
+    {
+        var roots = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var claim in claims)
+        {
+            if (string.IsNullOrWhiteSpace(claim.Folder)) continue;
+            if (roots.ContainsKey(claim.ComponentId)) continue;
+
+            var root = ManifestConflictInputProvider.ResolveStorageFolder(storageDir, claim.Folder, claim.Domain);
+            if (root is null) continue;
+            roots[claim.ComponentId] = root;
+        }
+
+        if (roots.Count < 2) return new List<ConflictEvidence>();
+
+        var scanned = new List<ComponentSymbols>();
+        foreach (var (componentId, root) in roots)
+        {
+            var result = ScriptSymbolScanner.ScanComponent(root);
+            if (result.RsblobError is not null)
+                DiagnosticLog.Write($"[scripts] {componentId}: precompiled.rsblob not readable: {result.RsblobError}");
+
+            if (result.Symbols.Count > 0)
+                scanned.Add(new ComponentSymbols(componentId, result.Symbols, result.Fingerprint));
+        }
+
+        return ScriptSymbolConflictAnalyzer.Analyze(scanned).ToList();
+    }
 
     /// <summary>
     /// Returns enabled mods that use WolvenKit bundle packaging (contain blob0.bundle).
