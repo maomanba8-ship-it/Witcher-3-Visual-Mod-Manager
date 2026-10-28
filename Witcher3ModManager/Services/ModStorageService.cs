@@ -338,6 +338,71 @@ public class ModStorageService
         IndexPackage(mod);
     }
 
+    /// <summary>
+    /// Adds a record that shares one or more component folders with an existing record. The
+    /// folder-name uniqueness check is skipped on purpose: two packages can ship the same core
+    /// component, and both records must point at the one physical folder.
+    ///
+    /// The ownership index keeps a single owner per path, so the shared folders stay indexed to
+    /// the record that created them; the new record still declares them in mods.json, which is what
+    /// enable/disable and the shared-folder protection read.
+    /// </summary>
+    public void AddSharedMod(ModEntry mod, IReadOnlyCollection<string> sharedFolders)
+    {
+        if (mod is null) return;
+
+        var shared = new HashSet<string>(
+            sharedFolders ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+
+        mod.Priority = _mods.Count > 0 ? _mods.Max(m => m.Priority) + 1 : 1;
+        _mods.Add(mod);
+        Save();
+
+        var components = ComponentsOf(mod)
+            .Where(c => !IsSharedComponent(c, shared))
+            .ToList();
+        UpdateIndex(index => LibraryIndexUpdater.WithDeclaredComponents(index, mod.Id, mod.Name, components));
+    }
+
+    private static bool IsSharedComponent(ComponentRecord component, ISet<string> shared) =>
+        (component.Domain == TargetDomain.Mods || component.Domain == TargetDomain.Dlc)
+        && shared.Contains(component.StorageFolder);
+
+    /// <summary>
+    /// Copies a storage component folder aside before an import merges into or replaces it, so a
+    /// wrong "shared / overwrite" choice can be undone by hand. Returns the backup path, or null
+    /// when there was nothing to copy.
+    /// </summary>
+    public string? BackupComponentFolder(string folderName)
+    {
+        if (string.IsNullOrWhiteSpace(folderName)) return null;
+
+        var source = Path.Combine(_modsDir, folderName);
+        if (!Directory.Exists(source)) return null;
+
+        try
+        {
+            var root = Path.Combine(_dataDir, "Backups", "import");
+            Directory.CreateDirectory(root);
+            var target = Path.Combine(root, $"{folderName}-{DateTime.Now:yyyyMMdd-HHmmss-fff}");
+            CopyDirectory(source, target);
+            return target;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void CopyDirectory(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.GetFiles(source))
+            File.Copy(file, Path.Combine(target, Path.GetFileName(file)), overwrite: true);
+        foreach (var directory in Directory.GetDirectories(source))
+            CopyDirectory(directory, Path.Combine(target, Path.GetFileName(directory)));
+    }
+
     public void RemoveMod(string id)
     {
         var mod = _mods.FirstOrDefault(m => m.Id == id);

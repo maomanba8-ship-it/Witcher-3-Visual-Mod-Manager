@@ -71,6 +71,9 @@ public class ModImportService
         // Names the user confirmed to overwrite during pre-flight. Used to avoid a
         // second duplicate prompt when committing entries (same final storage name).
         var confirmedOverwriteNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Folders the user chose to share with an existing record: merged into the existing
+        // storage copy, and the new record keeps its own card pointing at the same folder.
+        var sharedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Step 0: Detect bundle-patching mods (quickbms + .bms)
         if (IsBundlePatchMod(tempExtractDir))
@@ -148,6 +151,29 @@ public class ModImportService
                     .ToList();
                 var duplicateNames = FindExistingPlannedNames(plannedNames);
 
+                // Decide once, before the preview: sharing keeps both records, overwriting
+                // replaces the old one. Cancelling here writes nothing.
+                if (duplicateNames.Count > 0)
+                {
+                    var action = AskDuplicateAction(duplicateNames, out var duplicateCancel);
+                    if (action == DuplicateAction.Cancel)
+                    {
+                        try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+                        progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                        return (new List<ModEntry>(), duplicateCancel ?? "cancelled");
+                    }
+
+                    if (action == DuplicateAction.Share)
+                    {
+                        sharedNames.UnionWith(duplicateNames);
+                        duplicateNames.Clear();
+                    }
+                    else
+                    {
+                        confirmedOverwriteNames.UnionWith(duplicateNames);
+                    }
+                }
+
                 // One read-only preview of the whole import: what will be created, what will be
                 // replaced, and anything the analyzer was unsure about. Nothing has been written
                 // at this point, so cancelling leaves storage, the game directory and the records
@@ -182,12 +208,7 @@ public class ModImportService
                     }
                 }
 
-                if (!ResolveDuplicateTargetsBeforeWrite(duplicateNames, tempExtractDir, confirmedOverwriteNames, plan.RequiresConfirmation, out var cancelErr))
-                {
-                    errorCode = cancelErr;
-                    progress?.Report(TranslationService.Instance.T("import.cancelled"));
-                    return (new List<ModEntry>(), errorCode);
-                }
+                DeleteOverwriteTargets(duplicateNames);
 
                 // Record each component's own imported content while its bytes are still in temp: a
                 // later import may delete and overwrite a shared storage folder, so fingerprinting
@@ -196,7 +217,7 @@ public class ModImportService
 
                 var primary = candidates.Primary!;
                 var primaryType = primary.Kind == ComponentKind.Dlc ? ModType.Dlc : ModType.Mod;
-                var entry = await BuildModEntry(primary.RootPath, primaryType, groupId, archivePath, archiveName, progress, primary.Name);
+                var entry = await BuildModEntry(primary.RootPath, primaryType, groupId, archivePath, archiveName, progress, primary.Name, sharedNames);
                 if (entry != null)
                 {
                     entry.ComponentFingerprints = componentFingerprints;
@@ -213,7 +234,7 @@ public class ModImportService
                     // already there, which the existence check skips.
                     foreach (var component in modRoots.Concat(dlcRoots)
                                  .Where(c => !IsSamePath(c.RootPath, primary.RootPath)))
-                        MoveComponentToStorage(component.RootPath);
+                        MoveComponentToStorage(component.RootPath, sharedNames);
 
                     if (binFiles.Count > 0)
                         AttachBinFiles(entry, candidates.BinRoots);
@@ -258,16 +279,30 @@ public class ModImportService
                     // Manual installs answer their own prompt, but still go through the same
                     // final-storage-name conflict gate before anything is written.
                     var duplicates = FindExistingPlannedNames(new List<string> { targetName });
-                    if (!ResolveDuplicateTargetsBeforeWrite(duplicates, tempExtractDir, confirmedOverwriteNames, alreadyConfirmed: false, out var manualCancel))
+                    if (duplicates.Count > 0)
                     {
-                        errorCode = manualCancel;
-                        progress?.Report(TranslationService.Instance.T("import.cancelled"));
-                        return (new List<ModEntry>(), errorCode);
+                        var action = AskDuplicateAction(duplicates, out var manualCancel);
+                        if (action == DuplicateAction.Cancel)
+                        {
+                            try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
+                            progress?.Report(TranslationService.Instance.T("import.cancelled"));
+                            return (new List<ModEntry>(), manualCancel ?? "cancelled");
+                        }
+
+                        if (action == DuplicateAction.Share)
+                        {
+                            sharedNames.UnionWith(duplicates);
+                        }
+                        else
+                        {
+                            confirmedOverwriteNames.UnionWith(duplicates);
+                            DeleteOverwriteTargets(duplicates);
+                        }
                     }
 
                     var domain = modType.Value == ModType.Dlc ? TargetDomain.Dlc : TargetDomain.Mods;
                     var fingerprint = ComponentFingerprintCollector.FromRoot(domain, targetName, manualRoot);
-                    var entry = await BuildModEntry(manualRoot, modType.Value, groupId, archivePath, archiveName, progress, targetName);
+                    var entry = await BuildModEntry(manualRoot, modType.Value, groupId, archivePath, archiveName, progress, targetName, sharedNames);
                     if (entry != null)
                     {
                         if (fingerprint != null) entry.ComponentFingerprints.Add(fingerprint);
@@ -285,6 +320,18 @@ public class ModImportService
 #if DEBUG
             DiagnosticLog.Write($"json={JsonSerializer.Serialize(entry)}");
 #endif
+            var sharedForEntry = (entry.GameModFolders ?? new List<string>())
+                .Where(sharedNames.Contains)
+                .ToList();
+            if (sharedForEntry.Count > 0)
+            {
+                // Two record cards, one physical folder. The old record keeps the ownership index
+                // entry; this one declares the folder in mods.json, which is what deployment and
+                // the shared-folder protection read.
+                _storage.AddSharedMod(entry, sharedForEntry);
+                continue;
+            }
+
             if (_storage.AddMod(entry)) continue;
 
             // A duplicate key can only happen for a target already confirmed in
@@ -315,7 +362,8 @@ public class ModImportService
     }
 
     private async Task<ModEntry?> BuildModEntry(string modRoot, ModType modType, string groupId,
-        string archivePath, string archiveName, IProgress<string>? progress, string? canonicalName = null)
+        string archivePath, string archiveName, IProgress<string>? progress, string? canonicalName = null,
+        ISet<string>? sharedNames = null)
     {
         progress?.Report(string.Format(TranslationService.Instance.T("import.progress.analyzing"), Path.GetFileName(modRoot)));
 
@@ -327,12 +375,22 @@ public class ModImportService
 
         var finalModDir = Path.Combine(_storage.GetModsDirectory(), gameFolderName);
 
-        // Overwrite semantics: duplicate targets are confirmed before this point,
-        // so a still-existing directory is a confirmed overwrite target — clear it first.
-        if (Directory.Exists(finalModDir))
-            Directory.Delete(finalModDir, true);
+        if (Directory.Exists(finalModDir) && sharedNames?.Contains(gameFolderName) == true)
+        {
+            // Shared component: keep the existing files, overlay the ones this package ships.
+            // The previous content is kept aside first, so choosing "share" by mistake is undoable.
+            _storage.BackupComponentFolder(gameFolderName);
+            await Task.Run(() => CopyDirectoryRecursive(modRoot, finalModDir));
+        }
+        else
+        {
+            // Overwrite semantics: duplicate targets are confirmed before this point,
+            // so a still-existing directory is a confirmed overwrite target — clear it first.
+            if (Directory.Exists(finalModDir))
+                Directory.Delete(finalModDir, true);
 
-        await Task.Run(() => MoveDirectory(modRoot, finalModDir));
+            await Task.Run(() => MoveDirectory(modRoot, finalModDir));
+        }
 
         var modInfo = ParseModInfo(finalModDir);
         // The v5.0 manifest (content/info.json) carries metadata a folder cannot: author, version,
@@ -407,12 +465,23 @@ public class ModImportService
     /// were confirmed by the duplicate pre-flight). A root that is no longer there is skipped: the
     /// primary was already moved while its record was built.
     /// </summary>
-    private void MoveComponentToStorage(string rootPath)
+    private void MoveComponentToStorage(string rootPath, ISet<string> sharedNames)
     {
         if (!Directory.Exists(rootPath)) return;
 
-        var target = Path.Combine(_storage.GetModsDirectory(), Path.GetFileName(rootPath));
-        if (Directory.Exists(target)) Directory.Delete(target, true);
+        var name = Path.GetFileName(rootPath);
+        var target = Path.Combine(_storage.GetModsDirectory(), name);
+        if (Directory.Exists(target))
+        {
+            if (sharedNames.Contains(name))
+            {
+                _storage.BackupComponentFolder(name);
+                CopyDirectoryRecursive(rootPath, target);
+                return;
+            }
+
+            Directory.Delete(target, true);
+        }
         if (Directory.Exists(rootPath)) Directory.Move(rootPath, target);
     }
 
@@ -930,50 +999,65 @@ private static string DeepFlatten(string sourceDir, string targetDir)
         return existing.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    private enum DuplicateAction
+    {
+        Share,
+        Overwrite,
+        Cancel
+    }
+
     /// <summary>
-    /// Pre-discussion guard: if any planned storage name already exists, ask the user once.
-    /// Returns true when it is safe to proceed (user confirmed overwrite, or no conflicts).
-    /// On cancel it cleans the temp dir and reports the caller.
+    /// Asks once what to do when a component folder already exists. Sharing keeps both records and
+    /// merges the files into the one physical folder; overwriting replaces the old record. The
+    /// dialog names the existing owner and defaults to sharing, because that is the choice that
+    /// cannot lose a package's files.
     /// </summary>
-    private bool ResolveDuplicateTargetsBeforeWrite(
-        List<string> duplicateNames,
-        string tempExtractDir,
-        HashSet<string> confirmedOverwriteNames,
-        bool alreadyConfirmed,
-        out string? cancelReason)
+    private DuplicateAction AskDuplicateAction(List<string> duplicateNames, out string? cancelReason)
     {
         cancelReason = null;
-        if (duplicateNames.Count == 0) return true;
 
-        // The import plan preview already put this question to the user, so do not ask twice.
-        // Already-confirmed names still fall through to the bookkeeping below.
-        if (!alreadyConfirmed)
+        var owners = _storage.GetAllMods()
+            .Where(m =>
+                (m.GameModFolders ?? new List<string>()).Any(f =>
+                    duplicateNames.Contains(f, StringComparer.OrdinalIgnoreCase)) ||
+                duplicateNames.Contains(m.GameModFolderName ?? "", StringComparer.OrdinalIgnoreCase))
+            .Select(m => m.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var message = string.Format(
+            TranslationService.Instance.T("import.shared_msg"),
+            string.Join(", ", duplicateNames),
+            owners.Count > 0
+                ? string.Join(", ", owners)
+                : TranslationService.Instance.T("import.shared_unknown_owner"));
+
+        var result = Application.Current.Dispatcher.Invoke(() =>
+            MessageBox.Show(
+                message,
+                TranslationService.Instance.T("import.shared_title"),
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question,
+                MessageBoxResult.Yes));
+
+        if (result == MessageBoxResult.Yes) return DuplicateAction.Share;
+        if (result == MessageBoxResult.No) return DuplicateAction.Overwrite;
+
+        cancelReason = "cancelled";
+        return DuplicateAction.Cancel;
+    }
+
+    /// <summary>
+    /// Removes the storage copies the user chose to overwrite. Shared folders are never listed
+    /// here: they are merged into instead, and deleting them would take the other record's files.
+    /// </summary>
+    private void DeleteOverwriteTargets(List<string> names)
+    {
+        foreach (var name in names)
         {
-            var overwrite = Application.Current.Dispatcher.Invoke(() =>
-                MessageBox.Show(
-                    string.Format(TranslationService.Instance.T("import.overwrite_msg"), string.Join(", ", duplicateNames)),
-                    TranslationService.Instance.T("import.overwrite_title"),
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question) == MessageBoxResult.Yes);
-
-            if (!overwrite)
-            {
-                try { if (Directory.Exists(tempExtractDir)) Directory.Delete(tempExtractDir, true); } catch { }
-                cancelReason = "cancelled";
-                return false;
-            }
+            var directory = Path.Combine(_storage.GetModsDirectory(), name);
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
         }
-
-        // Overwrite confirmed once: remove existing physical targets so downstream
-        // deployment reuses the canonical name (no timestamp suffix), and record the
-        // names so the DB write can replace silently without a second prompt.
-        foreach (var name in duplicateNames)
-        {
-            var dir = Path.Combine(_storage.GetModsDirectory(), name);
-            if (Directory.Exists(dir)) Directory.Delete(dir, true);
-            confirmedOverwriteNames.Add(name);
-        }
-        return true;
     }
 
 #if DEBUG
