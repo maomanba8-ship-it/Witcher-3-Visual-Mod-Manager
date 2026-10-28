@@ -122,6 +122,40 @@
 
 ---
 
+## H. 冲突 / 合并 / 共享 / 依赖（2026-10-28）
+
+### H1 脚本符号冲突（仅定义级）
+- **前置**：启用 `modDeathsReworkedWoundsAndBrutality` 与 `modCleanScreenRemaster`。
+- **期望**：出现 4 条红色脚本冲突，标题为 `类::函数`（`W3DamageManagerProcessor::ProcessAction` / `ProcessActionReaction` / `ProcessDismemberment` / `ProcessFrostDismemberment`）；
+  只有 `@wrapMethod` 的组合（如 `OnSpawned`、`OnClosingMenu`）不出现。
+
+### H2 已由 Script Merger 合并
+- **前置**：SM 做过合并，`mod0000_MergedFiles` 已安装并启用，SM 安装目录存在 `MergeInventory.xml`。
+- **期望**：对应脚本冲突显示绿色「已由 Script Merger 合并（mod0000_MergedFiles）」，不计入红色数字；合并 mod 卡片显示「SM 合并产物」；
+  停用或删除合并 mod 后，这些冲突恢复为红色。
+
+### H3 停用依赖警告
+- **前置**：`modFlyingMountsCore` 与 `modFlyingMountsRoyalWyvern`、`modFlyingMountsSilverBasilisk` 均启用。
+- **期望**：停用 Core 时弹窗列出两个依赖方与 `FMCController`，默认按钮为「否」；选否保持启用，选是才停用。
+
+### H4 共享导入
+- **前置**：已安装一个包含共享文件夹的包（如骑龙 Core）。
+- **操作**：导入另一个包含同名文件夹的包。
+- **期望**：弹「组件文件夹已存在」；是=共享（两张卡、文件合并、旧内容备份到 `Backups\import`）、否=覆盖、取消=不导入。
+  共享后停用任意一方，共享文件夹都不会被删除；重新启用后文件回来。
+
+### H5 旧索引清理与孤儿接管
+- **前置**：历史上替换记录留下旧索引（骑龙包的 `c8f5...`）。
+- **操作**：启动管理器 → 全部接管。
+- **期望**：旧索引在启动时被清理；孤儿文件夹可以成功接管；游戏目录保持不变。
+
+### H6 bin 接管（需要手动模拟）
+- **前置**：选一个带 bin 的 mod（如“和任何 NPC 发生关系”），停用它，然后手动把它的存储 bin 文件复制回游戏目录。
+- **操作**：在管理器里启用 → 再停用。
+- **期望**：第二次停用后该 bin 文件被移除（不是被“还原”回来）；启用期间 `bin-ledger.json` 中该路径 `Original` 为 `null`。
+
+---
+
 ## 结果记录
 
 | 版本 | 日期 | 执行人 | 结果 | 备注 |
@@ -129,3 +163,5 @@
 | v0.9.7（正式版包） | 2026-10-22 | 用户 | A1 / B1 / D 通过；游戏内三个模组均生效 | 安装并启用三种形状：裸根（房子升级）、mod+dlc（LOTR 武器）、mod+bin（NPC 互动，bin 配置 `modExpandedSexWork.xml` 已部署）；进游戏全部正常运行。B2 待做。 |
 | v0.9.7（正式版包） | 2026-10-22 | 用户 | B2 通过（同时发现并修掉一个 UI 缺陷） | B2 的失败弹窗、回滚提示都正确。但它暴露了一个真 bug：失败后把复选框拨回去，又触发了反向操作，来回打乒乓——一次点击留下 **10 条**未完成日志、弹窗反复出现。已修（7603e16，`_revertingToggle` 守卫），修复后一次点击只产生一次操作、至多一条日志。 |
 | 修复构建（Debug） | 2026-10-22 | 用户 | B2 复跑 ✓、C1 ✓、F1 ✓ | B2 复跑：只弹一个「停用失败」，一次点击只写一条日志。C1：停用后 `~modSleepWithAlmostAnyWoman`、bin 配置消失、`bin-ledger.json` 归零；再启用复原 ✓。F1：10 条日志「我已处理」，`journal\handled` 共 22 条、未处理 0 条 ✓。另发现 `_w3mm_staging` 残留 12 个操作目录，已改为「处理日志时报告路径与体积、不自动删除」（428e8e2）。 |
+| v0.9.7（`121da68` 之后） | 2026-10-27 | 用户 | H1 通过 | 4 条 `W3DamageManagerProcessor::*` 与 Script Merger 的 `Script conflicts: 4` 完全一致；`@wrapMethod` 组合不再误报。 |
+| v0.9.7（`8773324` / `63af3fd` / `87455a4`） | 2026-10-28 | 用户 | H2 / H3 / H4 / H5 通过 | 合并条目变绿、卡片显示「SM 合并产物」；停用 Core 弹依赖警告且默认否；共享导入形成两张卡；旧索引清理后孤儿接管成功。H6 未执行（没有手动安装的 bin 文件，可按 H6 的步骤补测）。 |
