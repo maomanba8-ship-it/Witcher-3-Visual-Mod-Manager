@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -195,9 +195,15 @@ public partial class ModListPage : UserControl
         row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        var isMergedOutput = _conflict?.IsScriptMergerOutput(mod) == true;
+        var authorLabel = isMergedOutput
+            ? (string.IsNullOrWhiteSpace(mod.Author) ? "" : mod.Author + " · ")
+              + TranslationService.Instance.T("mods.sm_merged_output")
+            : mod.Author;
+
         var authorText = new TextBlock
         {
-            Text = mod.Author, FontSize = 11,
+            Text = authorLabel, FontSize = 11,
             Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#5E626E")),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -304,7 +310,12 @@ public partial class ModListPage : UserControl
         var enabled = _allMods.Count(m => m.IsEnabled);
         var total = _allMods.Count;
         var conflicts = 0;
-        try { conflicts = _conflict?.DetectConflicts().Count(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)) ?? 0; } catch { }
+        try
+        {
+            conflicts = _conflict?.DetectConflicts()
+                .Count(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind) && c.MergedBy is null) ?? 0;
+        }
+        catch { }
         var overrides = _conflict?.DetectPotentialOverrideCount() ?? 0;
         var bundleCount = _conflict?.GetBundleMods().Count ?? 0;
         var sharedCount = _conflict?.GetSharedResources().Count ?? 0;
@@ -513,7 +524,10 @@ public partial class ModListPage : UserControl
               + (mod.GameBinFiles.Count > 3 ? "…" : "") + ")"
             : "";
         RenameBtn.Tag = mod;
-        DetailAuthor.Text = TranslationService.Instance.T("mods.author") + "： " + mod.Author;
+        DetailAuthor.Text = TranslationService.Instance.T("mods.author") + "： " + mod.Author
+            + (_conflict?.IsScriptMergerOutput(mod) == true
+                ? " · " + TranslationService.Instance.T("mods.sm_merged_output")
+                : "");
         DetailVersion.Text = TranslationService.Instance.T("mods.version") + "： " + mod.Version;
         DetailCategory.Text = TranslationService.Instance.T("mods.category") + "： " + mod.DisplayCategory + " | " + mod.DisplayModType;
         DetailPriority.Text = mod.Priority.ToString();
@@ -894,3 +908,4 @@ public partial class ModListPage : UserControl
     }
 
 }
+

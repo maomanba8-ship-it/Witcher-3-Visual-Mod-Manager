@@ -57,7 +57,7 @@ public partial class MainWindow : Window
             _settings = new SettingsService();
             _importer = new ModImportService(_storage, _settings);
             _w3 = new Witcher3Service(_settings, _storage);
-            _conflict = new ConflictService(_storage, _w3);
+            _conflict = new ConflictService(_storage, _w3, _settings);
             _backup = new BackupService(_w3, _settings);
             _presets = new PresetService();
             _orphanDetector = new OrphanDetectionService();

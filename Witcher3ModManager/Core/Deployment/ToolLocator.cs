@@ -21,4 +21,20 @@ public static class ToolLocator
         }
         return null;
     }
+
+    /// <summary>
+    /// Locates <c>WitcherScriptMerger.exe</c>: the configured path first, then the usual install
+    /// locations. Shared by the conflict dialog and the merge-inventory lookup, so both always
+    /// refer to the same installation.
+    /// </summary>
+    public static string? FindScriptMerger(string? configuredPath) =>
+        FirstExisting(new[]
+        {
+            configuredPath,
+            @"D:\Tools\WitcherScriptMerger\WitcherScriptMerger.exe",
+            @"C:\Program Files\WitcherScriptMerger\WitcherScriptMerger.exe",
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads", "WitcherScriptMerger", "WitcherScriptMerger.exe")
+        });
 }

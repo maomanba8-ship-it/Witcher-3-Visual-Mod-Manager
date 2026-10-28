@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Analysis.Merge;
 using Witcher3ModManager.Core.Analysis.Script;
 using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Core.Manifest;
@@ -12,13 +13,16 @@ public class ConflictService
 {
     private readonly ModStorageService _storage;
     private readonly Witcher3Service _w3;
+    private readonly SettingsService? _settings;
     private List<ConflictInfo>? _cachedConflicts;
     private bool _cacheValid;
+    private IReadOnlyList<MergeEntry>? _mergeEntries;
 
-    public ConflictService(ModStorageService storage, Witcher3Service w3)
+    public ConflictService(ModStorageService storage, Witcher3Service w3, SettingsService? settings = null)
     {
         _storage = storage;
         _w3 = w3;
+        _settings = settings;
 #if DEBUG
         LogScanDiag($"ConflictService created. exeDir={AppContext.BaseDirectory}");
 #endif
@@ -28,6 +32,7 @@ public class ConflictService
     {
         _cacheValid = false;
         _cachedConflicts = null;
+        _mergeEntries = null;
     }
 
     public List<ConflictInfo> DetectConflicts()
@@ -101,10 +106,62 @@ public class ConflictService
                        ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         // Only genuine (red) conflicts are user-facing. Blue bundle/generated-artifact
         // items are NOT conflicts; bundle mods get their own blue "bundle" tag/panel.
-        return AdaptEvidence(evidence, idToName)
+        var conflicts = AdaptEvidence(evidence, idToName)
             .Where(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind))
             .ToList();
+        ApplyMergeInventory(conflicts);
+        return conflicts;
     }
+
+    private IReadOnlyList<MergeEntry> MergeEntries =>
+        _mergeEntries ??= MergeInventoryReader.ReadFromScriptMerger(
+            ToolLocator.FindScriptMerger(_settings?.Current.ScriptMergerPath));
+
+    /// <summary>
+    /// Marks script conflicts whose file is covered by Script Merger's inventory. Computed on every
+    /// detection, so disabling or deleting the merged output brings the conflict back as red.
+    /// </summary>
+    private void ApplyMergeInventory(List<ConflictInfo> conflicts)
+    {
+        var entries = MergeEntries;
+        if (entries.Count == 0) return;
+
+        var gamePath = _w3.GetGamePath();
+        if (string.IsNullOrEmpty(gamePath)) return;
+
+        // MergeInventory names the deployed folder (mod0000_MergedFiles), while a record's display
+        // name may be the folder name without the "mod" prefix. Compare against what is deployed.
+        var enabledFolders = new HashSet<string>(
+            _storage.GetAllMods().Where(m => m.IsEnabled)
+                .SelectMany(m => m.GameModFolders ?? new List<string>())
+                .Where(folder => !string.IsNullOrWhiteSpace(folder)),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var conflict in conflicts)
+        {
+            if (conflict.Kind != ConflictKind.ScriptOverride) continue;
+
+            var entry = entries.FirstOrDefault(e =>
+                string.Equals(e.ConflictPath, conflict.FilePath, StringComparison.OrdinalIgnoreCase));
+            if (entry is null || !enabledFolders.Contains(entry.MergedModName)) continue;
+
+            var mergedFile = Path.Combine(gamePath, "mods", entry.MergedModName,
+                entry.ConflictPath.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(mergedFile)) continue;
+
+            conflict.MergedBy = entry.MergedModName;
+        }
+    }
+
+    /// <summary>True when this mod is Script Merger's merged output according to its inventory.</summary>
+    public bool IsScriptMergerOutput(ModEntry mod) =>
+        MergeEntries.Any(e => IsMergedOutputName(e.MergedModName, mod));
+
+    private static bool IsMergedOutputName(string mergedModName, ModEntry mod) =>
+        string.Equals(mergedModName, mod.Name, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(mergedModName, mod.GameModFolderName ?? "", StringComparison.OrdinalIgnoreCase) ||
+        (mod.GameModFolders ?? new List<string>())
+            .Any(folder => string.Equals(mergedModName, folder, StringComparison.OrdinalIgnoreCase));
 
     // ���� Potential Override ��������������������������������������������������������������������������������
 

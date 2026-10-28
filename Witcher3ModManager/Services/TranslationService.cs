@@ -179,6 +179,7 @@ public class TranslationService
 
                 ["mods.conflict_check"] = "冲突检测",
                 ["mods.author"] = "作者",
+                ["mods.sm_merged_output"] = "SM 合并产物",
                 ["mods.shared_by"] = "🔗 共享资源",
                 ["mods.shared_by_who"] = "被 {0} 引用",
                 ["mods.shared_uses"] = "🔗 使用共享资源: {0}",
@@ -417,6 +418,8 @@ public class TranslationService
                 ["conflict.kind_bin"] = "bin 覆盖风险",
                 ["conflict.kind_unsupported"] = "无法解析的容器",
                 ["conflict.kind_generated"] = "已知生成物差异",
+                ["conflict.kind_merged"] = "已由 Script Merger 合并（{0}）",
+                ["conflict.all_merged"] = "所有脚本冲突都已由 Script Merger 合并。",
                 ["status.bundle"] = "Bundle: {0}",
                 ["overlap.summary"] = "检测到 {0} 组潜在覆盖，涉及 {1} 个模组。\n同分类模组可能修改同一游戏内容，游戏将根据优先级(Priority)决定最终效果。",
                 ["status.shared"] = "共享 {0}",
@@ -536,6 +539,7 @@ public class TranslationService
 
                 ["mods.conflict_check"] = "Conflict Check",
                 ["mods.author"] = "Author",
+                ["mods.sm_merged_output"] = "SM merged output",
                 ["mods.shared_by"] = "🔗 Shared Resource",
                 ["mods.shared_by_who"] = "Referenced by {0}",
                 ["mods.shared_uses"] = "🔗 Uses shared resource: {0}",
@@ -773,6 +777,8 @@ public class TranslationService
                 ["conflict.kind_bin"] = "bin override risk",
                 ["conflict.kind_unsupported"] = "Unparseable container",
                 ["conflict.kind_generated"] = "Generated artifact diff",
+                ["conflict.kind_merged"] = "Merged by Script Merger ({0})",
+                ["conflict.all_merged"] = "All script conflicts have been merged by Script Merger.",
                 ["status.bundle"] = "Bundle: {0}",
                 ["status.shared"] = "Shared {0}",
                 ["overlap.summary"] = "Detected {0} potential override group(s) involving {1} mod(s).\nMods in the same category may modify the same game content. The game decides priority-based.",

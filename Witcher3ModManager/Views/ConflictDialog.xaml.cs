@@ -60,14 +60,7 @@ public partial class ConflictDialog : Window
         // The path the user configured wins; then the usual install locations. The configured
         // value comes from the injected settings service, never from parsing the settings file
         // here, so a test build can no longer pick up the release build's settings.
-        _scriptMergerPath = ToolLocator.FirstExisting(new[]
-        {
-            _settings?.Current.ScriptMergerPath,
-            @"D:\Tools\WitcherScriptMerger\WitcherScriptMerger.exe",
-            @"C:\Program Files\WitcherScriptMerger\WitcherScriptMerger.exe",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Downloads", "WitcherScriptMerger", "WitcherScriptMerger.exe")
-        });
+        _scriptMergerPath = ToolLocator.FindScriptMerger(_settings?.Current.ScriptMergerPath);
     }
     private void LoadConflicts(List<ConflictInfo> conflicts, 
         Dictionary<string, DateTime>? modDates,
@@ -123,9 +116,14 @@ public partial class ConflictDialog : Window
         NoConflictsPanel.Visibility = Visibility.Collapsed;
         ConflictStackPanel.Visibility = Visibility.Visible;
 
-        var realConflicts = conflicts.Where(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind)).ToList();
+        var realConflicts = conflicts
+            .Where(c => ConflictEvidenceRules.IsRealConflictKind(c.Kind) && !c.IsMergedByScriptMerger)
+            .ToList();
         var scriptCount = realConflicts.Count(c => c.IsScriptConflict);
         SummaryText.Text = string.Format(TranslationService.Instance.T("conflict.summary"), realConflicts.Count, realConflicts.SelectMany(c => c.ConflictingMods).Distinct().Count());
+
+        if (realConflicts.Count == 0 && conflicts.Any(c => c.IsMergedByScriptMerger))
+            SummaryText.Text = TranslationService.Instance.T("conflict.all_merged");
 
         if (scriptCount > 0)
         {
@@ -134,7 +132,9 @@ public partial class ConflictDialog : Window
             BtnScriptMerger.Visibility = Visibility.Visible;
         }
 
-        var displayItems = conflicts.Select(c =>
+        var displayItems = conflicts
+            .OrderBy(c => c.IsMergedByScriptMerger)
+            .Select(c =>
         {
             var modNames = c.ConflictingMods.Select(m =>
             {
@@ -158,22 +158,26 @@ public partial class ConflictDialog : Window
                 FilePath = c.FilePath,
                 IsScript = c.IsScriptConflict,
                 Kind = c.Kind,
-                KindText = c.Kind switch
-                {
-                    ConflictKind.ScriptOverride => TranslationService.Instance.T("conflict.kind_script"),
-                    ConflictKind.BinOverrideRisk => TranslationService.Instance.T("conflict.kind_bin"),
-                    ConflictKind.UnsupportedContainer => TranslationService.Instance.T("conflict.kind_unsupported"),
-                    ConflictKind.GeneratedArtifactDiff => TranslationService.Instance.T("conflict.kind_generated"),
-                    _ => TranslationService.Instance.T("conflict.kind_override")
-                },
-                KindColor = c.Kind switch
-                {
-                    ConflictKind.ScriptOverride => "#D06A6A",
-                    ConflictKind.BinOverrideRisk => "#D06A6A",
-                    ConflictKind.UnsupportedContainer => "#5B8DB8",
-                    ConflictKind.GeneratedArtifactDiff => "#5B8DB8",
-                    _ => "#D06A6A"
-                },
+                KindText = c.IsMergedByScriptMerger
+                    ? string.Format(TranslationService.Instance.T("conflict.kind_merged"), c.MergedBy)
+                    : c.Kind switch
+                    {
+                        ConflictKind.ScriptOverride => TranslationService.Instance.T("conflict.kind_script"),
+                        ConflictKind.BinOverrideRisk => TranslationService.Instance.T("conflict.kind_bin"),
+                        ConflictKind.UnsupportedContainer => TranslationService.Instance.T("conflict.kind_unsupported"),
+                        ConflictKind.GeneratedArtifactDiff => TranslationService.Instance.T("conflict.kind_generated"),
+                        _ => TranslationService.Instance.T("conflict.kind_override")
+                    },
+                KindColor = c.IsMergedByScriptMerger
+                    ? "#6FAF8F"
+                    : c.Kind switch
+                    {
+                        ConflictKind.ScriptOverride => "#D06A6A",
+                        ConflictKind.BinOverrideRisk => "#D06A6A",
+                        ConflictKind.UnsupportedContainer => "#5B8DB8",
+                        ConflictKind.GeneratedArtifactDiff => "#5B8DB8",
+                        _ => "#D06A6A"
+                    },
             };
         }).ToList();
 
