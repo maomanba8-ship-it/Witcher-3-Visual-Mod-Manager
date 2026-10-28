@@ -106,4 +106,26 @@ public static class LibraryIndexUpdater
             ? current
             : new LibraryIndex(LibraryIndex.CurrentVersion, packages);
     }
+
+    /// <summary>
+    /// Drops packages whose record no longer exists. The index is derived data: a package left
+    /// behind after its record was replaced still claims the folders it used to own, and that
+    /// stale claim makes a later adoption answer "already owned" for a folder nobody uses.
+    /// </summary>
+    public static LibraryIndex WithoutUnknownPackages(
+        LibraryIndex? index,
+        IEnumerable<string>? knownPackageIds)
+    {
+        var current = index ?? LibraryIndex.Empty;
+        if (current.Packages.Count == 0 || knownPackageIds is null) return current;
+
+        var known = new HashSet<string>(knownPackageIds, StringComparer.OrdinalIgnoreCase);
+        var packages = current.Packages
+            .Where(p => known.Contains(p.PackageId))
+            .ToList();
+
+        return packages.Count == current.Packages.Count
+            ? current
+            : new LibraryIndex(LibraryIndex.CurrentVersion, packages);
+    }
 }

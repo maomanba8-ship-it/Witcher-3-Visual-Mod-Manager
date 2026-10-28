@@ -179,6 +179,34 @@ public class LibraryIndexUpdaterTests
         Assert.Equal(index, LibraryIndexUpdater.WithoutBinTargets(index, ""));
     }
 
+    [Fact]
+    public void Packages_without_a_record_are_dropped()
+    {
+        // The replaced record leaves its old folder claim behind; that claim is what made an
+        // orphan adoption answer "already owned" for a folder nobody uses any more.
+        var index = LibraryIndexUpdater.WithPackage(null, "old", "Old Mod",
+            new[] { Component("c1", Target(@"mods\shared")) });
+        index = LibraryIndexUpdater.WithPackage(index, "current", "Current Mod",
+            new[] { Component("c2", Target(@"mods\current")) });
+
+        var pruned = LibraryIndexUpdater.WithoutUnknownPackages(index, new[] { "current" });
+
+        Assert.Equal("current", Assert.Single(pruned.Packages).PackageId);
+        Assert.Null(pruned.OwnerOf(@"mods\shared"));
+        Assert.NotNull(pruned.OwnerOf(@"mods\current"));
+    }
+
+    [Fact]
+    public void Pruning_with_every_package_known_returns_the_same_index()
+    {
+        var index = LibraryIndexUpdater.WithPackage(null, "pkg1", "Mod One",
+            new[] { Component("c1", Target(@"mods\modOne")) });
+
+        var pruned = LibraryIndexUpdater.WithoutUnknownPackages(index, new[] { "pkg1" });
+
+        Assert.Same(index, pruned);
+    }
+
     private static ComponentRecord Component(string id, params TargetRecord[] targets) =>
         new(id, TargetDomain.Mods, "modOne", targets);
 

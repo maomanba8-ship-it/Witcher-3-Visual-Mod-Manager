@@ -47,7 +47,24 @@ public class ModStorageService
         Directory.CreateDirectory(_binDir);
         Load();
         _index = _indexStore.Load();
+        PruneStaleIndexEntries();
         _binClaims = _binLedgerStore.Load();
+    }
+
+    /// <summary>
+    /// The index is derived data. A record can be replaced or removed outside this process (or by
+    /// an older build that did not clean up), leaving a package that still claims folders nobody
+    /// owns. Dropping those entries at startup keeps adoption and drift detection honest; the
+    /// folder itself is never touched.
+    /// </summary>
+    private void PruneStaleIndexEntries()
+    {
+        var pruned = Core.Deployment.LibraryIndexUpdater.WithoutUnknownPackages(
+            _index, _mods.Select(m => m.Id));
+        if (ReferenceEquals(pruned, _index)) return;
+
+        _index = pruned;
+        _indexStore.Save(_index);
     }
 
     /// <summary>
@@ -307,7 +324,12 @@ public class ModStorageService
         {
             var existing = _mods.FirstOrDefault(m => m.GameModFolderName == mod.GameModFolderName);
             if (existing != null)
+            {
                 _mods.Remove(existing);
+                // Its index entry describes a record that is about to stop existing. Leaving it
+                // behind keeps claiming folders the replacement may not own.
+                IndexForget(existing.Id);
+            }
         }
 
         mod.Priority = _mods.Count > 0 ? _mods.Max(m => m.Priority) + 1 : 1;
