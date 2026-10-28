@@ -605,6 +605,25 @@ public partial class ModListPage : UserControl
         {
             if (_w3 != null && _w3.GetGamePath() != null)
             {
+                var dependents = _w3.GetScriptDependents(mod);
+                if (dependents.Count > 0)
+                {
+                    var lines = string.Join("\n", dependents
+                        .GroupBy(d => d.DependentModName)
+                        .Select(g => $"{g.Key} ({string.Join(", ", g.Select(x => x.ClassName).Distinct(StringComparer.OrdinalIgnoreCase))})"));
+
+                    var answer = MessageBox.Show(
+                        string.Format(TranslationService.Instance.T("mods.disable_dependency_warning"), mod.Name, lines),
+                        TranslationService.Instance.T("dialog.warning"),
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+
+                    if (answer != MessageBoxResult.Yes)
+                    {
+                        RevertToggle(chk, true);
+                        return;
+                    }
+                }
+
                 var outcome = _w3.DisableMod(mod);
                 if (!outcome.Ok)
                 {

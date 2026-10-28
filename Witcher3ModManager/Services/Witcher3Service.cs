@@ -2,6 +2,7 @@
 using System.Security.Cryptography;
 using Microsoft.Win32;
 using Witcher3ModManager.Core.Analysis;
+using Witcher3ModManager.Core.Analysis.Script;
 using Witcher3ModManager.Core.Deployment;
 using Witcher3ModManager.Core.Manifest;
 using Witcher3ModManager.Core.Shared;
@@ -315,6 +316,38 @@ public class Witcher3Service
         {
             return "";
         }
+    }
+
+    /// <summary>
+    /// Enabled mods whose loose scripts reference a class this mod defines. Disabling the definer
+    /// leaves those scripts without the class, which is a compile error at the next game start.
+    /// Read-only and evidence-based: only real class definitions and references in .ws files.
+    /// </summary>
+    public List<ScriptDependency> GetScriptDependents(ModEntry mod)
+    {
+        var storageDir = _storage?.GetModsDirectory();
+        if (string.IsNullOrWhiteSpace(storageDir)) return new List<ScriptDependency>();
+
+        var roots = (mod.GameModFolders ?? new List<string>())
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => Path.Combine(storageDir, f))
+            .Where(Directory.Exists)
+            .ToList();
+        if (roots.Count == 0) return new List<ScriptDependency>();
+
+        var others = _storage!.GetAllMods()
+            .Where(m => m.IsEnabled && !string.Equals(m.Id, mod.Id, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(m => (m.GameModFolders ?? new List<string>())
+                .Where(f => !string.IsNullOrWhiteSpace(f))
+                .Select(f => (ModName: m.Name, Root: Path.Combine(storageDir, f))))
+            .Where(x => Directory.Exists(x.Root))
+            .ToList();
+
+        return roots
+            .SelectMany(root => ScriptDependencyInspector.FindDependents(root, others))
+            .GroupBy(d => (d.DependentModName, d.ClassName))
+            .Select(g => g.First())
+            .ToList();
     }
 
     public OperationOutcome DisableMod(ModEntry mod, string? storageModsDir = null)
