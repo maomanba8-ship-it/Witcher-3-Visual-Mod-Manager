@@ -756,12 +756,33 @@ public class Witcher3Service
 
         foreach (var step in binPlan.Actionable)
         {
+            var exists = File.Exists(step.DestinationPath);
             var existing = BinBackupStore.HashOf(step.DestinationPath);
-            if (existing is null)
+
+            if (!exists)
             {
                 // Nothing there: the ledger has to remember that, so a later stop can remove the
                 // file this enable creates.
-                if (!File.Exists(step.DestinationPath)) captured[step.Subject] = null;
+                captured[step.Subject] = null;
+                continue;
+            }
+
+            // A file that already holds exactly what this package ships was installed by hand (or
+            // by this package before). Remembering it as the original would make a later disable
+            // put the mod back instead of removing it.
+            var incoming = BinBackupStore.HashOf(step.SourcePath);
+            var toRecord = BinTakeover.OriginalToRecord(existing, incoming);
+
+            if (existing is not null && toRecord is null)
+            {
+                captured[step.Subject] = null;
+                continue;
+            }
+
+            if (existing is null)
+            {
+                // The file is there but could not be hashed. Recording "nothing was there" would
+                // make a later disable delete a file that was always there, so record nothing.
                 continue;
             }
 
