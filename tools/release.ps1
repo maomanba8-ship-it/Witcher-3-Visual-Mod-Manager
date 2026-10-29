@@ -8,8 +8,13 @@
     with the tests and the fixture runner as gates: if either fails, nothing is published and no
     archive is produced.
 
-    The publish is single-file: the archive holds one Witcher3ModManager.exe, the Resources folder
-    and the two documents. Nobody has to scroll past 250 runtime DLLs to find the program.
+    By default the publish is single-file: the archive holds one Witcher3ModManager.exe, the
+    Resources folder and the two documents. Nobody has to scroll past 250 runtime DLLs to find the
+    program.
+
+    -MultiFile builds the self-contained layout instead: a small exe plus the runtime DLLs. It
+    still needs no .NET installation and is the shape that passed Nexus Mods' automated checks
+    before; use it as an alternative download when a single-file self-extracting exe is flagged.
 
     The version shown inside the app comes from Witcher3ModManager\Core\AppInfo.cs. The csproj
     carries the same number for the exe metadata, and a unit test fails if the two drift apart.
@@ -20,16 +25,25 @@
 .PARAMETER FrameworkDependent
     Publishes the small build that needs the .NET desktop runtime instead of the self-contained one.
 
+.PARAMETER MultiFile
+    Publishes a self-contained multi-file build (no single-file bundle, no .NET requirement).
+
 .EXAMPLE
     .\tools\release.ps1
+    .\tools\release.ps1 -MultiFile
     .\tools\release.ps1 -FrameworkDependent
 #>
 param(
     [string]$Version,
-    [switch]$FrameworkDependent
+    [switch]$FrameworkDependent,
+    [switch]$MultiFile
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($FrameworkDependent -and $MultiFile) {
+    throw 'Choose one publish shape: -MultiFile (self-contained, many files) or -FrameworkDependent (needs .NET).'
+}
 
 $repo = Split-Path -Parent $PSScriptRoot
 $appDir = Join-Path $repo 'Witcher3ModManager'
@@ -64,7 +78,9 @@ if ($LASTEXITCODE -ne 0 -or (($fixtureOutput -join "`n") -notmatch 'ALL OK')) {
 }
 
 # 3. Publish into a clean folder. The containment check is deliberate: this step clears a folder.
-$flavour = if ($FrameworkDependent) { 'framework' } else { 'selfcontained' }
+$flavour = if ($MultiFile) { 'multifile' }
+           elseif ($FrameworkDependent) { 'framework' }
+           else { 'selfcontained' }
 $publishDir = Join-Path $appDir "publish_$flavour"
 $repoFull = [System.IO.Path]::GetFullPath($repo).TrimEnd('\') + '\'
 $publishFull = [System.IO.Path]::GetFullPath($publishDir)
@@ -77,11 +93,16 @@ if (Test-Path -LiteralPath $publishFull) {
     Get-ChildItem -LiteralPath $publishFull -Force | Remove-Item -Recurse -Force
 }
 
-$publishArgs = @(
-    'publish', $appProject, '-c', 'Release', '-o', $publishDir, '--nologo',
-    '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=None'
-)
-if (-not $FrameworkDependent) { $publishArgs += @('-r', 'win-x64', '--self-contained', 'true') }
+$publishArgs = @('publish', $appProject, '-c', 'Release', '-o', $publishDir, '--nologo', '-p:DebugType=None')
+if ($MultiFile) {
+    # Self-contained, but every assembly stays a file of its own: no self-extracting bundle for a
+    # scanner to flag, and still no .NET installation needed on the user's machine.
+    $publishArgs += @('-r', 'win-x64', '--self-contained', 'true')
+}
+else {
+    $publishArgs += @('-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true')
+    if (-not $FrameworkDependent) { $publishArgs += @('-r', 'win-x64', '--self-contained', 'true') }
+}
 & dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 
@@ -111,9 +132,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Archiving failed.' }
 $exe = Join-Path $publishDir 'Witcher3ModManager.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "Published exe is missing: $exe" }
 
-# Single-file is the point of this layout; loose DLLs mean it silently fell back to the old shape.
 $looseDlls = @(Get-ChildItem -LiteralPath $publishFull -Filter *.dll -File)
-if ($looseDlls.Count -gt 0) {
+if ($MultiFile) {
+    if ($looseDlls.Count -eq 0) {
+        throw 'Multi-file publish produced no runtime DLLs; it silently fell back to a single-file bundle.'
+    }
+}
+elseif ($looseDlls.Count -gt 0) {
     throw "Publish produced $($looseDlls.Count) loose DLL(s); single-file publishing did not take effect."
 }
 
